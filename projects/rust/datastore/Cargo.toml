@@ -1,0 +1,42 @@
+[package]
+name = "udex-datastore"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[features]
+default = ["postgres"]
+postgres = ["sqlx/postgres"]
+integration_test = ["postgres"]
+
+[dependencies]
+udex-api = { path = "../api" }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+time = { workspace = true }
+serde_yaml = { workspace = true }
+
+# Used for integration test fixtures (shared database setup)
+maybe-once = { workspace = true }
+ctor = "0.2"  # For reliable test database cleanup on exit
+
+# Testcontainers no longer used - using existing DATABASE_URL instead
+# testcontainers = { workspace = true }
+# testcontainers-modules = { workspace = true } 
+
+[dev-dependencies]
+udex-datastore = { path = "../datastore", features = ["integration_test"] }
+tokio = { workspace = true }
+tracing-subscriber = { workspace = true }
+rstest = { workspace = true }
+sqlx-cli = { workspace = true }
+tokio-shared-rt = { workspace = true }

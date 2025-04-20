@@ -6,3 +6,5 @@ rustup default ${RUST_VERSION}
 rustup component add clippy
 rustup component add rustfmt
 rustup show
+
+npm install -g @anthropic-ai/claude-code

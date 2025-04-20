@@ -31,8 +31,14 @@ services:
     ports:
       - "5432:5432"
     # volumes:
-    #   - pg_data:/var/lib/postgresql/data
+    #   - pg_data:.data/var/lib/postgresql/data
+
+  # sqlite:
+  #   image: keinos/sqlite3:latest
+  #   volumes:
+  #     - ../data:/data
+  #   command: /bin/sh -c "while sleep 1000; do :; done"
   
-volumes:
-  pg_data:
-    driver: local
+# volumes:
+#   pg_data:
+#     driver: local

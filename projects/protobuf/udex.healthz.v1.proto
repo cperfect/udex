@@ -1,0 +1,20 @@
+
+syntax = "proto3";
+
+package udex.healthz.v1;
+
+import "google/protobuf/timestamp.proto";
+
+message HealthzRequest {}
+
+message HealthzResponse {
+    google.protobuf.Timestamp server_time = 1;
+    bool is_healthy = 2;
+    repeated string status_messages = 3; // List of status messages for detailed health check
+}
+
+// HealthzService provides operations for health checks
+service HealthzService {
+    // Healthz performs a health check on the server
+    rpc Healthz(HealthzRequest) returns (HealthzResponse);  
+}

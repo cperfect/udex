@@ -5,11 +5,11 @@ Udex
 
 Udex is a universal lookup directory for entities that is intended to be lighweight, fast and efficient for high transaction volumes, possibly across organisational and regulatory boundaries. Udex is intended to be used in complex distributed integration scenarios where it is desirably for internal representations of entities, potentially including the primary keys, not be exposed across the integration boundaries so are prevent tight coupling across those boundaries and limit the exposure to [Hyrum's Law](https://www.hyrumslaw.com/)!.
 
-Udex holds one or more Indeces which consist of mappings from globally unique keys to contexts: globally unique keys are just that and may be realised as UUIDs or another suitable standard and are allocated by Udex and are intended to be trully globally unique, whereas contexts are just one or more key value pairs, plus a fast hash of the key value pairs that are intended to be the minimum to uniquely and reliably map the entity in some other context (e.g. a source database or registry, or a differen Udex index): essential a Udex mapping is Globally Unique Key <-> Context Hash -> Context Key/Value Pairs and an Index is a namespace of Contexts. 
+Udex holds one or more Indeces which consist of entries from globally unique keys to contexts: globally unique keys are just that and may be realised as UUIDs or another suitable standard and are allocated by Udex and are intended to be trully globally unique, whereas contexts are just one or more key value pairs, plus a fast hash of the key value pairs that are intended to be the minimum to uniquely and reliably map the entity in some other context (e.g. a source database or registry, or a differen Udex index): essential a Udex entry is Globally Unique Key <-> Context Hash -> Context Key/Value Pairs and an Index is a namespace of Contexts. 
 
 Indeces will have a name that is a string of lower case latin letters with the option of underscore infixes. Index names must be unique within a give Udex system and are immutable. Indeces will also have a human friendly but short description (default empty) and a configurable max number of bulk operations (default 100) per client. These can be changed.
 
-A Globally Unique Key is intended to be just that: unique not only within an index (at least on the key side of the mapping) but across all indeces (and ideally across everything - i.e. truly global).
+A Globally Unique Key is intended to be just that: unique not only within an index (at least on the key side of the entry) but across all indeces (and ideally across everything - i.e. truly global).
 
 A context is uniquely determined by its hash, with the hash determined by Udex by applying its hash function agains the key value pairs. There could however be more than one unique key for any context in an Index. The same context can appear only once in an Index but could appear in multiple indeces. Note that, however, a context is not necessarily one to one with an entity: the same entity could be mapped to different contexts with different key value pairs. This is opaque to Udex and is entirely up to how clients use. 
 
@@ -20,12 +20,12 @@ A context, including its hash will be *immutable* and cannot be updated, though 
 
 #### Index
 Index operations, including bulk operations, are transactional.
-* Create a mapping for a context, returning a unique key. If the context already exists this is an error.
+* Create an entry for a context, returning a unique key. If the context already exists this is an error.
 * Replace a context for an existing key or keys: the key will now map to the context (which will be created if it does not already exist). Any other keys not specified will still map to the old context. If this change would result in no keys being mapped to the old context the old context will be deleted. If the key does not exists or already maps to the context then this will be treated as an error.
-* Add an additional unique key for a context: this creates and returns a new unique key mapping for the context and returns the key. If the context does not exist then this is an error.
-* Delete a mapping for a context and one or more unique keys. If there are additional keys in Udex mapped to the same context which the client has not asked to delete then the context will remain in Udex mapped to these "surviing keys". If the context does not exist, or any of the requested keys do not exist or do not map to the context then this is an error. The actual operation of the delete on the underlying datastore is opaque to clients (e.g. soft vs hard) and it might vary by datastore and configuration.
+* Add an additional unique key for a context: this creates and returns a new unique key entry for the context and returns the key. If the context does not exist then this is an error.
+* Delete an entry for a context and one or more unique keys. If there are additional keys in Udex mapped to the same context which the client has not asked to delete then the context will remain in Udex mapped to these "surviing keys". If the context does not exist, or any of the requested keys do not exist or do not map to the context then this is an error. The actual operation of the delete on the underlying datastore is opaque to clients (e.g. soft vs hard) and it might vary by datastore and configuration.
 * Lookup a context by its unique key. If the unique key does not exist or does not map to a context this is an error.
-* Reverse Lookup a unique key(s) by its context. If more than one key exits for the context in the index then all are returned. If the context does not exist or does not map to any keys then this is an error. In general use of this is only intended to support the creation or deletion of mappings.
+* Reverse Lookup a unique key(s) by its context. If more than one key exits for the context in the index then all are returned. If the context does not exist or does not map to any keys then this is an error. In general use of this is only intended to support the creation or deletion of entries.
 
 All of these operations can be performed in bulk (i.e. many at once) up to some configurable limit per index and bulk operations can combine a mix of different individual operations. Where bulk operations are performed the client can expect them to be performed in the exact order given and that if any fail rest will be rolled back (i.e. bulk operations are transactional). It is intended that the Create and Lookup operations will be the ones most utilised and these will be the ones most optimised for. Note that as contexts are immutable no update is provided. 
 
@@ -40,12 +40,12 @@ The admin operations are (initially these might only be supported by static conf
 ### Usage
 Udex is intended to be used by other systems.
 
-In general a "source" system will generate a mapping by sending the desired context for the entity to Udex, and Udex will generate a the mapping with a key. THe source then uses the key in integration for the entity with other parties. It may choose to use different keys and contexts for the same entity.
+In general a "source" system will generate an entry by sending the desired context for the entity to Udex, and Udex will generate a the entry with a key. THe source then uses the key in integration for the entity with other parties. It may choose to use different keys and contexts for the same entity.
 
 > An example of usage of Udex might be an Open Banking environment where customer and account identifiers are required to be stable vs changes in the underlying customer and account systems but also not shared between different data holders/partners so that the compromise of one data holder does not compromise the other data holders.
 
 ### What Udex is not
-Udex is not intended to store the entities themselves nor the relations between them and deliberately does not provide a flexible data model for this: the context is only intended to be able to capture the minimum required to perform further operations on the entity in other systems. Note that context could itself just be another unique key. Nor does Udex support mechanisms for search and query: it is assumed that Udex clients know either the unique key(s) or the context (or at least the context hash) of the entities they are interested in resolving and, once the mapping has been resolved they know how to use the mapping to perform further operations. 
+Udex is not intended to store the entities themselves nor the relations between them and deliberately does not provide a flexible data model for this: the context is only intended to be able to capture the minimum required to perform further operations on the entity in other systems. Note that context could itself just be another unique key. Nor does Udex support mechanisms for search and query: it is assumed that Udex clients know either the unique key(s) or the context (or at least the context hash) of the entities they are interested in resolving and, once the entry has been resolved they know how to use the entry to perform further operations. 
 
 Udex is not intended to be used directly by humans apart from specific admin operations (which will still be ideally automated in some way). Other systems might provide a human interface for Udex, and if so must provide for human level (i.e. fine-grained) authentication and authorization. 
 
@@ -107,9 +107,12 @@ Udex configuration will only support secrets by injection (e.g. Datastore creden
 * Udex will support Open Telemetry tracing and metric standards.
 * Udex deployments will be containerized with the primary deployment pattern being Kubernetes: Udex can be run either as its own service or as a sidecar. The sidecar pattern might be the only valid use case for disabling transport level encryption outside of local development.
 
+### Generative AI
+This project has been developed using Cursor using https://github.com/itseasy21/mcp-knowledge-graph as a local memory store (which is gitignored).
+
 ## Workspace
 Udex will be developed in a git monorepo. Some kind of build tooling will be required that support polyglot projects - e.g. Nx. The entire workspaces will be used via a vscode devcontainer.
 
 
 ## Questions/Issues
-Should many keys to one context per index be allowed or should there only be a one to one mapping? The latter would map better to a KV style datastore and semantics but require the creation of more contexts (and mappings) and for "sources" to distinguish between them (e.g. based on integration party?)
+Should many keys to one context per index be allowed or should there only be a one to one entry? The latter would map better to a KV style datastore and semantics but require the creation of more contexts (and entries) and for "sources" to distinguish between them (e.g. based on integration party?)

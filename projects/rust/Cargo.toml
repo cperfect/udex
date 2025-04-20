@@ -1,0 +1,65 @@
+[workspace]
+members = [
+    "api",
+    "datastore",
+    "server"
+    # "cli" - temporarily excluded until implementation exists
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Udex Team"]
+license = "MIT"
+repository = "https://github.com/cperfect/udex"
+description = "Universal lookup directory for entities"
+
+[workspace.dependencies]
+# Core async runtime and networking
+tokio = { version = "1.36", features = ["full"] }
+tonic = { version = "0.13", features = ["transport", "_tls-any"] }
+prost = "0.13.5"
+prost-types = "0.13.5"
+
+# Error handling and utilities
+thiserror = "2.0"
+anyhow = "1.0"
+time = "0.3.41"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+async-trait = "0.1"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Database
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "time"] }
+
+# Authentication
+jsonwebtoken = { version = "9.3" }
+
+# Build dependencies
+tonic-build = "0.13"
+
+# Dev dependencies
+testcontainers = { version = "0.24.0", features = ["blocking"] }
+testcontainers-modules = { version = "0.12.1", features = ["postgres"] }
+tokio-shared-rt = "0.1.0"
+maybe-once = { version = "0.17.4", features = ["tokio"] }
+rstest = "0.25.0"
+mockall = "0.13.1"
+rustls = { version = "0.23", features = ["aws_lc_rs"] }
+sqlx-cli = "0.8.6"
+
+# Note: Profile-specific features are not supported in Cargo.toml
+# The integration_test feature is enabled in udex-datastore's dev-dependencies instead
+
+# Known issue: Transitive dependency num-bigint-dig v0.8.4 (via sqlx → rsa)
+# has a future incompatibility warning. This will be resolved when sqlx
+# updates its dependencies. Does not affect current functionality.
