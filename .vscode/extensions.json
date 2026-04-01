@@ -1,5 +1,7 @@
 {
   "recommendations": [
-    "pbkit.vscode-pbkit"
+    "pbkit.vscode-pbkit",
+    "fill-labs.dependi",
+    "anthropic.claude-code"
   ]
 }
