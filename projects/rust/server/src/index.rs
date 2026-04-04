@@ -268,7 +268,7 @@ where
         }
 
         Err(Status::unimplemented(
-            "IndexService::list_indices not implemented",
+            "IndexService::update_index not implemented",
         ))
     }
 
