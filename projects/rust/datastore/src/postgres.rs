@@ -127,7 +127,7 @@ impl PostgresDatastore {
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<(), Error> {
         // First delete the entry
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             DELETE FROM entry
             WHERE key = $1
@@ -137,6 +137,10 @@ impl PostgresDatastore {
         .execute(&mut **tx)
         .await
         .map_err(Error::Database)?;
+
+        if result.rows_affected() == 0 {
+            return Err(Error::EntryForKeyNotFound(key.to_string()));
+        }
 
         // Then delete any orphaned contexts (contexts with no remaining entries)
         sqlx::query(
