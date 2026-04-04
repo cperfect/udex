@@ -7,7 +7,10 @@
       "Bash(cargo tree:*)",
       "Bash(cargo search:*)",
       "Bash(cargo report:*)",
-      "Bash(cargo update:*)"
+      "Bash(cargo update:*)",
+      "WebFetch(domain:www.ietf.org)",
+      "WebFetch(domain:nrc.github.io)",
+      "WebFetch(domain:rust-lang.github.io)"
     ]
   }
 }
