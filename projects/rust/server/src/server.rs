@@ -60,10 +60,12 @@ where
     println!("Starting Udex server on {} with TLS", addr);
 
     // Load TLS certificates etc.
-    let cert = std::fs::read_to_string(config.tls.cert_path)
+    let cert = tokio::fs::read_to_string(config.tls.cert_path)
+        .await
         .map_err(|e| Error::ServerError(format!("Failed to read server cert: {}", e)))?;
 
-    let key = std::fs::read_to_string(config.tls.key_path)
+    let key = tokio::fs::read_to_string(config.tls.key_path)
+        .await
         .map_err(|e| Error::ServerError(format!("Failed to read private key: {}", e)))?;
 
     // construct the tls identity
