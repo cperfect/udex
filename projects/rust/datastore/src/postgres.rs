@@ -645,38 +645,24 @@ impl Datastore for PostgresDatastore {
         &self,
         operations: Vec<EntryReadOperation>,
     ) -> Result<Vec<EntryReadResult>, BulkOperationError> {
-        let mut tx = self.pool.begin().await.map_err(|e| BulkOperationError {
-            msg: "Failed to begin transaction".to_string(),
-            source: Error::Database(e),
-        })?;
-
         let mut results = Vec::new();
 
         for operation in operations {
             let result: Result<EntryReadResult, Error> = match operation {
                 EntryReadOperation::GetByKey(key) => {
-                    match self.get_entry_by_key_ex(key, &mut *tx).await {
-                        Ok(entry) => Ok(EntryReadResult::Entry(entry)),
-                        Err(e) => Err(e),
-                    }
+                    self.get_entry_by_key_ex(key, &*self.pool)
+                        .await
+                        .map(EntryReadResult::Entry)
                 }
                 EntryReadOperation::GetByContext(context_hash) => {
-                    match self
-                        .get_entries_by_context_ex(&context_hash, &mut *tx)
+                    self.get_entries_by_context_ex(&context_hash, &*self.pool)
                         .await
-                    {
-                        Ok(entries) => Ok(EntryReadResult::Entries(entries)),
-                        Err(e) => Err(e),
-                    }
+                        .map(EntryReadResult::Entries)
                 }
             };
             match result {
                 Ok(res) => results.push(res),
                 Err(e) => {
-                    tx.rollback().await.map_err(|err| BulkOperationError {
-                        msg: "Failed to rollback transaction".to_string(),
-                        source: Error::Database(err),
-                    })?;
                     return Err(BulkOperationError {
                         msg: "Bulk read operation failed".to_string(),
                         source: e,
