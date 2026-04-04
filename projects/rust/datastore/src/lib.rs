@@ -126,7 +126,7 @@ pub trait Datastore: Send + Sync {
     /// Initialize a datastore with the config and return a new instance.
     async fn init(config: DatastoreConfig) -> Result<Box<Self>, Error> where Self: Sized;
 
-    /// Checks the servier is healthy
+    /// Checks the server is healthy
     async fn is_healthy(&self) -> Result<bool, Error>;
 
     /// Create a new index

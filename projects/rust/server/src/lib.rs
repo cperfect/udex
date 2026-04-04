@@ -42,6 +42,6 @@ pub enum Error {
 
 #[tonic::async_trait]
 pub trait HealthCheck {
-    /// Checks the servier is healthy
+    /// Checks the server is healthy
     async fn is_healthy(&self) -> Result<bool, Error>;
 }
