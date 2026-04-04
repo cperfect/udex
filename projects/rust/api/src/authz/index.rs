@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use serde_json::json;
-
 use crate::index::{
     index_service_server::IndexService,
     DescribeRequest, DescribeResponse,
@@ -45,9 +43,6 @@ where
         let claims = request.extensions().get::<Claims>()
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
 
-        let json = json!(claims);
-        println!("Claims in request: {}", json);
-        
         // Check permissions
         if !is_permitted(request.get_ref(), claims)
             .map_err(|e| tonic::Status::internal(format!("Permission check failed: {}", e)))? {
