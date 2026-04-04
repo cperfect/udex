@@ -110,7 +110,7 @@ async fn test_describe_empty_name() {
     }
 }
 
-/// Tests the create_index endpoint with valid input returns NotImplemented
+/// Tests the create_index endpoint with valid input creates the index and returns it
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_create_index_valid_input() {
@@ -118,22 +118,111 @@ async fn test_create_index_valid_input() {
     let index_server = &data.0;
 
     let request = Request::new(CreateIndexRequest {
-        name: "test_index".to_string(),
-        description: "Test index description".to_string(),
-        max_bulk_operations: 100,
-        max_key_length: 256,
-        max_value_length: 1024,
-        max_kv_pairs_per_context: 50,
+        name: "created_test_index".to_string(),
+        description: "A newly created index".to_string(),
+        max_bulk_operations: 50,
+        max_key_length: 128,
+        max_value_length: 512,
+        max_kv_pairs_per_context: 20,
+        hash_algorithm: "sha1".to_string(),
+    });
+    let result = index_server.create_index(request).await;
+
+    assert!(result.is_ok(), "Create index with valid input should succeed: {:?}", result.err());
+
+    let index = result.unwrap().into_inner().index.expect("Response should contain the created index");
+    assert_eq!(index.name, "created_test_index");
+    assert_eq!(index.description, "A newly created index");
+    assert_eq!(index.max_bulk_operations, 50);
+    assert_eq!(index.max_key_length, 128);
+    assert_eq!(index.max_value_length, 512);
+    assert_eq!(index.max_kv_pairs_per_context, 20);
+    assert_eq!(index.hash_algorithm, HashAlgorithm::Sha1 as i32);
+    assert!(index.created_at.is_some());
+}
+
+/// Tests the create_index endpoint accepts hash_algorithm case-insensitively
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_create_index_hash_algorithm_case_insensitive() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    let request = Request::new(CreateIndexRequest {
+        name: "created_test_index_uppercase".to_string(),
+        description: "Case insensitive hash test".to_string(),
+        max_bulk_operations: 10,
+        max_key_length: 64,
+        max_value_length: 256,
+        max_kv_pairs_per_context: 5,
+        hash_algorithm: "SHA1".to_string(),
+    });
+    let result = index_server.create_index(request).await;
+
+    assert!(result.is_ok(), "Create index with uppercase SHA1 should succeed: {:?}", result.err());
+    let index = result.unwrap().into_inner().index.expect("Response should contain the created index");
+    assert_eq!(index.hash_algorithm, HashAlgorithm::Sha1 as i32);
+}
+
+/// Tests the create_index endpoint rejects an unsupported hash algorithm
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_create_index_unsupported_hash_algorithm() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    let request = Request::new(CreateIndexRequest {
+        name: "unsupported_hash_index".to_string(),
+        description: "Should fail".to_string(),
+        max_bulk_operations: 10,
+        max_key_length: 64,
+        max_value_length: 256,
+        max_kv_pairs_per_context: 5,
         hash_algorithm: "sha256".to_string(),
     });
     let result = index_server.create_index(request).await;
-    
-    assert!(result.is_err(), "Create index should return an error");
-    
-    if let Err(status) = result {
-        assert_eq!(status.code(), tonic::Code::Unimplemented);
-        assert!(status.message().contains("IndexService::create_index not implemented"));
-    }
+
+    assert!(result.is_err(), "Create index with unsupported hash_algorithm should fail");
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::InvalidArgument);
+    assert!(status.message().contains("unsupported hash_algorithm"));
+}
+
+/// Tests the create_index endpoint rejects a duplicate index name
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_create_index_duplicate_name() {
+    let data = data(true).await; // serial: true to avoid races with test_create_index_valid_input
+    let index_server = &data.0;
+
+    // First creation should succeed
+    let request = Request::new(CreateIndexRequest {
+        name: "duplicate_test_index".to_string(),
+        description: "First".to_string(),
+        max_bulk_operations: 10,
+        max_key_length: 64,
+        max_value_length: 256,
+        max_kv_pairs_per_context: 5,
+        hash_algorithm: "sha1".to_string(),
+    });
+    let result = index_server.create_index(request).await;
+    assert!(result.is_ok(), "First create should succeed: {:?}", result.err());
+
+    // Second creation with same name should fail
+    let request = Request::new(CreateIndexRequest {
+        name: "duplicate_test_index".to_string(),
+        description: "Second".to_string(),
+        max_bulk_operations: 10,
+        max_key_length: 64,
+        max_value_length: 256,
+        max_kv_pairs_per_context: 5,
+        hash_algorithm: "sha1".to_string(),
+    });
+    let result = index_server.create_index(request).await;
+    assert!(result.is_err(), "Duplicate create should fail");
+    // The datastore surfaces unique constraint violations as a generic Database error, which
+    // maps to Internal. Ideally this would be AlreadyExists — see datastore create_index.
+    assert_eq!(result.unwrap_err().code(), tonic::Code::Internal);
 }
 
 /// Tests the create_index endpoint validation for empty name
@@ -442,7 +531,7 @@ async fn test_validation_error_consistency() {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: "sha256".to_string(),
+            hash_algorithm: "sha1".to_string(),
         },
         CreateIndexRequest {
             name: "valid_name".to_string(),
@@ -451,7 +540,7 @@ async fn test_validation_error_consistency() {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: "sha256".to_string(),
+            hash_algorithm: "sha1".to_string(),
         },
         CreateIndexRequest {
             name: "valid_name".to_string(),
