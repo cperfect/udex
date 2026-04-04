@@ -134,28 +134,20 @@ where
                 updated_by: None,
             };
 
-            //check if the index already exists
-            if existing_indices
-                .iter()
-                .any(|i| i.name == index_request.name)
-            {
+            if let Some(existing) = existing_indices.iter().find(|i| i.name == index_request.name) {
                 // check if index requested is different from existing
-                if existing_indices.iter().any(|i| {
-                    i.name != index_request.name
-                        || i.description != index.description
-                        || i.max_bulk_operations != index.max_bulk_operations
-                        || i.max_key_length != index.max_key_length
-                        || i.max_value_length != index.max_value_length
-                        || i.max_kv_pairs_per_context != index.max_kv_pairs_per_context
-                        || i.hash_algorithm != index.hash_algorithm
-                }) {
+                if existing.description != index.description
+                    || existing.max_bulk_operations != index.max_bulk_operations
+                    || existing.max_key_length != index.max_key_length
+                    || existing.max_value_length != index.max_value_length
+                    || existing.max_kv_pairs_per_context != index.max_kv_pairs_per_context
+                    || existing.hash_algorithm != index.hash_algorithm
+                {
                     // update the existing index
                     self.update_index_internal(&index_request.name, update.clone(), "init")
                         .await?; //TODO useful updated by from auth
-                } else {
-                    // index already exists and is the same, skip
-                    continue;
                 }
+                // else: index already exists and is the same, skip
             } else {
                 // create the index
                 self.create_index_internal(index).await?;
