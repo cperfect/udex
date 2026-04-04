@@ -19,18 +19,6 @@ pub struct DatastoreConfig {
     pub query_timeout: Duration,
 }
 
-impl Default for DatastoreConfig {
-    fn default() -> Self {
-        Self {
-            connection_url: "postgres://postgres:admin@localhost:5432/postgres".to_string(),
-            max_connections: 10,
-            min_connections: 1,
-            connection_timeout: Duration::from_secs(10),
-            query_timeout: Duration::from_secs(30),
-        }
-    }
-}
-
 impl DatastoreConfig {
     /// Validate the datastore configuration.
     pub fn validate(&self) -> Result<(), DatastoreConfigError> {
@@ -88,17 +76,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_datastore_config() {
-        let config = DatastoreConfig::default();
-        assert!(config.validate().is_ok());
-        assert_eq!(config.connection_url, "postgres://postgres:admin@localhost:5432/postgres");
-        assert_eq!(config.max_connections, 10);
-        assert_eq!(config.min_connections, 1);
-    }
-
-    #[test]
     fn test_datastore_config_validation() {
-        let mut config = DatastoreConfig::default();
+        let mut config = DatastoreConfig {
+            connection_url: "postgres://localhost:5432/udex".to_string(),
+            max_connections: 10,
+            min_connections: 1,
+            connection_timeout: Duration::from_secs(10),
+            query_timeout: Duration::from_secs(30),
+        };
         
         // Test empty connection URL
         config.connection_url = String::new();
@@ -121,8 +106,13 @@ mod tests {
 
     #[test]
     fn test_connection_url_substitution() {
-        let mut config = DatastoreConfig::default();
-        config.connection_url = "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}".to_string();
+        let mut config = DatastoreConfig {
+            connection_url: "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}".to_string(),
+            max_connections: 10,
+            min_connections: 1,
+            connection_timeout: Duration::from_secs(10),
+            query_timeout: Duration::from_secs(30),
+        };
         
         std::env::set_var("DB_HOST", "localhost");
         std::env::set_var("DB_PORT", "5432");

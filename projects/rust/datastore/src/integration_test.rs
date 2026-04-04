@@ -104,10 +104,13 @@ pub async fn init_postgres() -> MaybeOnceType {
     // - 13 tests run concurrently
     // - test_concurrent_operations spawns 10 additional tasks
     // - Extra buffer for overhead
-    let mut cfg = DatastoreConfig::default();
-    cfg.connection_url = test_database_url.clone();
-    cfg.max_connections = 25; // Increased from default 10
-    cfg.connection_timeout = std::time::Duration::from_secs(30); // Long timeout for concurrent tests
+    let cfg = DatastoreConfig {
+        connection_url: test_database_url.clone(),
+        max_connections: 25, // Increased to support concurrent tests
+        min_connections: 1,
+        connection_timeout: std::time::Duration::from_secs(30), // Long timeout for concurrent tests
+        query_timeout: std::time::Duration::from_secs(30),
+    };
 
     let datastore = PostgresDatastore::init(cfg)
         .await
