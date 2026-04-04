@@ -38,28 +38,31 @@ impl DatastoreConfig {
     }
 
     /// Get the datastore configuration URL with environment variable substitution.
-    pub fn resolved_connection_url(&self) -> String {
-        // Simple environment variable substitution
+    ///
+    /// Returns an error if any `${VAR}` placeholder remains unresolved after substitution.
+    pub fn resolved_connection_url(&self) -> Result<String, DatastoreConfigError> {
         let mut url = self.connection_url.clone();
-        
-        // Replace common environment variables
-        if let Ok(db_host) = std::env::var("DB_HOST") {
-            url = url.replace("${DB_HOST}", &db_host);
+
+        for (var, placeholder) in [
+            ("DB_HOST",     "${DB_HOST}"),
+            ("DB_PORT",     "${DB_PORT}"),
+            ("DB_USER",     "${DB_USER}"),
+            ("DB_PASSWORD", "${DB_PASSWORD}"),
+            ("DB_NAME",     "${DB_NAME}"),
+        ] {
+            if let Ok(value) = std::env::var(var) {
+                url = url.replace(placeholder, &value);
+            }
         }
-        if let Ok(db_port) = std::env::var("DB_PORT") {
-            url = url.replace("${DB_PORT}", &db_port);
+
+        if url.contains("${") {
+            return Err(DatastoreConfigError::Validation(format!(
+                "connection_url contains unresolved placeholder(s): {}",
+                url
+            )));
         }
-        if let Ok(db_user) = std::env::var("DB_USER") {
-            url = url.replace("${DB_USER}", &db_user);
-        }
-        if let Ok(db_password) = std::env::var("DB_PASSWORD") {
-            url = url.replace("${DB_PASSWORD}", &db_password);
-        }
-        if let Ok(db_name) = std::env::var("DB_NAME") {
-            url = url.replace("${DB_NAME}", &db_name);
-        }
-        
-        url
+
+        Ok(url)
     }
 }
 
@@ -120,14 +123,18 @@ mod tests {
         std::env::set_var("DB_PASSWORD", "test_pass");
         std::env::set_var("DB_NAME", "test_db");
         
-        let url = config.resolved_connection_url();
+        let url = config.resolved_connection_url().expect("all placeholders should be resolved");
         assert_eq!(url, "postgres://test_user:test_pass@localhost:5432/test_db");
-        
+
         // Clean up environment variables
         std::env::remove_var("DB_HOST");
         std::env::remove_var("DB_PORT");
         std::env::remove_var("DB_USER");
         std::env::remove_var("DB_PASSWORD");
         std::env::remove_var("DB_NAME");
+
+        // Unresolved placeholder should return an error
+        config.connection_url = "postgres://user:pass@${DB_HOST}:5432/db".to_string();
+        assert!(config.resolved_connection_url().is_err());
     }
 }

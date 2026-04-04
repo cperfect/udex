@@ -285,7 +285,7 @@ impl Datastore for PostgresDatastore {
             .min_connections(config.min_connections)
             .acquire_timeout(config.connection_timeout)
             .idle_timeout(config.query_timeout)
-            .connect(&config.resolved_connection_url())
+            .connect(&config.resolved_connection_url().map_err(|e| Error::DatabaseNotInitialized(e.to_string()))?)
             .await
             .map_err(Error::Database)?;
 
