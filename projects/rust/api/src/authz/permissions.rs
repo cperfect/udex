@@ -42,10 +42,13 @@ pub fn is_permitted<M>(message: &M, claims: &Claims) -> Result<bool, Error> wher
             }
             validated_permissions
         } else {
+            // TODO(major): replace println! with tracing::warn! - adopt tracing crate for
+            // structured, levelled logging throughout the codebase.
             println!("Permissions in claims are not an array, treating as empty");
             Vec::new()
         }
     } else {
+        // TODO(major): replace println! with tracing::warn! (see above)
         println!("No permissions found in claims, treating as empty");
         Vec::new()
     };

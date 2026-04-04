@@ -74,6 +74,9 @@ impl AuthnInterceptor {
         let claims = match decode::<Claims>(token, &self.public_key, &validation) {
             Ok(token_data) => Ok(token_data.claims),
             Err(err) => {
+                // TODO(major): replace println! with tracing::warn! - adopt tracing crate for
+                // structured, levelled logging. Use tracing::warn! here as JWT errors are
+                // expected in normal operation (e.g. expired tokens) and should not be noise.
                 println!("JWT validation error: {:?}", err);
                 Err(Status::unauthenticated("Invalid JWT token"))
             }
@@ -112,10 +115,12 @@ impl RequestInterceptor for AuthnInterceptor {
             Some(auth_header) => {
                 let token = self.extract_bearer_token(auth_header)?;
                 let claims = self.validate_jwt(token)?;
+                // TODO(major): replace println! with tracing::debug! (see above)
                 println!("JWT validation successful for token");
 
                 //add the claims to the request extensions
                 req.extensions_mut().insert(claims);
+                // TODO(major): replace println! with tracing::debug! (see above)
                 println!("Claims added to request extensions");
                 Ok(req)
             }

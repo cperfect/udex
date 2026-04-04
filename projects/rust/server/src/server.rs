@@ -24,6 +24,9 @@ where
 
     let addr = config.bind_address;
 
+    // TODO(major): replace println! with tracing - adopt tracing crate for structured, levelled
+    // logging throughout the server. Use tracing::info!, tracing::warn!, tracing::error! etc.
+    // See: https://docs.rs/tracing
     println!("Initialising services");
 
     let datastore_arc = Arc::new(datastore);
@@ -57,6 +60,7 @@ where
         index_service_inner_arc.clone(),
     );
 
+    // TODO(major): replace println! with tracing (see above)
     println!("Starting Udex server on {} with TLS", addr);
 
     // Load TLS certificates etc.
