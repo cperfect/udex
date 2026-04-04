@@ -42,16 +42,16 @@ impl PostgresDatastore {
         entry: Entry,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<(), Error> {
-        // Get the hash algorithm from the index
-        let index = self.get_index(&entry.index_name).await?;
-        let hash_algorithm_str = HashAlgorithm::try_from(index.hash_algorithm)
-            .map_err(|_| {
-                Error::InvalidIndex(format!(
-                    "Invalid hash_algorithm value: {}",
-                    index.hash_algorithm
-                ))
-            })?
-            .as_str_name();
+        // Fetch only the hash_algorithm from the index within the transaction to avoid
+        // a pool read outside the transaction boundary.
+        let hash_algorithm_str = sqlx::query_scalar::<_, String>(
+            "SELECT hash_algorithm FROM index WHERE name = $1",
+        )
+        .bind(&entry.index_name)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(Error::Database)?
+        .ok_or_else(|| Error::InvalidIndex(format!("Index '{}' not found", entry.index_name)))?;
         // Check if an entry with this key already exists
         let existing_entry = sqlx::query("SELECT key FROM entry WHERE key = $1")
             .bind(UuidWrapper(entry.key))
