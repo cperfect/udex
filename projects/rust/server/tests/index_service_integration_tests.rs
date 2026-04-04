@@ -220,8 +220,8 @@ async fn test_create_index_duplicate_name() {
     });
     let result = index_server.create_index(request).await;
     assert!(result.is_err(), "Duplicate create should fail");
-    // The datastore surfaces unique constraint violations as a generic Database error, which
-    // maps to Internal. Ideally this would be AlreadyExists — see datastore create_index.
+    // Deliberately returns Internal rather than AlreadyExists: exposing AlreadyExists would
+    // leak the existence of index names the caller may not have permission to know about.
     assert_eq!(result.unwrap_err().code(), tonic::Code::Internal);
 }
 
