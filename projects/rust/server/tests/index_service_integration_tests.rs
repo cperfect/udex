@@ -124,7 +124,7 @@ async fn test_create_index_valid_input() {
         max_key_length: 128,
         max_value_length: 512,
         max_kv_pairs_per_context: 20,
-        hash_algorithm: "sha1".to_string(),
+        hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
 
@@ -141,30 +141,7 @@ async fn test_create_index_valid_input() {
     assert!(index.created_at.is_some());
 }
 
-/// Tests the create_index endpoint accepts hash_algorithm case-insensitively
-#[rstest]
-#[tokio_shared_rt::test]
-async fn test_create_index_hash_algorithm_case_insensitive() {
-    let data = data(false).await;
-    let index_server = &data.0;
-
-    let request = Request::new(CreateIndexRequest {
-        name: "created_test_index_uppercase".to_string(),
-        description: "Case insensitive hash test".to_string(),
-        max_bulk_operations: 10,
-        max_key_length: 64,
-        max_value_length: 256,
-        max_kv_pairs_per_context: 5,
-        hash_algorithm: "SHA1".to_string(),
-    });
-    let result = index_server.create_index(request).await;
-
-    assert!(result.is_ok(), "Create index with uppercase SHA1 should succeed: {:?}", result.err());
-    let index = result.unwrap().into_inner().index.expect("Response should contain the created index");
-    assert_eq!(index.hash_algorithm, HashAlgorithm::Sha1 as i32);
-}
-
-/// Tests the create_index endpoint rejects an unsupported hash algorithm
+/// Tests the create_index endpoint rejects an unknown hash algorithm enum value
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_create_index_unsupported_hash_algorithm() {
@@ -178,11 +155,11 @@ async fn test_create_index_unsupported_hash_algorithm() {
         max_key_length: 64,
         max_value_length: 256,
         max_kv_pairs_per_context: 5,
-        hash_algorithm: "sha256".to_string(),
+        hash_algorithm: 99, // not a valid HashAlgorithm variant
     });
     let result = index_server.create_index(request).await;
 
-    assert!(result.is_err(), "Create index with unsupported hash_algorithm should fail");
+    assert!(result.is_err(), "Create index with unknown hash_algorithm value should fail");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(status.message().contains("unsupported hash_algorithm"));
@@ -203,7 +180,7 @@ async fn test_create_index_duplicate_name() {
         max_key_length: 64,
         max_value_length: 256,
         max_kv_pairs_per_context: 5,
-        hash_algorithm: "sha1".to_string(),
+        hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
     assert!(result.is_ok(), "First create should succeed: {:?}", result.err());
@@ -216,7 +193,7 @@ async fn test_create_index_duplicate_name() {
         max_key_length: 64,
         max_value_length: 256,
         max_kv_pairs_per_context: 5,
-        hash_algorithm: "sha1".to_string(),
+        hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
     assert!(result.is_err(), "Duplicate create should fail");
@@ -239,7 +216,7 @@ async fn test_create_index_empty_name() {
         max_key_length: 256,
         max_value_length: 1024,
         max_kv_pairs_per_context: 50,
-        hash_algorithm: "sha256".to_string(),
+        hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
     
@@ -265,7 +242,7 @@ async fn test_create_index_invalid_max_bulk_operations() {
         max_key_length: 256,
         max_value_length: 1024,
         max_kv_pairs_per_context: 50,
-        hash_algorithm: "sha256".to_string(),
+        hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
     
@@ -291,7 +268,7 @@ async fn test_create_index_invalid_max_key_length() {
         max_key_length: 0, // Invalid: should be >= 1
         max_value_length: 1024,
         max_kv_pairs_per_context: 50,
-        hash_algorithm: "sha256".to_string(),
+        hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
     
@@ -317,7 +294,7 @@ async fn test_create_index_invalid_max_value_length() {
         max_key_length: 256,
         max_value_length: 0, // Invalid: should be >= 1
         max_kv_pairs_per_context: 50,
-        hash_algorithm: "sha256".to_string(),
+        hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
     
@@ -343,7 +320,7 @@ async fn test_create_index_invalid_max_kv_pairs_per_context() {
         max_key_length: 256,
         max_value_length: 1024,
         max_kv_pairs_per_context: 0, // Invalid: should be >= 1
-        hash_algorithm: "sha256".to_string(),
+        hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
     
@@ -355,10 +332,10 @@ async fn test_create_index_invalid_max_kv_pairs_per_context() {
     }
 }
 
-/// Tests the create_index endpoint validation for empty hash_algorithm
+/// Tests the create_index endpoint rejects an unknown hash_algorithm enum value
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_empty_hash_algorithm() {
+async fn test_create_index_invalid_hash_algorithm() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -369,15 +346,15 @@ async fn test_create_index_empty_hash_algorithm() {
         max_key_length: 256,
         max_value_length: 1024,
         max_kv_pairs_per_context: 50,
-        hash_algorithm: "".to_string(), // Invalid: should not be empty
+        hash_algorithm: 99, // not a valid HashAlgorithm variant
     });
     let result = index_server.create_index(request).await;
-    
-    assert!(result.is_err(), "Create index with empty hash_algorithm should return an error");
-    
+
+    assert!(result.is_err(), "Create index with invalid hash_algorithm should return an error");
+
     if let Err(status) = result {
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
-        assert!(status.message().contains("hash_algorithm is required"));
+        assert!(status.message().contains("unsupported hash_algorithm"));
     }
 }
 
@@ -531,7 +508,7 @@ async fn test_validation_error_consistency() {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: "sha1".to_string(),
+            hash_algorithm: HashAlgorithm::Sha1 as i32,
         },
         CreateIndexRequest {
             name: "valid_name".to_string(),
@@ -540,7 +517,7 @@ async fn test_validation_error_consistency() {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: "sha1".to_string(),
+            hash_algorithm: HashAlgorithm::Sha1 as i32,
         },
         CreateIndexRequest {
             name: "valid_name".to_string(),
@@ -549,7 +526,7 @@ async fn test_validation_error_consistency() {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: "".to_string(),
+            hash_algorithm: 99, // not a valid HashAlgorithm variant
         },
     ];
 

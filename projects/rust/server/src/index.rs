@@ -229,17 +229,10 @@ where
                 "max_kv_pairs_per_context must be >= 1",
             ));
         }
-        if req.hash_algorithm.is_empty() {
-            return Err(Status::invalid_argument("hash_algorithm is required"));
-        }
-
-        let hash_algorithm = match req.hash_algorithm.to_lowercase().as_str() {
-            "sha1" => udex_api::index::HashAlgorithm::Sha1 as i32,
-            _ => return Err(Status::invalid_argument(format!(
-                "unsupported hash_algorithm '{}', supported values: sha1",
-                req.hash_algorithm
-            ))),
-        };
+        udex_api::index::HashAlgorithm::try_from(req.hash_algorithm)
+            .map_err(|_| Status::invalid_argument(
+                format!("unsupported hash_algorithm value: {}", req.hash_algorithm)
+            ))?;
 
         let index = Index {
             name: req.name,
@@ -248,7 +241,7 @@ where
             max_key_length: req.max_key_length,
             max_value_length: req.max_value_length,
             max_kv_pairs_per_context: req.max_kv_pairs_per_context,
-            hash_algorithm,
+            hash_algorithm: req.hash_algorithm,
             created_at: Some(udex_api::now_timestamp()),
             created_by: "api".to_string(), // TODO: populate from auth claims once Claims exposes a sub() accessor
             updated_at: None,

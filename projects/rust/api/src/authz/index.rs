@@ -139,6 +139,7 @@ impl Permissable<ListIndicesRequest> for ListIndicesRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::index::HashAlgorithm;
     use mockall::mock;
     use serde_json::json;
     use tonic::{Request, Response, Status};
@@ -268,7 +269,7 @@ mod tests {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: "sha256".to_string(),
+            hash_algorithm: HashAlgorithm::Sha1 as i32,
         });
         request.extensions_mut().insert(claims);
         
@@ -289,7 +290,7 @@ mod tests {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: "sha256".to_string(),
+            hash_algorithm: HashAlgorithm::Sha1 as i32,
         });
         request.extensions_mut().insert(claims);
         
@@ -359,7 +360,7 @@ mod tests {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: "sha256".to_string(),
+            hash_algorithm: HashAlgorithm::Sha1 as i32,
         });
         request.extensions_mut().insert(claims);
         
@@ -380,7 +381,7 @@ mod tests {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: "sha256".to_string(),
+            hash_algorithm: HashAlgorithm::Sha1 as i32,
         });
         request.extensions_mut().insert(claims);
         

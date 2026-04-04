@@ -73,7 +73,7 @@ message CreateIndexRequest {
   int32 max_key_length = 4; // required
   int32 max_value_length = 5; // required
   int32 max_kv_pairs_per_context = 6; // required
-  string hash_algorithm = 7; // required, e.g., "sha1", "blake3"
+  HashAlgorithm hash_algorithm = 7; // required
 }
 
 // CreateIndexResponse returns the created index
