@@ -20,4 +20,5 @@ Use these local extracts as your primary reference. They are curated summaries o
 | Rust Style Guide | [rust-style-guide.md](rust-style-guide.md) | https://doc.rust-lang.org/style-guide/index.html |
 | NRC Error Design Guidelines | [nrc-error-design.md](nrc-error-design.md) | https://nrc.github.io/error-docs/error-design/index.html |
 | Rust API Design Guidelines | [rust-api-guidelines.md](rust-api-guidelines.md) | https://rust-lang.github.io/api-guidelines/ |
+| OWASP Secure Coding Practices | [owasp-secure-coding-practices.md](owasp-secure-coding-practices.md) | https://owasp.org/www-project-secure-coding-practices-quick-reference-guide/stable-en/02-checklist/05-checklist |
 
