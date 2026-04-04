@@ -84,21 +84,24 @@ where
     
     /// Converts a ContextInput to a Context by generating a hash.
     /// Uses the default hash algorithm (SHA-1) for context identification.
-    fn context_input_to_context(&self, index_name: String, input: ContextInput) -> Context {
+    fn context_input_to_context(&self, index_name: String, input: ContextInput) -> Result<Context, Status> {
         let hasher_fn = self
             .index_hasher_fns
-            .get(&index_name.clone())
-            .ok_or_else(|| Error::ServerError(format!("Hash function for index {} not found - have the indexes and this entry service been initialised?", index_name))).unwrap();
+            .get(&index_name)
+            .ok_or_else(|| Status::internal(format!(
+                "Hash function for index {} not found - have the indexes and this entry service been initialised?",
+                index_name
+            )))?;
 
         let hash = hasher_fn(&input)
-            .expect("Failed to generate context hash");
+            .map_err(|e| Status::internal(format!("Failed to generate context hash: {}", e)))?;
 
-        Context {
+        Ok(Context {
             hash,
             pairs: input.pairs,
             dek: input.dek,
             kek_id: input.kek_id,
-        }
+        })
     }
 
     /// Converts a datastore Entry to an API Context.
@@ -176,7 +179,7 @@ where
         let key = Uuid::new_v4();
 
         // Convert context input to context with hash
-        let context = self.context_input_to_context(index_name.clone(), context_input);
+        let context = self.context_input_to_context(index_name.clone(), context_input)?;
 
         // save this for the response before moving the context below
         let context_hash = context.hash.clone();
@@ -328,7 +331,7 @@ where
                     let key = Uuid::new_v4();
 
                     // Convert context input to context with hash
-                    let context = self.context_input_to_context(req.index_name.clone(), context_input);
+                    let context = self.context_input_to_context(req.index_name.clone(), context_input)?;
 
                     // save this for the response before moving the context below
                     let context_hash = context.hash.clone();
