@@ -90,9 +90,9 @@ pub struct CreateIndexRequest {
     /// required
     #[prost(int32, tag = "6")]
     pub max_kv_pairs_per_context: i32,
-    /// required, e.g., "sha1", "blake3"
-    #[prost(string, tag = "7")]
-    pub hash_algorithm: ::prost::alloc::string::String,
+    /// required
+    #[prost(enumeration = "HashAlgorithm", tag = "7")]
+    pub hash_algorithm: i32,
 }
 /// CreateIndexResponse returns the created index
 #[derive(serde::Serialize, serde::Deserialize)]
