@@ -1,113 +1,82 @@
-# CLAUDE.md
+# workspace Project Guidelines
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This is an Intent v2.8.0 project.
 
-## Project Overview
+## Rules
 
-Udex is a universal lookup directory for entities designed for high-transaction distributed systems. It provides globally unique keys that map to contexts (key-value pairs) to prevent tight coupling across integration boundaries.
+1. **The Highlander Rule**: There can be only one. Never duplicate code paths, modules, or logic for the same concern. Before creating anything new, check MODULES.md.
+2. **Thin controllers and LiveViews**: Business logic lives in service modules or Ash domains, never in controllers, LiveViews, or CLI commands.
+3. **Tagged tuples everywhere**: Functions return `{:ok, result}` or `{:error, reason}`. Never return bare values from fallible operations.
+4. **No silent failures**: Every error path must be handled explicitly. No bare `rescue`, no `catch-all` that swallows errors.
+5. **Check before you create**: Before creating a new module, check MODULES.md. If a module already owns that concern, use it.
+6. **Register before you code**: When you must create a new module, add it to MODULES.md FIRST, then create the file.
 
-## Architecture
+## Project Structure
 
-This is a monorepo containing:
+- `intent/` - Project artifacts (steel threads, docs, work tracking)
+  - `st/` - Steel threads organized as directories
+  - `docs/` - Technical documentation
+  - `llm/` - LLM-specific guidelines (MODULES.md, DECISION_TREE.md, ARCHETYPES.md)
+- `.intent/` - Configuration and metadata
 
-- **`/projects/rust/`** - Main Rust workspace with 4 crates:
-  - `api/` - Generated gRPC API definitions and stubs from protobuf
-  - `datastore/` - Database abstraction layer (PostgreSQL/SQLite - future)
-  - `core/` - Server implementation with business logic
-  - `cli/` - Command-line interface for management and operations
-- **`/projects/protobuf/`** - Protobuf definitions for API generation
-- **`/docs/`** - Technical specifications and design documents
+## Key Reference Files
 
-## Key Technologies
+Read these on every session start and after every context reset:
 
-- **Rust**: Core implementation using tokio runtime
-- **gRPC/tonic**: Primary API protocol
-- **Protobuf v3**: API definitions and code generation
-- **Database**: PostgreSQL (or SQLite in future - via compile-time feature selection)
-- **sqlx**: Query builder & Database migration management
-- **clap**: CLI framework
+- `CLAUDE.md` (this file) - Project rules and structure
+- `intent/llm/MODULES.md` - Module registry (the Highlander enforcer)
+- `intent/llm/DECISION_TREE.md` - Where does this code belong?
+- `intent/wip.md` - Current work in progress
+- `intent/restart.md` - Session restart context (if exists)
 
-## Common Commands
+## Steel Threads
 
-### Building
-```bash
-# Build all projects
-cd projects/rust && cargo build
+Steel threads are organized as directories under `intent/st/`:
 
-# Build specific crate
-cargo build -p udex-api
-cargo build -p udex-datastore --features postgres  # or sqlite
-cargo build -p udex-core
-cargo build -p udex-cli
+- Each steel thread has its own directory (eg ST0001/)
+- Minimum required file is `info.md` with metadata
+- Optional files: design.md, impl.md, tasks.md
 
-# Build with specific datastore
-cargo build --features postgres
-cargo build --features sqlite
-```
+## Commands
 
-### Testing
-```bash
-# Run all tests
-cd projects/rust && cargo test
+### Core Commands
 
-# Test specific crate
-cargo test -p udex-api
-cargo test -p udex-datastore --features postgres
-```
+- `intent st new "Title"` - Create a new steel thread
+- `intent st list` - List all steel threads
+- `intent st show <id>` - Show steel thread details
+- `intent wp new <STID> "Title"` - Create a new work package
+- `intent wp list <STID>` - List work packages for a steel thread
+- `intent wp start <STID/NN>` - Mark work package as WIP
+- `intent wp done <STID/NN>` - Mark work package as Done
+- `intent doctor` - Check configuration
+- `intent help` - Get help
 
-### Running
-```bash
-# Start server
-cd projects/rust && cargo run -p udex-core --bin udex-server
+### Claude Commands
 
-# Use CLI
-cargo run -p udex-cli -- server start
-cargo run -p udex-cli -- index create my-index
-cargo run -p udex-cli -- index list
-```
+- `intent claude subagents <command>` - Manage Claude subagents
+- `intent claude skills <command>` - Manage Claude skills
+- `intent claude prime` - Synthesize project knowledge into MEMORY.md
 
-### Database Operations
-```bash
-# Run migrations
-cd projects/rust && cargo run -p udex-datastore --bin udex-datastore-migrate -- --datastore postgres://user:pass@localhost/udex
-```
+## Session Workflow
 
-### API Generation
-```bash
-# Regenerate API from protobuf
-cd projects/rust && cargo build -p udex-api
-```
+### On session start
 
-## Development Notes
+1. Read this file, MODULES.md, DECISION_TREE.md, wip.md, restart.md
+2. Understand current state before making any changes
+3. Ask clarifying questions if the task is ambiguous
 
-### Features and Compilation
-- Database support is compile-time selected via Cargo features (`postgres` or `sqlite`)
-- API code is generated from protobuf definitions in `/projects/protobuf/`
-- Each crate has specific feature flags for different datastore implementations
+### Before creating code
 
-### Configuration
-- Server configuration via YAML files
-- Environment variables: `UDEX_CONFIG_PATH`
-- Command line arguments: `--config config.yaml`
+1. Check MODULES.md -- does a module already own this concern?
+2. Check DECISION_TREE.md -- where does this code belong?
+3. If creating a new module: register in MODULES.md first
 
-### Security Model
-- OAuth 2.0 Client Credentials Flow with JWTs
-- TLS 1.3 required for all communications
-- Index-level permissions for operations
-- Envelope encryption support for sensitive context values
+### On session end
 
-### Data Model
-- **Index**: Named collection of entries with configurable limits
-- **Context**: Immutable key-value pairs identified by hash
-- **Globally Unique Key**: UUIDv4 generated by server
-- **Entry**: Relationship between unique keys and contexts
+1. Update intent/wip.md with current state
+2. Update intent/restart.md with context for next session
+3. Commit with descriptive message
 
-### Key Design Principles
-- Contexts are immutable (delete and replace only)
-- All operations are transactional
-- Bulk operations supported with configurable limits
-- Fast, non-cryptographic hashing for context identity
+## Author
 
-## Development Guidelines
-* [Udex Development Guide](./docs/DEVELOPMENT.md)
-* [Rust Development Guide](./projects/rust/DEVELOPMENT.md)
+vscode
