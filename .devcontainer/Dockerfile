@@ -10,3 +10,10 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
   && apt-get -y install --no-install-recommends \
   protobuf-compiler libprotobuf-dev
 
+# install intent
+# Clone the repository
+RUN mkdir -p /opt/intent
+WORKDIR /opt/intent
+RUN git clone https://github.com/matthewsinclair/intent.git .
+RUN ln -s /opt/intent/bin/intent /usr/local/bin/intent
+

@@ -10,16 +10,8 @@
 		"DATABASE_URL": "postgres://postgres:admin@localhost:5432/postgres"
 	},
 	"features": {
-		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
-			"moby": false,
-			"installDockerBuildx": true,
-			"installDockerComposeSwitch": true,
-			"version": "latest",
-			"dockerDashComposeVersion": "v2"
-		},
-		"ghcr.io/devcontainers-extra/features/protoc:1": {
-			"version": "latest"
-		},
+		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+		"ghcr.io/devcontainers-extra/features/protoc:1": {},
 		// "ghcr.io/devcontainers/features/java:1": {
 		// 	"version": "17",
 		// 	"jdkDistro": "open",
@@ -29,12 +21,8 @@
 		// 	"groovyVersion": "2.5.22"
 		// },
 		"ghcr.io/warrenbuckley/codespace-features/sqlite:1": {},
-		"ghcr.io/devcontainers/features/node:1": {
-			"nodeGypDependencies": true,
-			"version": "22",
-			"pnpmVersion": "none",
-			"nvmVersion": "0.39"
-		}
+		"ghcr.io/devcontainers/features/node:1": {},
+		"ghcr.io/devcontainers-extra/features/claude-code:1": {}
 	},
 
 	// Use 'mounts' to make the cargo cache persistent in a Docker Volume.
