@@ -40,6 +40,7 @@ time = { workspace = true }
 [dev-dependencies]
 udex-datastore = { path = "../datastore", features = ["integration_test"]}
 tokio = { workspace = true }
+tracing-test = "0.2"
 tonic = { workspace = true }
 maybe-once = { workspace = true } 
 rstest = { workspace = true }

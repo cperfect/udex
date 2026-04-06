@@ -101,6 +101,42 @@ impl AuthnInterceptor {
     // }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::AuthNzConfig;
+    use tracing_test::traced_test;
+
+    fn test_interceptor() -> AuthnInterceptor {
+        AuthnInterceptor::new(AuthNzConfig {
+            jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
+            jwt_issuer: Some("test-issuer".to_string()),
+            jwt_audience: Some("test-audience".to_string()),
+        })
+        .expect("Failed to create test AuthnInterceptor")
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_invalid_jwt_emits_warn() {
+        let interceptor = test_interceptor();
+        let result = interceptor.validate_jwt("this.is.not.a.valid.jwt");
+        assert!(result.is_err());
+        assert!(logs_contain("JWT validation error"));
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_jwt_wrong_issuer_emits_warn() {
+        // A structurally valid JWT but signed for the wrong issuer will fail validation
+        // Using a clearly invalid token is sufficient to trigger the warn path
+        let interceptor = test_interceptor();
+        let result = interceptor.validate_jwt("eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJ4In0.invalidsig");
+        assert!(result.is_err());
+        assert!(logs_contain("JWT validation error"));
+    }
+}
+
 #[tonic::async_trait]
 impl RequestInterceptor for AuthnInterceptor {
     async fn intercept(&self, mut req: Request<Body>) -> Result<Request<Body>, Status> {

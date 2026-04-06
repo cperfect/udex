@@ -64,6 +64,7 @@ pub fn is_permitted<M>(message: &M, claims: &Claims) -> Result<bool, Error> wher
 mod tests {
     use super::*;
     use serde_json::json;
+    use tracing_test::traced_test;
     use std::collections::HashMap;
 
     // Test message structs that implement prost::Message for testing
@@ -520,6 +521,26 @@ mod tests {
         assert!(result.is_err());
         //check we get the expected Error::InvalidPermissionError
         assert_eq!(result.unwrap_err().to_string(), "Invalid permission: Invalid permission format: test:read:write:***");
+    }
+
+    // --- Logging tests ---
+
+    #[traced_test]
+    #[test]
+    fn test_malformed_permissions_emits_warn() {
+        let message = TestSinglePermissionMessage { data: "test".to_string() };
+        let claims = create_claims_with_malformed_permissions();
+        let _ = is_permitted(&message, &claims);
+        assert!(logs_contain("Permissions in claims are not an array"));
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_missing_permissions_emits_warn() {
+        let message = TestSinglePermissionMessage { data: "test".to_string() };
+        let claims = create_claims_without_permissions();
+        let _ = is_permitted(&message, &claims);
+        assert!(logs_contain("No permissions found in claims"));
     }
 
     #[test]

@@ -29,3 +29,7 @@ Two-layer approach:
 
 - Per-handler `tracing::info!` for requests/responses: rejected as it duplicates boilerplate across every handler and is easy to miss on new handlers.
 - `tonic_middleware::RequestInterceptor` for logging: rejected as it only sees requests, not responses or status codes.
+
+## Out of Scope / Deferred
+
+**Concurrent log assertions in full server integration tests** — verifying log output from the shared background server task during concurrent tests requires span propagation across gRPC boundaries (e.g. via metadata headers) so that each test's events can be isolated by span ID. This is deferred to the steel thread that implements full distributed tracing with spans. At that point, a span-aware log capture layer and per-request span correlation should be implemented together.
