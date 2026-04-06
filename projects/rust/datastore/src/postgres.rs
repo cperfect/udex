@@ -712,9 +712,7 @@ impl Datastore for PostgresDatastore {
 #[async_trait::async_trait]
 impl Migrator for PostgresDatastore {
     async fn migrate(&self) -> Result<(), Error> {
-        // TODO(major): replace println! with tracing::info! - adopt tracing crate for
-        // structured, levelled logging throughout the codebase.
-        println!("Running migrations...");
+        tracing::info!("Running migrations");
 
         // note that the macro embeds the migrations into the binary
         // see https://docs.rs/sqlx/latest/sqlx/macro.migrate.html
@@ -722,8 +720,7 @@ impl Migrator for PostgresDatastore {
             .run(&*self.pool)
             .await
             .map_err(|e| Error::Migration(format!("Migration failed: {}", e)))?;
-        // TODO(major): replace println! with tracing::info! (see above)
-        println!("Migrations completed successfully.");
+        tracing::info!("Migrations completed successfully");
 
         Ok(())
     }

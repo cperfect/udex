@@ -24,19 +24,13 @@ where
 
     let addr = config.bind_address;
 
-    // TODO(major): replace println! with tracing - adopt tracing crate for structured, levelled
-    // logging throughout the server. Use tracing::info!, tracing::warn!, tracing::error! etc.
-    // See: https://docs.rs/tracing
-    println!("Initialising services");
+    tracing::info!("Initializing services");
 
     let datastore_arc = Arc::new(datastore);
 
     let index_service_inner = IndexService::new(datastore_arc.clone());
 
     let mut entry_service_inner = EntryService::new(datastore_arc.clone());
-
-    // need to do this before moving the inner services below
-    println!("Initializing services");
 
     index_service_inner
         .init(config.init_indexes.clone())
@@ -60,8 +54,7 @@ where
         index_service_inner_arc.clone(),
     );
 
-    // TODO(major): replace println! with tracing (see above)
-    println!("Starting Udex server on {} with TLS", addr);
+    tracing::info!(addr = %addr, "Starting Udex server with TLS");
 
     // Load TLS certificates etc.
     let cert = tokio::fs::read_to_string(config.tls.cert_path)
