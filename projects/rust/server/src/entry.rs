@@ -135,31 +135,31 @@ where
             }
             DatastoreError::DatabaseNotInitialized(msg) => {
                 tracing::error!(error = %msg, "Database not initialized");
-                Status::failed_precondition(format!("Database not initialized: {}", msg))
+                Status::failed_precondition("Service unavailable")
             }
             DatastoreError::NotImplemented(msg) => {
                 tracing::error!(error = %msg, "Unimplemented datastore operation called");
-                Status::unimplemented(format!("Not implemented: {}", msg))
+                Status::unimplemented("Not implemented")
             }
             DatastoreError::Database(e) => {
                 tracing::error!(error = %e, "Database error");
-                Status::internal(format!("Database error: {}", e))
+                Status::internal("Internal server error")
             }
             DatastoreError::Transaction(msg) => {
                 tracing::error!(error = %msg, "Transaction error");
-                Status::internal(format!("Transaction error: {}", msg))
+                Status::internal("Internal server error")
             }
             DatastoreError::Serialization(e) => {
                 tracing::error!(error = %e, "Serialization error");
-                Status::internal(format!("Serialization error: {}", e))
+                Status::internal("Internal server error")
             }
             DatastoreError::DataConversion(msg) => {
                 tracing::error!(error = %msg, "Data conversion error");
-                Status::internal(format!("Data conversion error: {}", msg))
+                Status::internal("Internal server error")
             }
             DatastoreError::Migration(msg) => {
                 tracing::error!(error = %msg, "Migration error");
-                Status::internal(format!("Migration error: {}", msg))
+                Status::internal("Internal server error")
             }
         }
     }

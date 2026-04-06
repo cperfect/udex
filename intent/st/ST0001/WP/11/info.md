@@ -3,7 +3,7 @@ verblock: "06 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-11
 title: "Return opaque messages to gRPC clients for internal errors"
 scope: Small
-status: Not Started
+status: Done
 priority: major
 ---
 

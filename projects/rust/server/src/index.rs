@@ -199,7 +199,7 @@ where
                     Err(Status::not_found(format!("Index '{}' not found", req.name)))
                 } else {
                     tracing::error!(error = %e, index = %req.name, "Failed to get index");
-                    Err(Status::internal(format!("Failed to get index: {}", e)))
+                    Err(Status::internal("Internal server error"))
                 }
             }
         }
@@ -253,7 +253,7 @@ where
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to create index");
-                Status::internal(format!("Failed to create index: {}", e))
+                Status::internal("Internal server error")
             })?;
 
         Ok(Response::new(CreateIndexResponse {
@@ -307,7 +307,7 @@ where
             }
             Err(e) => {
                 tracing::error!(error = %e, "Failed to list indices");
-                Err(Status::internal(format!("Failed to list indices: {}", e)))
+                Err(Status::internal("Internal server error"))
             }
         }
     }
