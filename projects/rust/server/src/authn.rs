@@ -128,10 +128,37 @@ mod tests {
     #[traced_test]
     #[test]
     fn test_jwt_wrong_issuer_emits_warn() {
-        // A structurally valid JWT but signed for the wrong issuer will fail validation
-        // Using a clearly invalid token is sufficient to trigger the warn path
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize;
+
+        // Build a JWT signed with the real key but with the wrong issuer.
+        // This passes signature validation but fails issuer validation,
+        // confirming the warn fires for that specific code path.
+        let claims = Claims::new(
+            "test-user".to_string(),
+            "wrong-issuer".to_string(),
+            "test-audience".to_string(),
+            now + 3600,
+            now,
+        );
+
+        let private_key = std::fs::read_to_string("tests/jwt/signing_private_key.pem")
+            .expect("Failed to read signing private key");
+        let encoding_key = EncodingKey::from_ec_pem(private_key.as_bytes())
+            .expect("Failed to create EncodingKey");
+
+        let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
+        header.typ = Some("JWT".to_string());
+
+        let token = encode(&header, &claims, &encoding_key).expect("Failed to encode JWT");
+
         let interceptor = test_interceptor();
-        let result = interceptor.validate_jwt("eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJ4In0.invalidsig");
+        let result = interceptor.validate_jwt(&token);
         assert!(result.is_err());
         assert!(logs_contain("JWT validation error"));
     }
