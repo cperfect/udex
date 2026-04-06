@@ -3,7 +3,7 @@ verblock: "06 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-17
 title: "Review structured field usage consistency in log sites"
 scope: Small
-status: Not Started
+status: Done
 priority: suggestion
 ---
 

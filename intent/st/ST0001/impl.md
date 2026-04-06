@@ -10,6 +10,29 @@
 
 Println! usage should be replaced with structured log usage or deleted.
 
+## Structured Field Convention
+
+All `tracing` macro call sites must use structured fields for any associated values rather than string interpolation:
+
+```rust
+// Preferred — values as structured fields
+tracing::error!(error = %e, index = %name, "Failed to get index");
+tracing::warn!(error = ?err, "JWT validation error");
+
+// Avoid — values interpolated into the message string
+tracing::error!("Failed to get index {}: {}", name, e);
+```
+
+Sigil choice:
+- `%` — uses `Display`; for user-visible or string-like values (addresses, names, messages)
+- `?` — uses `Debug`; for internal/opaque types (error enums, complex structs)
+
+Log sites with no associated value need no fields:
+
+```rust
+tracing::info!("Running migrations");
+```
+
 ## Code Examples
 
 [Key code snippets and examples]
