@@ -10,6 +10,7 @@ pub mod config;
 pub mod entry;
 pub mod index;
 pub mod healthz;
+pub mod logging;
 pub mod server;
 mod authn;
 
