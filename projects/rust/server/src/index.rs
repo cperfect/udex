@@ -198,6 +198,7 @@ where
                 if error_msg.contains("no rows returned") || error_msg.contains("RowNotFound") {
                     Err(Status::not_found(format!("Index '{}' not found", req.name)))
                 } else {
+                    tracing::error!(error = %e, index = %req.name, "Failed to get index");
                     Err(Status::internal(format!("Failed to get index: {}", e)))
                 }
             }
@@ -250,7 +251,10 @@ where
 
         self.create_index_internal(index.clone())
             .await
-            .map_err(|e| Status::internal(format!("Failed to create index: {}", e)))?;
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to create index");
+                Status::internal(format!("Failed to create index: {}", e))
+            })?;
 
         Ok(Response::new(CreateIndexResponse {
             index: Some(index),
@@ -302,6 +306,7 @@ where
                 Ok(Response::new(response))
             }
             Err(e) => {
+                tracing::error!(error = %e, "Failed to list indices");
                 Err(Status::internal(format!("Failed to list indices: {}", e)))
             }
         }

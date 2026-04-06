@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tonic::transport::Server as TonicServer;
 use tonic::transport::{Identity, ServerTlsConfig};
 use tonic_middleware::InterceptorFor;
+use tower_http::trace::TraceLayer;
 use udex_api::{
     authz::{entry::EntryServiceAuthorizor, index::IndexServiceAuthorizor},
     entry::entry_service_server::EntryServiceServer,
@@ -77,6 +78,7 @@ where
 
     // Build and start the server with TLS
     TonicServer::builder()
+        .layer(TraceLayer::new_for_grpc())
         .tls_config(ServerTlsConfig::new().identity(identity))
         .map_err(|e| Error::ServerError(format!("TLS configuration error: {}", e)))?
         .add_service(InterceptorFor::new(index_server, auth_interceptor.clone()))

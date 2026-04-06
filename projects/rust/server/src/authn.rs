@@ -118,7 +118,10 @@ impl RequestInterceptor for AuthnInterceptor {
                 tracing::debug!("Claims added to request extensions");
                 Ok(req)
             }
-            None => Err(Status::unauthenticated("Authorization header missing")),
+            None => {
+                tracing::warn!("Request missing Authorization header");
+                Err(Status::unauthenticated("Authorization header missing"))
+            }
         }
     }
 }

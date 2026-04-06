@@ -110,43 +110,57 @@ where
     }
 
     /// Converts a datastore error to a tonic Status.
+    ///
+    /// Internal errors (Database, Transaction, Serialization, etc.) are logged at error level here,
+    /// at the network boundary, before being converted to an opaque Status::internal response.
     fn datastore_error_to_status(&self, error: DatastoreError) -> Status {
         match error {
             DatastoreError::EntryForKeyNotFound(key) => {
-                        Status::not_found(format!("Entry not found for key: {}", key))
-                    }
+                Status::not_found(format!("Entry not found for key: {}", key))
+            }
             DatastoreError::EntryForContextNotFound(context) => {
-                        Status::not_found(format!("Entry not found for context: {}", context))
-                    }
+                Status::not_found(format!("Entry not found for context: {}", context))
+            }
             DatastoreError::DuplicateKey(key) => {
-                        Status::already_exists(format!("Entry already exists for key: {}", key))
-                    }
+                Status::already_exists(format!("Entry already exists for key: {}", key))
+            }
             DatastoreError::InvalidContext(msg) => {
-                        Status::invalid_argument(format!("Invalid context: {}", msg))
-                    }
+                Status::invalid_argument(format!("Invalid context: {}", msg))
+            }
             DatastoreError::InvalidIndex(msg) => {
-                        Status::invalid_argument(format!("Invalid index: {}", msg))
-                    }
-            DatastoreError::DatabaseNotInitialized(msg) => {
-                        Status::failed_precondition(format!("Database not initialized: {}", msg))
-                    }
-            DatastoreError::NotImplemented(msg) => {
-                        Status::unimplemented(format!("Not implemented: {}", msg))
-                    }
-            DatastoreError::Database(e) => Status::internal(format!("Database error: {}", e)),
-            DatastoreError::Transaction(msg) => {
-                        Status::internal(format!("Transaction error: {}", msg))
-                    }
-            DatastoreError::Serialization(e) => {
-                        Status::internal(format!("Serialization error: {}", e))
-                    }
-            DatastoreError::DataConversion(msg) => {
-                        Status::internal(format!("Data conversion error: {}", msg))
-                    }
+                Status::invalid_argument(format!("Invalid index: {}", msg))
+            }
             DatastoreError::InvalidIndexUpdate(_) => {
-                        Status::invalid_argument("Invalid index update")
-                    }
-            DatastoreError::Migration(msg) => Status::internal(format!("Migration error: {}", msg))
+                Status::invalid_argument("Invalid index update")
+            }
+            DatastoreError::DatabaseNotInitialized(msg) => {
+                tracing::error!(error = %msg, "Database not initialized");
+                Status::failed_precondition(format!("Database not initialized: {}", msg))
+            }
+            DatastoreError::NotImplemented(msg) => {
+                tracing::error!(error = %msg, "Unimplemented datastore operation called");
+                Status::unimplemented(format!("Not implemented: {}", msg))
+            }
+            DatastoreError::Database(e) => {
+                tracing::error!(error = %e, "Database error");
+                Status::internal(format!("Database error: {}", e))
+            }
+            DatastoreError::Transaction(msg) => {
+                tracing::error!(error = %msg, "Transaction error");
+                Status::internal(format!("Transaction error: {}", msg))
+            }
+            DatastoreError::Serialization(e) => {
+                tracing::error!(error = %e, "Serialization error");
+                Status::internal(format!("Serialization error: {}", e))
+            }
+            DatastoreError::DataConversion(msg) => {
+                tracing::error!(error = %msg, "Data conversion error");
+                Status::internal(format!("Data conversion error: {}", msg))
+            }
+            DatastoreError::Migration(msg) => {
+                tracing::error!(error = %msg, "Migration error");
+                Status::internal(format!("Migration error: {}", msg))
+            }
         }
     }
 }

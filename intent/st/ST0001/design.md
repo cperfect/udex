@@ -2,18 +2,30 @@
 
 ## Approach
 
-[Planned approach for implementing this steel thread, including methodology and key steps]
+Two-layer approach:
+1. `tower_http::trace::TraceLayer::new_for_grpc()` on the tonic server for automatic request/response lifecycle logging (method, status code, latency) across all services.
+2. Explicit `tracing::error!` at internal error conversion sites (`datastore_error_to_status` in entry.rs, inline in index.rs) for errors that disrupt the user's request.
 
 ## Design Decisions
 
-The log-level should be configurable.
-
-Logging should default to info-level, with the local development environment set to trace.
+- Log level is configurable via `RUST_LOG` env var, defaulting to `info`.
+- Local development should set `RUST_LOG=trace`.
+- JSON output format via `tracing-subscriber` with the `json` feature.
+- `TraceLayer` preferred over per-handler logging to avoid duplication and ensure consistency.
+- Internal errors logged once at the network boundary only; client/business errors (not found, invalid argument) are not logged as errors.
 
 ## Architecture
 
-[Architectural considerations and diagrams if applicable]
+`udex-server::logging::init_tracing()` must be called at binary startup before `serve()`.
+
+```
+[TraceLayer]          ← logs every gRPC request/response (method, status, latency)
+  [AuthnInterceptor]  ← warns on JWT failures and missing auth header
+    [EntryService]    ← errors! on internal datastore failures
+    [IndexService]    ← errors! on internal datastore failures
+```
 
 ## Alternatives Considered
 
-[Other approaches that were considered and why they were not chosen]
+- Per-handler `tracing::info!` for requests/responses: rejected as it duplicates boilerplate across every handler and is easy to miss on new handlers.
+- `tonic_middleware::RequestInterceptor` for logging: rejected as it only sees requests, not responses or status codes.
