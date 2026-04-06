@@ -1,5 +1,5 @@
 use crate::{
-    authn::AuthnInterceptor, config::ServerConfig, EntryService, Error, HealthzService,
+    authn::AuthnInterceptor, config::ServerConfig, logging, EntryService, Error, HealthzService,
     IndexService,
 };
 use std::sync::Arc;
@@ -20,6 +20,8 @@ pub async fn serve<D>(config: ServerConfig, datastore: D) -> Result<(), Error>
 where
     D: Datastore + Send + Sync + 'static,
 {
+    logging::init_tracing();
+
     // validate the server configuration
     config.validate()?;
 

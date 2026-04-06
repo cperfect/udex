@@ -3,7 +3,7 @@ verblock: "06 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-05
 title: "init_tracing is never called - connect to binary entry point"
 scope: Small
-status: Not Started
+status: Done
 priority: critical
 ---
 
