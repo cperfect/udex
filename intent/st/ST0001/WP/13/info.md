@@ -3,7 +3,7 @@ verblock: "06 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-13
 title: "Review RUST_LOG=debug default in devcontainer"
 scope: Small
-status: Not Started
+status: Done
 priority: minor
 ---
 
