@@ -77,9 +77,7 @@ impl AuthnInterceptor {
                 tracing::warn!(error = ?err, "JWT validation error");
                 Err(Status::unauthenticated("Invalid JWT token"))
             }
-        }.or_else(|_| {
-            Err(Status::unauthenticated("Failed to decode JWT token"))
-        })?;
+        }?;
 
         // validate the public claims
         claims.custom_validate_public().map_err(|e| {
