@@ -3,7 +3,7 @@ verblock: "06 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-10
 title: "Move test-only server deps from [dependencies] to [dev-dependencies]"
 scope: Small
-status: Not Started
+status: Done
 priority: major
 ---
 

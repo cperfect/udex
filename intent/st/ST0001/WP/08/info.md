@@ -3,7 +3,7 @@ verblock: "06 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-08
 title: "Move tower-http to workspace dependencies"
 scope: Small
-status: Not Started
+status: Done
 priority: major
 ---
 
