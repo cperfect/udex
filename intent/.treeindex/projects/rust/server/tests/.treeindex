@@ -1,0 +1,16 @@
+<!-- treeindex v1 fingerprint:29eab0dd generated:2026-04-06T03:49:52Z -->
+
+# tests/
+
+Integration test suite for gRPC services using the Maybe Once pattern for efficient Postgres container setup across tests. Includes shared fixtures for TLS certificates and JWT key pairs used across server and service tests.
+
+## Dirs
+
+- `certs/` -- Self-signed CA and server certificates for local HTTPS/TLS testing
+- `jwt/` -- ECDSA key pairs for JWT signing and verification in integration tests
+
+## Files
+
+- `server_integration_tests.rs` -- Full server integration tests with TLS, JWT auth, health checks, and Postgres setup
+- `entry_service_integration_tests.rs` -- Entry service integration tests with shared Postgres container and index initialization
+- `index_service_integration_tests.rs` -- Index service integration tests with shared Postgres container and test index setup

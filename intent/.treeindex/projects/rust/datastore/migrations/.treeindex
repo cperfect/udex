@@ -1,0 +1,8 @@
+<!-- treeindex v1 fingerprint:ab27f42a generated:2026-04-06T03:50:35Z -->
+
+I don't have access to file reading tools in the current environment to explore the migrations/ directory. Could you either:
+
+1. Share the list of files in the `migrations/` directory, or
+2. Run `ls -la migrations/` in your terminal and paste the output
+
+Once I can see the files and their purposes, I'll generate the .treeindex following the format rules.

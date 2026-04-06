@@ -1,0 +1,15 @@
+<!-- treeindex v1 fingerprint:b528ec58 generated:2026-04-06T03:48:56Z -->
+
+# certs/
+
+Test and development SSL/TLS certificates for local HTTPS testing. Contains a self-signed CA, server certificate signed by that CA, and a script to regenerate certificates when needed. DO NOT use these certificates in production.
+
+## Files
+
+- `regenerate_certs.sh` -- Script to generate test CA, server keys, CSRs, and certificates; supports system CA trust store installation
+- `ca.crt` -- Self-signed CA certificate
+- `ca.key` -- CA private key
+- `server.crt` -- Server certificate signed by the test CA
+- `server.key` -- Server private key
+- `server.csr` -- Server certificate signing request
+- `ca.srl` -- CA serial number file (tracks certificate issuance)

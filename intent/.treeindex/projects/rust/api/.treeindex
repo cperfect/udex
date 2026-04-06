@@ -1,0 +1,15 @@
+<!-- treeindex v1 fingerprint:13dbc971 generated:2026-04-06T03:51:28Z -->
+
+# api/
+
+Rust crate providing gRPC API definitions, client/server stubs, and protocol buffer bindings for Udex. The build process automatically generates code from protobuf definitions, applies Serde serialization support, and handles code generation into the `src/generated` directory.
+
+## Dirs
+
+- `src/` -- Core library exports, generated protobuf modules, timestamp utilities, and context hashing logic
+
+## Files
+
+- `build.rs` -- Protobuf compilation script using tonic-build; generates Rust code with Serde support and fixes well-known types doc tests
+- `Cargo.toml` -- Package metadata and workspace dependency declarations for the udex-api crate
+- `README.md` -- Usage documentation with client/server examples and development guidelines for protobuf code generation

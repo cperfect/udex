@@ -1,0 +1,14 @@
+<!-- treeindex v1 fingerprint:7f52a67f generated:2026-04-06T03:49:23Z -->
+
+# authz/
+
+Authorization and permission enforcement for gRPC services. Handles JWT claims validation, permission checking via glob pattern matching, and service-level authorization wrappers for EntryService and IndexService.
+
+## Files
+
+- `mod.rs` -- Module exports and Error enum for authorization failures
+- `claims.rs` -- JWT Claims struct with registered and custom claim fields, plus custom validation logic
+- `permissions.rs` -- Permissable trait definition, permission validation regex, and is_permitted authorization check function
+- `glob.rs` -- High-performance glob pattern matching with DP memoization for URN-style permission strings
+- `entry.rs` -- EntryServiceAuthorizor wrapper that checks permissions before delegating to inner service
+- `index.rs` -- IndexServiceAuthorizor wrapper that checks permissions before delegating to inner service

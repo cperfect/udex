@@ -1,0 +1,16 @@
+<!-- treeindex v1 fingerprint:9391e2be generated:2026-04-06T03:49:59Z -->
+
+# src/
+
+Core gRPC server implementation for Udex, providing authentication, service implementations, and server orchestration. Contains the main library exports, configuration management, logging setup, and service handlers for Entry, Index, and Health Check operations.
+
+## Files
+
+- `lib.rs` -- Library exports, Error type, and HealthCheck trait definition
+- `server.rs` -- Server startup, TLS configuration, and service initialization
+- `config.rs` -- ServerConfig, TlsConfig, and AuthNzConfig structures with validation
+- `logging.rs` -- Tracing subscriber initialization with JSON output
+- `authn.rs` -- JWT authentication interceptor for token validation and Bearer extraction
+- `healthz.rs` -- Health check service implementation across Entry and Index services
+- `index.rs` -- Index service with CRUD operations and datastore integration
+- `entry.rs` -- Entry service with bulk read/write operations and context hashing

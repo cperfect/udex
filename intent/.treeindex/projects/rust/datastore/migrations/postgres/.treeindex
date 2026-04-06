@@ -1,0 +1,11 @@
+<!-- treeindex v1 fingerprint:a525acd9 generated:2026-04-06T03:49:05Z -->
+
+# postgres/
+
+PostgreSQL schema migrations for the Intent v2.8.0 project. Defines core tables for managing indexed key-value stores with context hashing, encryption metadata, and multi-tenant isolation.
+
+## Files
+
+- `01_initial_schema.sql` -- Creates core tables: index (metadata), context (encrypted key-value pairs), and entry (mapping between contexts and indexes)
+- `02_initial_indexes.sql` -- Performance indexes on entry table for context hash, index name, and composite lookups
+- `03_context_store_alg.sql` -- Adds hash_algorithm column to context table with migration from null to sha1 default

@@ -1,0 +1,21 @@
+<!-- treeindex v1 fingerprint:206616ae generated:2026-04-06T03:51:37Z -->
+
+# rust/
+
+Rust workspace for Udex containing the core server implementation, data persistence layer, API definitions, and CLI tools. Provides a modular structure with shared dependencies and workspace-level configuration for gRPC services, PostgreSQL integration, and observability through tracing.
+
+## Dirs
+
+- `api/` -- gRPC API definitions and protocol buffer bindings with code generation
+- `cli/` -- CLI interface for server management and utility operations (currently excluded from workspace)
+- `datastore/` -- PostgreSQL-backed data persistence layer with migrations and trait-based abstractions
+- `server/` -- gRPC server implementation with authentication, service handlers, and observability
+- `target/` -- Rust build artifacts and compilation output directory
+
+## Files
+
+- `Cargo.toml` -- Workspace root configuration with member crates and shared dependencies
+- `README.md` -- Workspace overview, building instructions, and project structure documentation
+- `DEVELOPMENT.md` -- Development guidelines following Rust style guide and error design principles
+- `Cargo.lock` -- Dependency lock file for reproducible builds
+- `.gitignore` -- Git ignore rules for Rust projects and local development artifacts

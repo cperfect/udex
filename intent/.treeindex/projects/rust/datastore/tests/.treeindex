@@ -1,0 +1,5 @@
+<!-- treeindex v1 fingerprint:431bddf9 generated:2026-04-06T03:50:07Z -->
+
+I need to check what files are in the tests/ directory. Let me look at the actual directory structure first.
+
+What files are currently in the tests/ directory? The postgres_integration_tests.rs source you showed me doesn't appear to be in the repo yet. Are you asking me to generate the .treeindex based on what will be there, or should I check the actual current state?

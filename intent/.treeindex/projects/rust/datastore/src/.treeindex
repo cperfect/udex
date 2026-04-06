@@ -1,0 +1,12 @@
+<!-- treeindex v1 fingerprint:1b50ae81 generated:2026-04-06T03:50:17Z -->
+
+# src/
+
+Core datastore implementation for Udex, providing PostgreSQL-backed data persistence with transaction support, configuration management, and entry/index operations. Implements the Datastore trait with full CRUD operations, migration support, and integration testing utilities.
+
+## Files
+
+- `lib.rs` -- Core Datastore trait, error types, and public API surface
+- `postgres.rs` -- PostgreSQL implementation of Datastore with transaction-based operations
+- `config.rs` -- DatastoreConfig struct and environment variable placeholder resolution
+- `integration_test.rs` -- Test database initialization and cleanup helpers using testcontainers pattern

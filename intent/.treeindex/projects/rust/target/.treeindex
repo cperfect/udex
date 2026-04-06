@@ -1,0 +1,17 @@
+<!-- treeindex v1 fingerprint:3bb57689 generated:2026-04-06T03:50:52Z -->
+
+# target/
+
+Rust build output directory containing compiled artifacts, dependency tracking, and build metadata for the workspace. Organized by build profile (debug, release) and contains intermediate compilation state and toolchain metadata.
+
+## Dirs
+
+- `debug/` -- Rust compiler debug build artifacts including compiled libraries and dependency tracking
+- `flycheck0/` -- Temporary IDE syntax-checking directory for real-time error reporting
+
+## Files
+
+- `.cargo-lock` -- Cargo lock file for reproducible build dependency resolution
+- `.future-incompat-report.json` -- Report of future Rust compiler incompatibilities in dependencies (num-bigint-dig v0.8.4 uses private vec! macro)
+- `.rustc_info.json` -- Rustc metadata and configuration information for the build
+- `CACHEDIR.TAG` -- Cache directory tag per https://bford.info/cachedir/ specification
