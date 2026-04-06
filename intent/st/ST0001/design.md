@@ -32,4 +32,6 @@ Two-layer approach:
 
 ## Out of Scope / Deferred
 
+**`#[tracing::instrument]` on gRPC handler methods (WP-16)** — annotating handlers with `#[tracing::instrument]` would create named spans per invocation with structured fields. Deferred to the distributed tracing steel thread so that span design (field names, PII exclusions, OTLP export) is done consistently across the system rather than piecemeal.
+
 **Concurrent log assertions in full server integration tests** — verifying log output from the shared background server task during concurrent tests requires span propagation across gRPC boundaries (e.g. via metadata headers) so that each test's events can be isolated by span ID. This is deferred to the steel thread that implements full distributed tracing with spans. At that point, a span-aware log capture layer and per-request span correlation should be implemented together.

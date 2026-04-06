@@ -1,9 +1,9 @@
 ---
-verblock: "06 Apr 2026:v0.1: vscode - Initial version"
+verblock: "06 Apr 2026:v0.1: vscode - Initial version\n06 Apr 2026:v0.2: vscode - Deferred to distributed tracing ST"
 wp_id: WP-16
 title: "Consider tracing::instrument for gRPC handler methods"
 scope: Medium
-status: Not Started
+status: Deferred
 priority: suggestion
 ---
 
@@ -36,9 +36,13 @@ async fn create_entry(
 
 This work is closely related to the distributed tracing steel thread. It may be better deferred until that work is planned, so that spans are designed consistently across the system.
 
+## Decision
+
+Deferred to the distributed tracing steel thread. Span design should be consistent across the system and is best done alongside OTLP export and span propagation, not in isolation.
+
 ## Acceptance Criteria
 
-- [ ] Decision made: implement now or defer to distributed tracing ST
+- [x] Decision made: deferred to distributed tracing ST
 - [ ] If implemented: key handler methods in `entry.rs` and `index.rs` have `#[tracing::instrument]` with appropriate `skip` and `fields`
 - [ ] Logs must not include PII or secrets in span fields
 
