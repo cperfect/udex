@@ -5,7 +5,7 @@ use udex_api::index::{
     index_service_server::IndexService as IndexServiceTrait, CreateIndexRequest, DescribeRequest, HashAlgorithm, IndexUpdate, ListIndicesRequest, UpdateIndexRequest
 };
 use udex_datastore::{postgres::PostgresDatastore};
-use udex_server::{HealthCheck, IndexService};
+use udex_server::{logging, HealthCheck, IndexService};
 use std::sync::{Arc, OnceLock};
 use tonic::Request;
 use udex_datastore::integration_test::{
@@ -22,7 +22,7 @@ type MaybeOnceType = (
 /// Starts a Postgres container shared between all tests.
 /// It will be stopped when the tests terminate.
 async fn init_index_service() -> MaybeOnceType {
-    println!("Initializing index service...");
+    logging::init_test_tracing();
 
     let datastore_fixtures = init_postgres().await;
     let datastore = Arc::from(datastore_fixtures.0);

@@ -9,9 +9,9 @@ use tokio::time::{sleep, Duration};
 use tonic::transport::{Channel, ClientTlsConfig};
 use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzRequest};
 use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
-use udex_server::{config::ServerConfig, server};
+use udex_server::{config::ServerConfig, logging, server};
 use udex_datastore::integration_test::{
-    init_postgres 
+    init_postgres
 };
 use time::OffsetDateTime;
 
@@ -32,6 +32,8 @@ type MaybeOnceType = (
 /// Starts a Postgres container shared between all tests.
 /// It will be stopped when the tests terminate.
 async fn init_server() -> MaybeOnceType {
+    logging::init_test_tracing();
+
     // Initialize rustls crypto provider
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 

@@ -18,3 +18,23 @@ pub fn init_tracing() {
         .with_env_filter(env_filter)
         .try_init();
 }
+
+/// Initializes a human-readable tracing subscriber for use in tests.
+///
+/// Output is routed through `with_test_writer()`, so it is captured per-test
+/// and only visible when running with `--nocapture`:
+///
+/// ```bash
+/// RUST_LOG=debug cargo test -- --nocapture
+/// ```
+///
+/// Safe to call multiple times — subsequent calls are no-ops.
+pub fn init_test_tracing() {
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let _ = fmt()
+        .with_env_filter(env_filter)
+        .with_test_writer()
+        .try_init();
+}

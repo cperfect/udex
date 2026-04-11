@@ -2,7 +2,7 @@
 use maybe_once::tokio::{Data, MaybeOnceAsync};
 use rstest::*;
 use udex_datastore::{postgres::PostgresDatastore};
-use udex_server::{EntryService, HealthCheck, IndexService};
+use udex_server::{logging, EntryService, HealthCheck, IndexService};
 use uuid::Uuid;
 use std::sync::{Arc, OnceLock};
 use udex_api::entry::entry_service_server::EntryService as EntryServiceTrait;
@@ -41,7 +41,7 @@ type MaybeOnceType = (
 /// Starts a Postgres container shared between all tests.
 /// It will be stopped when the tests terminate.
 async fn init_entry_service() -> MaybeOnceType {
-    println!("Initializing entry service...");
+    logging::init_test_tracing();
 
     let datastore_fixtures = init_postgres().await;
     let datastore = Arc::from(datastore_fixtures.0);
