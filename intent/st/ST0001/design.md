@@ -25,6 +25,16 @@ Two-layer approach:
     [IndexService]    ← errors! on internal datastore failures
 ```
 
+For tests, `udex-server::logging::init_test_tracing()` provides a human-readable subscriber
+routed through `with_test_writer()`. Output is captured per-test and only visible when running:
+
+```bash
+RUST_LOG=debug cargo test -- --nocapture
+```
+
+It is called from each integration test suite's shared initialiser so all integration tests
+benefit without per-test boilerplate.
+
 ## Alternatives Considered
 
 - Per-handler `tracing::info!` for requests/responses: rejected as it duplicates boilerplate across every handler and is easy to miss on new handlers.

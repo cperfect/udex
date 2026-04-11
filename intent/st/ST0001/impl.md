@@ -35,13 +35,53 @@ tracing::info!("Running migrations");
 
 ## Code Examples
 
-[Key code snippets and examples]
+Production subscriber (JSON, called once at binary startup):
+
+```rust
+// src/logging.rs
+pub fn init_tracing() {
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let _ = fmt().json().with_env_filter(env_filter).try_init();
+}
+```
+
+Test subscriber (human-readable, respects `--nocapture`):
+
+```rust
+pub fn init_test_tracing() {
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let _ = fmt().with_env_filter(env_filter).with_test_writer().try_init();
+}
+```
+
+Structured field usage at a log site:
+
+```rust
+tracing::error!(error = %e, index = %name, "Failed to get index");
+tracing::warn!(error = ?err, "JWT validation error");
+```
 
 ## Technical Details
 
-[Specific technical details and considerations]
-**Logs MUST not include sensitive data such as secrets or PII**
+**Logs MUST not include sensitive data such as secrets or PII.**
+
+Both `init_tracing()` and `init_test_tracing()` use `try_init()` and discard the error,
+making them safe to call multiple times (idempotent). The global subscriber is set at most once.
+
+`with_test_writer()` routes output through Rust's test capture machinery. Without it, tracing
+output goes to stderr and is not associated with the capturing test, so it always appears
+regardless of `--nocapture`.
 
 ## Challenges & Solutions
 
-[Challenges encountered during implementation and how they were resolved]
+**Duplicate JWT warn test** — a test was found that duplicated an existing warn-level assertion.
+Replaced with a genuine wrong-issuer test to improve coverage without redundancy (WP-14).
+
+**Dead `or_else` in `validate_jwt`** — a dead code path was removed after analysis confirmed
+it could never be reached (WP-15).
+
+**Log capture in full server integration tests** — verifying log output from the shared
+background server task during concurrent tests requires per-request span correlation across
+gRPC boundaries. Deferred to the distributed tracing steel thread (see design.md).
