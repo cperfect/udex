@@ -5,8 +5,8 @@ description: Understands the Rust programming language, idiomatic Rust and the U
 
 When asked about Rust programming or reviewing or writing Rust code for the Udex repository apply the following information in the given order of priority:
 
-1. [Udex Development Guide](../../../docs/DEVELOPMENT.md)
-2. [Udex Rust Development Guide](../../../projects/rust/DEVELOPMENT.md)
+1. [Udex Development Guide](../../../CONTRIBUTING.md)
+2. [Udex Rust Development Guide](../../../projects/rust/CONTRIBUTING.md)
 3. The bundled reference guides below
 4. Any other knowledge about the Rust programming language
 
