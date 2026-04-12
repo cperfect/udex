@@ -16,7 +16,7 @@ A context is uniquely determined by its hash, with the hash determined by Udex b
 A context, including its hash will be *immutable* and cannot be updated, though they can be deleted and replaceds.
 
 ### Operations
- Udex has two types of operations: Index  and Admin
+Udex has two types of operations: Index  and Admin
 
 #### Index
 Index operations, including bulk operations, are transactional.
@@ -55,7 +55,7 @@ Udex is not intended to be used directly by humans apart from specific admin ope
 * Performance - Udex should be able to handle many transaction concurrently and respond quickly. Ideally it will support 100 or 1000s of transactions per second with the right configuration and infrastructure.
 * Easy to develop and test both in local development and shared test environments. Udex should be able to run locally for end to end testing. Project structure, usage and tooling should follow conventions and standards.
 * Easy to operate - Udex should be simple to setup and get running and should provide no more configuration options than necessary, and provide sensible defaults. Udex should make use of and work well with standard, both actual and defacto, such as HTTP, Kubernetes, *Nix. 
-* Minimise use of shell scripting - long lived or
+* Minimise use of shell scripting
 
 ## Architecture
 The system has two server side components, which combined support one or more indeces.
@@ -97,18 +97,29 @@ Udex will not support encryption at rest directly though it is anticipated that 
 #### Secrets
 Udex configuration will only support secrets by injection (e.g. Datastore credentials, JWT validation keys, TLS private keys) using standard patterns (e.g. env vars) and will not support secrets directly in the condiguration. The application component will only hold secrets in memory. Udex will support rolling out of new secrets.
 
+## Developer Guides
+
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — general development principles, guidelines, and testing standards for all contributors
+- [projects/rust/DEVELOPMENT.md](projects/rust/DEVELOPMENT.md) — Rust-specific coding standards, error conventions, and local check commands
+
 ## Development & Implementation
 * Development will be API spec driven using Protobuf version 3: server, client, datamodels and SDKs will be generated from this and then extended and elaborated as necessary.
-* Operations will be CLI driven: the server will be stopped and started via CLI and the configuration created and managed via CLI.
-* Udex CLI and Server and the initial client will be written in Rust. The CLI will used the [clap create using the build pattern](https://docs.rs/clap/latest/clap/_tutorial/index.html). The Server will be built using the [tokio runtime](https://docs.rs/tokio/latest/tokio/). APIs will be exposed via gRPC by default (via tonic), with an option for a REST interface (via Hyper).
-* The Datastores supported initially will be SQL Lite and Postgres. The choice of datastore will be at compile time and the Udex CLI and Server binaries and install packaing will need to be available in different versions for the different datastores supported.
+* _(Deferred)_ Operations will be CLI driven: the server will be stopped and started via CLI and the configuration created and managed via CLI.
+* Udex CLI and Server and the initial client will be written in Rust. _(Deferred)_ The CLI will used the [clap create using the build pattern](https://docs.rs/clap/latest/clap/_tutorial/index.html). The Server will be built using the [tokio runtime](https://docs.rs/tokio/latest/tokio/). APIs will be exposed via gRPC by default (via tonic). _(Deferred)_ An optional REST interface (via Hyper) may be added in future.
+* The Datastores supported initially will be Postgres. _(Deferred)_ SQLite support may be added in future. The choice of datastore will be at compile time and the Udex CLI and Server binaries and install packaing will need to be available in different versions for the different datastores supported.
 * The Configurations supported will initially be a yaml file
 * Udex will be semantically versioned.
-* Udex will support Open Telemetry tracing and metric standards.
+* _(Deferred)_ Udex will support Open Telemetry tracing and metric standards.
 * Udex deployments will be containerized with the primary deployment pattern being Kubernetes: Udex can be run either as its own service or as a sidecar. The sidecar pattern might be the only valid use case for disabling transport level encryption outside of local development.
 
 ### Generative AI
-This project has been developed using Cursor using https://github.com/itseasy21/mcp-knowledge-graph as a local memory store (which is gitignored).
+This project is developed using [Claude Code](https://claude.ai/code) (Anthropic) with [Intent v2.8.0](https://github.com/matthewsinclair/intent) for steel thread and work package management.
+
+**Plugins**
+- [`rust-analyzer-lsp`](https://github.com/anthropics/claude-code-plugins) — provides live Rust diagnostics and code intelligence to Claude Code via the rust-analyzer language server.
+
+**Skills**
+- [`in-essentials`](https://github.com/matthewsinclair/intent) — core Intent workflow skill providing steel thread and work package management conventions.
 
 ## Workspace
 Udex will be developed in a git monorepo. Some kind of build tooling will be required that support polyglot projects - e.g. Nx. The entire workspaces will be used via a vscode devcontainer.

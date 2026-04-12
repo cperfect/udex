@@ -2,14 +2,44 @@
 
 This is an Intent v2.8.0 project.
 
-## Rules
+## Guidelines
 
-1. **The Highlander Rule**: There can be only one. Never duplicate code paths, modules, or logic for the same concern. Before creating anything new, check MODULES.md.
-2. **Thin controllers and LiveViews**: Business logic lives in service modules or Ash domains, never in controllers, LiveViews, or CLI commands.
-3. **Tagged tuples everywhere**: Functions return `{:ok, result}` or `{:error, reason}`. Never return bare values from fallible operations.
-4. **No silent failures**: Every error path must be handled explicitly. No bare `rescue`, no `catch-all` that swallows errors.
-5. **Check before you create**: Before creating a new module, check MODULES.md. If a module already owns that concern, use it.
-6. **Register before you code**: When you must create a new module, add it to MODULES.md FIRST, then create the file.
+Full guidelines are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) and [projects/rust/DEVELOPMENT.md](projects/rust/DEVELOPMENT.md). Key rules to always apply:
+
+### General — see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+
+- Think of the Next Guy: write for the person reading this under pressure at 2am.
+- State is hard: minimise it; prefer stateless design.
+- If it isn't tested it doesn't work.
+- Interfaces MUST be developed schema first.
+- AI-generated files MUST have a comment on line 1 stating the tool and model.
+- Commits MUST follow Conventional Commits; Git workflow is Trunk Based.
+- Minimise shell scripting.
+
+### Architecture — see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+
+- Server MUST be stateless; all persistent state lives in the datastore.
+- Datastore concerns (transactions, scaling, distribution) MUST be opaque to the application.
+- Use internet/de-facto standards; minimise external dependencies (especially stateful ones).
+- Datastores without TLS MUST NOT be supported.
+- Configuration MUST NOT be mutated at runtime.
+
+### Testing — see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+
+- Tests MUST be automated and reliable (flakey tests are broken tests).
+- Prefer integration test coverage over unit tests (Test Diamond).
+
+### Rust — see [projects/rust/DEVELOPMENT.md](projects/rust/DEVELOPMENT.md)
+
+- Follow the Rust Style Guide (`rustfmt`) and Rust API Design Guidelines.
+- Use `thiserror`; name error types with an `Error` suffix; never expose third-party error types.
+- Before committing: `cargo fmt --check`, `cargo clippy`, `cargo test`.
+
+### Project Conventions
+
+- **The Highlander Rule**: Never duplicate code paths or logic for the same concern — check `intent/llm/MODULES.md` first.
+- **Check before you create**: if a module owns a concern, use it; if creating a new one, register it in `MODULES.md` first.
+- **No silent failures**: every error path must be handled explicitly.
 
 ## Project Structure
 

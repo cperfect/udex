@@ -13,3 +13,10 @@
 1. **thiserror crate SHOULD be used for errors declared by the code**
 1. **APIs SHOULD NOT expose errors from 3rd party libraries or services** these should be wrapped or converted to error types exposed by the API.
 1. **errors SHOULD be called <SomethingUseful>Error** i.e. explicitly have the word Error at the end of the name
+
+## Perform Local Checks before committing
+- `cargo fmt --check`
+- `cargo clippy`
+- `cargo test`
+and fix any issues found
+

@@ -14,7 +14,11 @@
 
 ## Architecture
 1. **Udex SHOULD use internet standards or de-facto standards** e.g. use OAuth2 vs custom Auth frameworks.
-1. **Udex SHOULD minimise the number of external dependencies** in both terms of code packages and external and 3rd party services, especially if they are stateful.
+1. **Udex SHOULD minimise the number of external dependencies** in both terms of code packages and external and 3rd party services, especially if they are stateful. Note: the core Rust stack (tokio, tonic, sqlx, etc.) is established — this constraint applies to additions beyond it.
+1. **The application server MUST be stateless** — all persistent state lives in the datastore. This is a prerequisite for horizontal scaling.
+1. **Datastore concerns MUST be opaque to the application layer** — transactions, distribution, and scaling are handled by the datastore implementation. The application MUST NOT leak or depend on datastore-specific behaviour.
+1. **Datastores that do not support TLS MUST NOT be supported** — all datastore connections require transport encryption.
+1. **Configuration MUST be consumed as static or injected values** — the application layer MUST NOT mutate configuration at runtime. Dynamic configuration (e.g. via etcd) is handled at the infrastructure layer before values reach the application.
 ## Development
 1. **Code SHOULD be safe & secure** Code should implement secure code practices, e.g. [OWASP](https://owasp.org/www-project-secure-coding-practices-quick-reference-guide/stable-en/02-checklist/05-checklist)
 1. **Systems SHOULD be deterministic and synchronous as far as possible** Non-determistic and asynchronous behavious should be isolated and clearly named and documented
@@ -24,6 +28,7 @@
 1. **Additional inline comments SHOULD be added for clarity** e.g. for complex code, use of non-standard or inconsistent, patterns, or the intent is not clear from the name, or the code relates to a library or external service where constraints and usage are not obvious. 
 1. **Commits SHOULD conform to the Conventional Commits standard** see https://www.conventionalcommits.org/en/v1.0.0/#summary
 1. **The Git Workflow WILL BE Trunk Based**
+1. **Shell scripting SHOULD be minimised** — prefer CLI tooling, Makefiles, or application code over shell scripts. Shell scripts are hard to test, port, and maintain.
 ## Testing
 1. **Tests MUST be automated**
 1. **Tests SHOULD be reliable** flakey tests are broken tests. Either fix what is being tested of fix the tests.
