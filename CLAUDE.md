@@ -43,10 +43,14 @@ Full guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md) and [projects/rust/CON
 
 ## Project Structure
 
+- `projects/rust/` - Rust workspace (three crates)
+  - `api/` - `udex-api`: protobuf-generated types, authz, hashing — no I/O
+  - `server/` - `udex-server`: gRPC handlers, authn, config, logging
+  - `datastore/` - `udex-datastore`: `Datastore`/`Migrator` traits + PostgreSQL impl
 - `intent/` - Project artifacts (steel threads, docs, work tracking)
   - `st/` - Steel threads organized as directories
   - `docs/` - Technical documentation
-  - `llm/` - LLM-specific guidelines (MODULES.md, DECISION_TREE.md, ARCHETYPES.md)
+  - `llm/` - LLM-specific guidelines (MODULES.md, DECISION_TREE.md)
 - `.intent/` - Configuration and metadata
 
 ## Key Reference Files
