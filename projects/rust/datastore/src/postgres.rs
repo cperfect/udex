@@ -44,14 +44,15 @@ impl PostgresDatastore {
     ) -> Result<(), Error> {
         // Fetch only the hash_algorithm from the index within the transaction to avoid
         // a pool read outside the transaction boundary.
-        let hash_algorithm_str = sqlx::query_scalar::<_, String>(
-            "SELECT hash_algorithm FROM index WHERE name = $1",
-        )
-        .bind(&entry.index_name)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(Error::Database)?
-        .ok_or_else(|| Error::InvalidIndex(format!("Index '{}' not found", entry.index_name)))?;
+        let hash_algorithm_str =
+            sqlx::query_scalar::<_, String>("SELECT hash_algorithm FROM index WHERE name = $1")
+                .bind(&entry.index_name)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(Error::Database)?
+                .ok_or_else(|| {
+                    Error::InvalidIndex(format!("Index '{}' not found", entry.index_name))
+                })?;
         // Check if an entry with this key already exists
         let existing_entry = sqlx::query("SELECT key FROM entry WHERE key = $1")
             .bind(UuidWrapper(entry.key))
@@ -253,7 +254,8 @@ impl PostgresDatastore {
                     serde_json::from_value(pairs_value).map_err(Error::Serialization)?;
 
                 // Read hash_algorithm from database but don't use it yet since Context struct doesn't have this field
-                let _hash_algorithm: String = row.try_get("hash_algorithm").map_err(Error::Database)?;
+                let _hash_algorithm: String =
+                    row.try_get("hash_algorithm").map_err(Error::Database)?;
 
                 let context = Context {
                     hash: row.try_get("context_hash").map_err(Error::Database)?,
@@ -285,7 +287,11 @@ impl Datastore for PostgresDatastore {
             .min_connections(config.min_connections)
             .acquire_timeout(config.connection_timeout)
             .idle_timeout(config.query_timeout)
-            .connect(&config.resolved_connection_url().map_err(|e| Error::DatabaseNotInitialized(e.to_string()))?)
+            .connect(
+                &config
+                    .resolved_connection_url()
+                    .map_err(|e| Error::DatabaseNotInitialized(e.to_string()))?,
+            )
             .await
             .map_err(Error::Database)?;
 
@@ -428,15 +434,13 @@ impl Datastore for PostgresDatastore {
         // Convert chrono DateTime back to prost Timestamp
         let created_at = offset_datetime_to_google_timestamp(
             row.try_get::<Option<OffsetDateTime>, _>("created_at")
-                .map_err(Error::Database)?
-                .map(|dt| dt.into()),
+                .map_err(Error::Database)?,
         )
         .map_err(|e| Error::DataConversion(format!("created_at conversion failed: {:?}", e)))?;
 
         let updated_at = offset_datetime_to_google_timestamp(
             row.try_get::<Option<OffsetDateTime>, _>("updated_at")
-                .map_err(Error::Database)?
-                .map(|dt| dt.into()),
+                .map_err(Error::Database)?,
         )
         .map_err(|e| Error::DataConversion(format!("updated_at conversion failed: {:?}", e)))?;
 
@@ -568,8 +572,7 @@ impl Datastore for PostgresDatastore {
                 // Convert chrono NaiveDateTime back to prost Timestamp.
                 let created_at = offset_datetime_to_google_timestamp(
                     row.try_get::<Option<OffsetDateTime>, _>("created_at")
-                        .map_err(Error::Database)?
-                        .map(|dt| dt.into()),
+                        .map_err(Error::Database)?,
                 )
                 .map_err(|e| {
                     Error::InvalidIndex(format!("created_at conversion failed: {:?}", e))
@@ -577,8 +580,7 @@ impl Datastore for PostgresDatastore {
 
                 let updated_at = offset_datetime_to_google_timestamp(
                     row.try_get::<Option<OffsetDateTime>, _>("updated_at")
-                        .map_err(Error::Database)?
-                        .map(|dt| dt.into()),
+                        .map_err(Error::Database)?,
                 )
                 .map_err(|e| {
                     Error::InvalidIndex(format!("updated_at conversion failed: {:?}", e))
@@ -649,16 +651,14 @@ impl Datastore for PostgresDatastore {
 
         for operation in operations {
             let result: Result<EntryReadResult, Error> = match operation {
-                EntryReadOperation::GetByKey(key) => {
-                    self.get_entry_by_key_ex(key, &*self.pool)
-                        .await
-                        .map(EntryReadResult::Entry)
-                }
-                EntryReadOperation::GetByContext(context_hash) => {
-                    self.get_entries_by_context_ex(&context_hash, &*self.pool)
-                        .await
-                        .map(EntryReadResult::Entries)
-                }
+                EntryReadOperation::GetByKey(key) => self
+                    .get_entry_by_key_ex(key, &*self.pool)
+                    .await
+                    .map(EntryReadResult::Entry),
+                EntryReadOperation::GetByContext(context_hash) => self
+                    .get_entries_by_context_ex(&context_hash, &*self.pool)
+                    .await
+                    .map(EntryReadResult::Entries),
             };
             match result {
                 Ok(res) => results.push(res),
@@ -762,8 +762,7 @@ impl Migrator for PostgresDatastore {
             let file_name_str = file_name.to_string_lossy();
 
             // Check if file matches pattern: <digits>_<snake_case_name>.sql
-            if file_name_str.ends_with(".sql") {
-                let name_without_ext = &file_name_str[..file_name_str.len() - 4];
+            if let Some(name_without_ext) = file_name_str.strip_suffix(".sql") {
                 if let Some(underscore_pos) = name_without_ext.find('_') {
                     let version_str = &name_without_ext[..underscore_pos];
                     let name_part = &name_without_ext[underscore_pos + 1..];

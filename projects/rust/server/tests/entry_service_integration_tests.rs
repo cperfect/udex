@@ -1,15 +1,13 @@
 /// Integration tests for the entry server
 use maybe_once::tokio::{Data, MaybeOnceAsync};
 use rstest::*;
-use udex_datastore::{postgres::PostgresDatastore};
-use udex_server::{logging, EntryService, HealthCheck, IndexService};
-use uuid::Uuid;
 use std::sync::{Arc, OnceLock};
 use udex_api::entry::entry_service_server::EntryService as EntryServiceTrait;
 use udex_api::index::HashAlgorithm;
-use udex_datastore::integration_test::{
-    init_postgres
-};
+use udex_datastore::integration_test::init_postgres;
+use udex_datastore::postgres::PostgresDatastore;
+use udex_server::{logging, EntryService, HealthCheck, IndexService};
+use uuid::Uuid;
 
 const ID_PREFIX: &str = "entry_service_integration_test_";
 
@@ -20,7 +18,6 @@ type MaybeOnceType = (
     String, // database name for cleanup (kept in scope for automatic cleanup via ctor)
 );
 
-/// Test helper to create a sample index
 // fn create_sample_index(name: &str) -> Index {
 //     Index {
 //         name: name.to_string(),
@@ -64,12 +61,18 @@ async fn init_entry_service() -> MaybeOnceType {
     };
 
     // initialize the index service with the static index
-    index_server.init(vec![init_index.clone()]).await.expect("Failed to initialize index service");
+    index_server
+        .init(vec![init_index.clone()])
+        .await
+        .expect("Failed to initialize index service");
 
     // Create a new datastore instance for the EntryService from the same pool
     let mut entry_service: EntryService<PostgresDatastore> = EntryService::new(datastore.clone());
 
-    entry_service.init(Arc::new(index_server)).await.expect("Failed to initialize entry service");
+    entry_service
+        .init(Arc::new(index_server))
+        .await
+        .expect("Failed to initialize entry service");
 
     (entry_service, index_name, datastore_fixtures.2)
 }
@@ -89,7 +92,10 @@ async fn test_entry_server_init() {
     let data = data(false).await;
     let entry_server = &data.0;
     //check entry server health
-    let is_healthy = entry_server.is_healthy().await.expect("Health check failed");
+    let is_healthy = entry_server
+        .is_healthy()
+        .await
+        .expect("Health check failed");
     assert!(is_healthy, "Entry server should be healthy");
 }
 
@@ -98,7 +104,7 @@ async fn test_entry_server_init() {
 #[tokio_shared_rt::test]
 async fn test_create_entry() {
     use tonic::Request;
-    use udex_api::entry::{CreateEntryRequest, ContextInput, KeyValuePair, Value};
+    use udex_api::entry::{ContextInput, CreateEntryRequest, KeyValuePair, Value};
 
     let data = data(false).await;
     let entry_server = &data.0;
@@ -110,14 +116,18 @@ async fn test_create_entry() {
             KeyValuePair {
                 key: "user_id".to_string(),
                 value: Some(Value {
-                    value: Some(udex_api::entry::value::Value::StringValue("user123".to_string())),
+                    value: Some(udex_api::entry::value::Value::StringValue(
+                        "user123".to_string(),
+                    )),
                 }),
                 kek_id: None,
             },
             KeyValuePair {
                 key: "session_id".to_string(),
                 value: Some(Value {
-                    value: Some(udex_api::entry::value::Value::StringValue("sess456".to_string())),
+                    value: Some(udex_api::entry::value::Value::StringValue(
+                        "sess456".to_string(),
+                    )),
                 }),
                 kek_id: None,
             },
@@ -131,13 +141,19 @@ async fn test_create_entry() {
         context: Some(context_input),
     });
 
-    let response = entry_server.create_entry(request).await.expect("Create entry failed");
+    let response = entry_server
+        .create_entry(request)
+        .await
+        .expect("Create entry failed");
     let create_response = response.into_inner();
 
     // Verify response
     assert!(!create_response.key.is_empty(), "Key should not be empty");
-    assert!(!create_response.context_hash.is_empty(), "Context hash should not be empty");
-    
+    assert!(
+        !create_response.context_hash.is_empty(),
+        "Context hash should not be empty"
+    );
+
     // Verify key is valid UUID
     let _uuid = Uuid::parse_str(&create_response.key).expect("Key should be valid UUID");
 }
@@ -147,7 +163,9 @@ async fn test_create_entry() {
 #[tokio_shared_rt::test]
 async fn test_delete_entry() {
     use tonic::Request;
-    use udex_api::entry::{CreateEntryRequest, DeleteEntryRequest, ContextInput, KeyValuePair, Value};
+    use udex_api::entry::{
+        ContextInput, CreateEntryRequest, DeleteEntryRequest, KeyValuePair, Value,
+    };
 
     let data = data(false).await;
     let entry_server = &data.0;
@@ -155,15 +173,15 @@ async fn test_delete_entry() {
 
     // First create an entry
     let context_input = ContextInput {
-        pairs: vec![
-            KeyValuePair {
-                key: "test_key".to_string(),
-                value: Some(Value {
-                    value: Some(udex_api::entry::value::Value::StringValue("test_value".to_string())),
-                }),
-                kek_id: None,
-            },
-        ],
+        pairs: vec![KeyValuePair {
+            key: "test_key".to_string(),
+            value: Some(Value {
+                value: Some(udex_api::entry::value::Value::StringValue(
+                    "test_value".to_string(),
+                )),
+            }),
+            kek_id: None,
+        }],
         dek: None,
         kek_id: None,
     };
@@ -173,23 +191,32 @@ async fn test_delete_entry() {
         context: Some(context_input),
     });
 
-    let create_response = entry_server.create_entry(create_request).await.expect("Create entry failed");
+    let create_response = entry_server
+        .create_entry(create_request)
+        .await
+        .expect("Create entry failed");
     let key = create_response.into_inner().key;
 
     // Now delete the entry
-    let delete_request = Request::new(DeleteEntryRequest { 
+    let delete_request = Request::new(DeleteEntryRequest {
         index_name: index_name.clone(),
-        key: key.clone() 
+        key: key.clone(),
     });
-    let _delete_response = entry_server.delete_entry(delete_request).await.expect("Delete entry failed");
+    let _delete_response = entry_server
+        .delete_entry(delete_request)
+        .await
+        .expect("Delete entry failed");
 
     // Verify entry is deleted by trying to lookup
-    let lookup_request = Request::new(udex_api::entry::LookupContextByKeyRequest { 
+    let lookup_request = Request::new(udex_api::entry::LookupContextByKeyRequest {
         index_name: index_name.clone(),
-        key 
+        key,
     });
     let lookup_result = entry_server.lookup_context_by_key(lookup_request).await;
-    assert!(lookup_result.is_err(), "Entry should be deleted and not found");
+    assert!(
+        lookup_result.is_err(),
+        "Entry should be deleted and not found"
+    );
 }
 
 /// Tests looking up context by key through the gRPC service
@@ -197,7 +224,9 @@ async fn test_delete_entry() {
 #[tokio_shared_rt::test]
 async fn test_lookup_context_by_key() {
     use tonic::Request;
-    use udex_api::entry::{CreateEntryRequest, LookupContextByKeyRequest, ContextInput, KeyValuePair, Value};
+    use udex_api::entry::{
+        ContextInput, CreateEntryRequest, KeyValuePair, LookupContextByKeyRequest, Value,
+    };
 
     let data = data(false).await;
     let entry_server = &data.0;
@@ -205,15 +234,15 @@ async fn test_lookup_context_by_key() {
 
     // Create an entry first
     let context_input = ContextInput {
-        pairs: vec![
-            KeyValuePair {
-                key: "lookup_test".to_string(),
-                value: Some(Value {
-                    value: Some(udex_api::entry::value::Value::StringValue("lookup_value".to_string())),
-                }),
-                kek_id: None,
-            },
-        ],
+        pairs: vec![KeyValuePair {
+            key: "lookup_test".to_string(),
+            value: Some(Value {
+                value: Some(udex_api::entry::value::Value::StringValue(
+                    "lookup_value".to_string(),
+                )),
+            }),
+            kek_id: None,
+        }],
         dek: None,
         kek_id: None,
     };
@@ -223,16 +252,25 @@ async fn test_lookup_context_by_key() {
         context: Some(context_input.clone()),
     });
 
-    let create_response = entry_server.create_entry(create_request).await.expect("Create entry failed");
+    let create_response = entry_server
+        .create_entry(create_request)
+        .await
+        .expect("Create entry failed");
     let key = create_response.into_inner().key;
 
     // Now lookup the context
-    let lookup_request = Request::new(LookupContextByKeyRequest { 
+    let lookup_request = Request::new(LookupContextByKeyRequest {
         index_name: index_name.clone(),
-        key 
+        key,
     });
-    let lookup_response = entry_server.lookup_context_by_key(lookup_request).await.expect("Lookup failed");
-    let context = lookup_response.into_inner().context.expect("Context should be present");
+    let lookup_response = entry_server
+        .lookup_context_by_key(lookup_request)
+        .await
+        .expect("Lookup failed");
+    let context = lookup_response
+        .into_inner()
+        .context
+        .expect("Context should be present");
 
     // Verify context matches what we created
     assert_eq!(context.pairs.len(), 1);
@@ -253,7 +291,9 @@ async fn test_lookup_context_by_key() {
 #[tokio_shared_rt::test]
 async fn test_lookup_keys_by_context() {
     use tonic::Request;
-    use udex_api::entry::{CreateEntryRequest, LookupKeysByContextRequest, ContextInput, KeyValuePair, Value};
+    use udex_api::entry::{
+        ContextInput, CreateEntryRequest, KeyValuePair, LookupKeysByContextRequest, Value,
+    };
 
     let data = data(false).await;
     let entry_server = &data.0;
@@ -261,15 +301,15 @@ async fn test_lookup_keys_by_context() {
 
     // Create context input
     let context_input = ContextInput {
-        pairs: vec![
-            KeyValuePair {
-                key: "shared_context".to_string(),
-                value: Some(Value {
-                    value: Some(udex_api::entry::value::Value::StringValue("shared_value".to_string())),
-                }),
-                kek_id: None,
-            },
-        ],
+        pairs: vec![KeyValuePair {
+            key: "shared_context".to_string(),
+            value: Some(Value {
+                value: Some(udex_api::entry::value::Value::StringValue(
+                    "shared_value".to_string(),
+                )),
+            }),
+            kek_id: None,
+        }],
         dek: None,
         kek_id: None,
     };
@@ -279,7 +319,10 @@ async fn test_lookup_keys_by_context() {
         index_name: index_name.clone(),
         context: Some(context_input.clone()),
     });
-    let create_response1 = entry_server.create_entry(create_request1).await.expect("Create entry 1 failed");
+    let create_response1 = entry_server
+        .create_entry(create_request1)
+        .await
+        .expect("Create entry 1 failed");
     let context_hash = create_response1.into_inner().context_hash;
 
     // Create second entry with same context
@@ -287,19 +330,25 @@ async fn test_lookup_keys_by_context() {
         index_name: index_name.clone(),
         context: Some(context_input),
     });
-    let _create_response2 = entry_server.create_entry(create_request2).await.expect("Create entry 2 failed");
+    let _create_response2 = entry_server
+        .create_entry(create_request2)
+        .await
+        .expect("Create entry 2 failed");
 
     // Lookup keys by context hash
     let lookup_request = Request::new(LookupKeysByContextRequest {
         index_name: index_name.clone(),
         context_hash: context_hash.clone(),
     });
-    let lookup_response = entry_server.lookup_keys_by_context(lookup_request).await.expect("Lookup keys failed");
+    let lookup_response = entry_server
+        .lookup_keys_by_context(lookup_request)
+        .await
+        .expect("Lookup keys failed");
     let keys = lookup_response.into_inner().keys;
 
     // Should have 2 keys for the same context
     assert_eq!(keys.len(), 2, "Should have 2 keys for the same context");
-    
+
     // Verify all keys are valid UUIDs
     for key in &keys {
         let _uuid = Uuid::parse_str(key).expect("Each key should be valid UUID");
@@ -312,8 +361,8 @@ async fn test_lookup_keys_by_context() {
 async fn test_bulk_write_entry_operation() {
     use tonic::Request;
     use udex_api::entry::{
-        BulkWriteEntryOperationRequest, BulkWriteEntryOperation, ContextInput, KeyValuePair, Value,
-        bulk_write_entry_operation::Operation,
+        bulk_write_entry_operation::Operation, BulkWriteEntryOperation,
+        BulkWriteEntryOperationRequest, ContextInput, KeyValuePair, Value,
     };
 
     let data = data(false).await;
@@ -323,56 +372,66 @@ async fn test_bulk_write_entry_operation() {
     // Create bulk write operations
     let operations = vec![
         BulkWriteEntryOperation {
-            operation: Some(Operation::CreateEntry(udex_api::entry::CreateEntryRequest {
-                index_name: index_name.clone(),
-                context: Some(ContextInput {
-                    pairs: vec![
-                        KeyValuePair {
+            operation: Some(Operation::CreateEntry(
+                udex_api::entry::CreateEntryRequest {
+                    index_name: index_name.clone(),
+                    context: Some(ContextInput {
+                        pairs: vec![KeyValuePair {
                             key: "bulk_test1".to_string(),
                             value: Some(Value {
-                                value: Some(udex_api::entry::value::Value::StringValue("value1".to_string())),
+                                value: Some(udex_api::entry::value::Value::StringValue(
+                                    "value1".to_string(),
+                                )),
                             }),
                             kek_id: None,
-                        },
-                    ],
-                    dek: None,
-                    kek_id: None,
-                }),
-            })),
+                        }],
+                        dek: None,
+                        kek_id: None,
+                    }),
+                },
+            )),
         },
         BulkWriteEntryOperation {
-            operation: Some(Operation::CreateEntry(udex_api::entry::CreateEntryRequest {
-                index_name: index_name.clone(),
-                context: Some(ContextInput {
-                    pairs: vec![
-                        KeyValuePair {
+            operation: Some(Operation::CreateEntry(
+                udex_api::entry::CreateEntryRequest {
+                    index_name: index_name.clone(),
+                    context: Some(ContextInput {
+                        pairs: vec![KeyValuePair {
                             key: "bulk_test2".to_string(),
                             value: Some(Value {
-                                value: Some(udex_api::entry::value::Value::StringValue("value2".to_string())),
+                                value: Some(udex_api::entry::value::Value::StringValue(
+                                    "value2".to_string(),
+                                )),
                             }),
                             kek_id: None,
-                        },
-                    ],
-                    dek: None,
-                    kek_id: None,
-                }),
-            })),
+                        }],
+                        dek: None,
+                        kek_id: None,
+                    }),
+                },
+            )),
         },
     ];
 
-    let bulk_request = Request::new(BulkWriteEntryOperationRequest { 
+    let bulk_request = Request::new(BulkWriteEntryOperationRequest {
         index_name: index_name.clone(),
-        operations 
+        operations,
     });
-    let bulk_response = entry_server.bulk_write_entry_operation(bulk_request).await.expect("Bulk write failed");
+    let bulk_response = entry_server
+        .bulk_write_entry_operation(bulk_request)
+        .await
+        .expect("Bulk write failed");
     let results = bulk_response.into_inner().results;
 
     // Verify we got results for both operations
     assert_eq!(results.len(), 2, "Should have 2 results");
-    
+
     // Verify each result contains a valid key
     for result in results {
-        if let Some(udex_api::entry::bulk_write_entry_operation_result::Result::CreateEntry(create_response)) = result.result {
+        if let Some(udex_api::entry::bulk_write_entry_operation_result::Result::CreateEntry(
+            create_response,
+        )) = result.result
+        {
             assert!(!create_response.key.is_empty(), "Key should not be empty");
             let _uuid = Uuid::parse_str(&create_response.key).expect("Key should be valid UUID");
         } else {
@@ -387,8 +446,8 @@ async fn test_bulk_write_entry_operation() {
 async fn test_bulk_read_entry_operation() {
     use tonic::Request;
     use udex_api::entry::{
-        CreateEntryRequest, BulkReadEntryOperationRequest, BulkReadEntryOperation,
-        ContextInput, KeyValuePair, Value, bulk_read_entry_operation::Operation,
+        bulk_read_entry_operation::Operation, BulkReadEntryOperation,
+        BulkReadEntryOperationRequest, ContextInput, CreateEntryRequest, KeyValuePair, Value,
     };
 
     let data = data(false).await;
@@ -397,15 +456,15 @@ async fn test_bulk_read_entry_operation() {
 
     // First create some entries
     let context_input = ContextInput {
-        pairs: vec![
-            KeyValuePair {
-                key: "bulk_read_test".to_string(),
-                value: Some(Value {
-                    value: Some(udex_api::entry::value::Value::StringValue("bulk_read_value".to_string())),
-                }),
-                kek_id: None,
-            },
-        ],
+        pairs: vec![KeyValuePair {
+            key: "bulk_read_test".to_string(),
+            value: Some(Value {
+                value: Some(udex_api::entry::value::Value::StringValue(
+                    "bulk_read_value".to_string(),
+                )),
+            }),
+            kek_id: None,
+        }],
         dek: None,
         kek_id: None,
     };
@@ -414,7 +473,10 @@ async fn test_bulk_read_entry_operation() {
         index_name: index_name.clone(),
         context: Some(context_input),
     });
-    let create_response = entry_server.create_entry(create_request).await.expect("Create entry failed");
+    let create_response = entry_server
+        .create_entry(create_request)
+        .await
+        .expect("Create entry failed");
     let create_result = create_response.into_inner();
     let key = create_result.key;
     let context_hash = create_result.context_hash;
@@ -422,40 +484,59 @@ async fn test_bulk_read_entry_operation() {
     // Create bulk read operations
     let operations = vec![
         BulkReadEntryOperation {
-            operation: Some(Operation::LookupContext(udex_api::entry::LookupContextByKeyRequest {
-                index_name: index_name.clone(),
-                key: key.clone(),
-            })),
+            operation: Some(Operation::LookupContext(
+                udex_api::entry::LookupContextByKeyRequest {
+                    index_name: index_name.clone(),
+                    key: key.clone(),
+                },
+            )),
         },
         BulkReadEntryOperation {
-            operation: Some(Operation::LookupKeys(udex_api::entry::LookupKeysByContextRequest {
-                index_name: index_name.clone(),
-                context_hash,
-            })),
+            operation: Some(Operation::LookupKeys(
+                udex_api::entry::LookupKeysByContextRequest {
+                    index_name: index_name.clone(),
+                    context_hash,
+                },
+            )),
         },
     ];
 
-    let bulk_request = Request::new(BulkReadEntryOperationRequest { 
+    let bulk_request = Request::new(BulkReadEntryOperationRequest {
         index_name: index_name.clone(),
-        operations 
+        operations,
     });
-    let bulk_response = entry_server.bulk_read_entry_operation(bulk_request).await.expect("Bulk read failed");
+    let bulk_response = entry_server
+        .bulk_read_entry_operation(bulk_request)
+        .await
+        .expect("Bulk read failed");
     let results = bulk_response.into_inner().results;
 
     // Verify we got results for both operations
     assert_eq!(results.len(), 2, "Should have 2 results");
-    
+
     // First result should be a context lookup
-    if let Some(udex_api::entry::bulk_read_entry_operation_result::Result::LookupContext(context_response)) = &results[0].result {
-        assert!(context_response.context.is_some(), "Context should be present");
+    if let Some(udex_api::entry::bulk_read_entry_operation_result::Result::LookupContext(
+        context_response,
+    )) = &results[0].result
+    {
+        assert!(
+            context_response.context.is_some(),
+            "Context should be present"
+        );
     } else {
         panic!("Expected lookup context result");
     }
-    
+
     // Second result should be keys lookup
-    if let Some(udex_api::entry::bulk_read_entry_operation_result::Result::LookupKeys(keys_response)) = &results[1].result {
+    if let Some(udex_api::entry::bulk_read_entry_operation_result::Result::LookupKeys(
+        keys_response,
+    )) = &results[1].result
+    {
         assert!(!keys_response.keys.is_empty(), "Keys should not be empty");
-        assert!(keys_response.keys.contains(&key), "Should contain our created key");
+        assert!(
+            keys_response.keys.contains(&key),
+            "Should contain our created key"
+        );
     } else {
         panic!("Expected lookup keys result");
     }
@@ -466,16 +547,16 @@ async fn test_bulk_read_entry_operation() {
 #[tokio_shared_rt::test]
 async fn test_error_handling() {
     use tonic::Request;
-    use udex_api::entry::{CreateEntryRequest, LookupContextByKeyRequest, DeleteEntryRequest};
+    use udex_api::entry::{CreateEntryRequest, DeleteEntryRequest, LookupContextByKeyRequest};
 
     let data = data(false).await;
     let entry_server = &data.0;
     let index_name = &data.1;
 
     // Test creating entry without context
-    let create_request = Request::new(CreateEntryRequest { 
+    let create_request = Request::new(CreateEntryRequest {
         index_name: index_name.clone(),
-        context: None 
+        context: None,
     });
     let create_result = entry_server.create_entry(create_request).await;
     assert!(create_result.is_err(), "Should fail without context");
@@ -498,9 +579,9 @@ async fn test_error_handling() {
 
     // Test lookup with non-existent key
     let valid_uuid = Uuid::new_v4().to_string();
-    let lookup_request = Request::new(LookupContextByKeyRequest { 
+    let lookup_request = Request::new(LookupContextByKeyRequest {
         index_name: index_name.clone(),
-        key: valid_uuid 
+        key: valid_uuid,
     });
     let lookup_result = entry_server.lookup_context_by_key(lookup_request).await;
     assert!(lookup_result.is_err(), "Should fail for non-existent key");

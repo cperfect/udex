@@ -20,7 +20,7 @@ pub fn sha1_context_hash(context: &ContextInput) -> Result<String, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entry::{KeyValuePair, Value, value::Value as ValueOneof};
+    use crate::entry::{value::Value as ValueOneof, KeyValuePair, Value};
 
     fn create_string_value(s: &str) -> Option<Value> {
         Some(Value {
@@ -85,7 +85,10 @@ mod tests {
         let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
         let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
 
-        assert_eq!(hash1, hash2, "Identical contexts should produce the same hash");
+        assert_eq!(
+            hash1, hash2,
+            "Identical contexts should produce the same hash"
+        );
     }
 
     #[test]
@@ -137,7 +140,10 @@ mod tests {
         let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
         let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
 
-        assert_eq!(hash1, hash2, "Same key-value pairs in different order should produce the same hash");
+        assert_eq!(
+            hash1, hash2,
+            "Same key-value pairs in different order should produce the same hash"
+        );
     }
 
     #[test]
@@ -179,31 +185,30 @@ mod tests {
         let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
         let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
 
-        assert_ne!(hash1, hash2, "Different contexts should produce different hashes");
+        assert_ne!(
+            hash1, hash2,
+            "Different contexts should produce different hashes"
+        );
     }
 
     #[test]
     fn test_different_values_different_hashes() {
         let context1 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "age".to_string(),
-                    value: create_int_value(30),
-                    kek_id: None,
-                },
-            ],
+            pairs: vec![KeyValuePair {
+                key: "age".to_string(),
+                value: create_int_value(30),
+                kek_id: None,
+            }],
             dek: None,
             kek_id: None,
         };
 
         let context2 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "age".to_string(),
-                    value: create_int_value(31),
-                    kek_id: None,
-                },
-            ],
+            pairs: vec![KeyValuePair {
+                key: "age".to_string(),
+                value: create_int_value(31),
+                kek_id: None,
+            }],
             dek: None,
             kek_id: None,
         };
@@ -211,31 +216,30 @@ mod tests {
         let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
         let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
 
-        assert_ne!(hash1, hash2, "Different values should produce different hashes");
+        assert_ne!(
+            hash1, hash2,
+            "Different values should produce different hashes"
+        );
     }
 
     #[test]
     fn test_different_keys_different_hashes() {
         let context1 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "name".to_string(),
-                    value: create_string_value("Alice"),
-                    kek_id: None,
-                },
-            ],
+            pairs: vec![KeyValuePair {
+                key: "name".to_string(),
+                value: create_string_value("Alice"),
+                kek_id: None,
+            }],
             dek: None,
             kek_id: None,
         };
 
         let context2 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "username".to_string(),
-                    value: create_string_value("Alice"),
-                    kek_id: None,
-                },
-            ],
+            pairs: vec![KeyValuePair {
+                key: "username".to_string(),
+                value: create_string_value("Alice"),
+                kek_id: None,
+            }],
             dek: None,
             kek_id: None,
         };
@@ -243,31 +247,30 @@ mod tests {
         let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
         let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
 
-        assert_ne!(hash1, hash2, "Different keys should produce different hashes");
+        assert_ne!(
+            hash1, hash2,
+            "Different keys should produce different hashes"
+        );
     }
 
     #[test]
     fn test_different_value_types_different_hashes() {
         let context1 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "value".to_string(),
-                    value: create_string_value("42"),
-                    kek_id: None,
-                },
-            ],
+            pairs: vec![KeyValuePair {
+                key: "value".to_string(),
+                value: create_string_value("42"),
+                kek_id: None,
+            }],
             dek: None,
             kek_id: None,
         };
 
         let context2 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "value".to_string(),
-                    value: create_int_value(42),
-                    kek_id: None,
-                },
-            ],
+            pairs: vec![KeyValuePair {
+                key: "value".to_string(),
+                value: create_int_value(42),
+                kek_id: None,
+            }],
             dek: None,
             kek_id: None,
         };
@@ -275,7 +278,10 @@ mod tests {
         let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
         let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
 
-        assert_ne!(hash1, hash2, "Same value but different types should produce different hashes");
+        assert_ne!(
+            hash1, hash2,
+            "Same value but different types should produce different hashes"
+        );
     }
 
     #[test]
@@ -324,7 +330,7 @@ mod tests {
                 },
                 KeyValuePair {
                     key: "x_float".to_string(),
-                    value: create_float_value(3.14),
+                    value: create_float_value(std::f64::consts::PI),
                     kek_id: None,
                 },
             ],
@@ -336,7 +342,7 @@ mod tests {
             pairs: vec![
                 KeyValuePair {
                     key: "x_float".to_string(),
-                    value: create_float_value(3.14),
+                    value: create_float_value(std::f64::consts::PI),
                     kek_id: None,
                 },
                 KeyValuePair {
@@ -367,7 +373,10 @@ mod tests {
         let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
         let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
 
-        assert_eq!(hash1, hash2, "Complex reordering of same key-value pairs should produce the same hash");
+        assert_eq!(
+            hash1, hash2,
+            "Complex reordering of same key-value pairs should produce the same hash"
+        );
     }
 
     #[test]
@@ -378,18 +387,16 @@ mod tests {
         // 1. It ensures that the same context will always map to the same hash
         // 2. It guarantees consistent behavior across different runs of the application
         // 3. It enables reliable storage and retrieval of contexts by their hash
-        // 
+        //
         // Without determinism, contexts could not be reliably found after being stored,
         // as their hash might change between storage and retrieval operations.
-        
+
         let context = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "test".to_string(),
-                    value: create_string_value("value"),
-                    kek_id: None,
-                },
-            ],
+            pairs: vec![KeyValuePair {
+                key: "test".to_string(),
+                value: create_string_value("value"),
+                kek_id: None,
+            }],
             dek: None,
             kek_id: None,
         };
@@ -400,21 +407,28 @@ mod tests {
         let hash3 = sha1_context_hash(&context).expect("Hash should succeed");
 
         // All three hashes must be identical - this proves determinism
-        assert_eq!(hash1, hash2, "Hash should be deterministic - same input must always produce same output");
-        assert_eq!(hash2, hash3, "Hash should be deterministic - same input must always produce same output");
-        assert_eq!(hash1, hash3, "Hash should be deterministic - same input must always produce same output");
+        assert_eq!(
+            hash1, hash2,
+            "Hash should be deterministic - same input must always produce same output"
+        );
+        assert_eq!(
+            hash2, hash3,
+            "Hash should be deterministic - same input must always produce same output"
+        );
+        assert_eq!(
+            hash1, hash3,
+            "Hash should be deterministic - same input must always produce same output"
+        );
     }
 
     #[test]
     fn test_hash_format() {
         let context = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "test".to_string(),
-                    value: create_string_value("value"),
-                    kek_id: None,
-                },
-            ],
+            pairs: vec![KeyValuePair {
+                key: "test".to_string(),
+                value: create_string_value("value"),
+                kek_id: None,
+            }],
             dek: None,
             kek_id: None,
         };
@@ -423,10 +437,13 @@ mod tests {
 
         // SHA-1 hash should be 40 characters (160 bits in hex)
         assert_eq!(hash.len(), 40, "SHA-1 hash should be 40 characters");
-        
+
         // Should only contain hex characters
-        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "Hash should only contain hex characters");
-        
+        assert!(
+            hash.chars().all(|c| c.is_ascii_hexdigit()),
+            "Hash should only contain hex characters"
+        );
+
         // Should be lowercase
         assert_eq!(hash, hash.to_lowercase(), "Hash should be lowercase");
     }

@@ -10,13 +10,9 @@ use tracing_subscriber::{fmt, EnvFilter};
 /// `serve()` to call it unconditionally without conflicting with test
 /// subscribers or other entry points.
 pub fn init_tracing() {
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
-    let _ = fmt()
-        .json()
-        .with_env_filter(env_filter)
-        .try_init();
+    let _ = fmt().json().with_env_filter(env_filter).try_init();
 }
 
 /// Initializes a human-readable tracing subscriber for use in tests.
@@ -30,8 +26,7 @@ pub fn init_tracing() {
 ///
 /// Safe to call multiple times — subsequent calls are no-ops.
 pub fn init_test_tracing() {
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     let _ = fmt()
         .with_env_filter(env_filter)

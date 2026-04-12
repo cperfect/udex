@@ -25,7 +25,8 @@ impl AuthnInterceptor {
             })?)
             .map_err(|e| {
                 Error::ConfigValidation(format!("Failed to read jwt_public_key_path: {}", e))
-            }).map(|key| {
+            })
+            .map(|key| {
                 DecodingKey::from_ec_pem(key.as_bytes()).map_err(|e| {
                     Error::ConfigValidation(format!("Failed to create decoding key: {}", e))
                 })
@@ -56,6 +57,7 @@ impl AuthnInterceptor {
         })
     }
 
+    #[allow(clippy::result_large_err)]
     fn extract_bearer_token<'a>(&self, auth_header: &'a str) -> Result<&'a str, Status> {
         if let Some(token) = auth_header.strip_prefix("Bearer ") {
             Ok(token.trim())
@@ -66,6 +68,7 @@ impl AuthnInterceptor {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn validate_jwt(&self, token: &str) -> Result<Claims, Status> {
         let mut validation = Validation::new(Algorithm::ES256);
         validation.set_issuer(&[&self.expected_issuer]);
@@ -80,9 +83,9 @@ impl AuthnInterceptor {
         }?;
 
         // validate the public claims
-        claims.custom_validate_public().map_err(|e| {
-            Status::unauthenticated(format!("JWT validation failed: {}", e))
-        })?;
+        claims
+            .custom_validate_public()
+            .map_err(|e| Status::unauthenticated(format!("JWT validation failed: {}", e)))?;
 
         Ok(claims)
     }
@@ -97,6 +100,31 @@ impl AuthnInterceptor {
     //         Err(Status::unauthenticated("Invalid API key"))
     //     }
     // }
+}
+
+#[tonic::async_trait]
+impl RequestInterceptor for AuthnInterceptor {
+    async fn intercept(&self, mut req: Request<Body>) -> Result<Request<Body>, Status> {
+        match req
+            .headers()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+        {
+            Some(auth_header) => {
+                let token = self.extract_bearer_token(auth_header)?;
+                let claims = self.validate_jwt(token)?;
+                tracing::debug!("JWT validation successful");
+
+                req.extensions_mut().insert(claims);
+                tracing::debug!("Claims added to request extensions");
+                Ok(req)
+            }
+            None => {
+                tracing::warn!("Request missing Authorization header");
+                Err(Status::unauthenticated("Authorization header missing"))
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -147,8 +175,8 @@ mod tests {
 
         let private_key = std::fs::read_to_string("tests/jwt/signing_private_key.pem")
             .expect("Failed to read signing private key");
-        let encoding_key = EncodingKey::from_ec_pem(private_key.as_bytes())
-            .expect("Failed to create EncodingKey");
+        let encoding_key =
+            EncodingKey::from_ec_pem(private_key.as_bytes()).expect("Failed to create EncodingKey");
 
         let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
         header.typ = Some("JWT".to_string());
@@ -159,30 +187,5 @@ mod tests {
         let result = interceptor.validate_jwt(&token);
         assert!(result.is_err());
         assert!(logs_contain("JWT validation error"));
-    }
-}
-
-#[tonic::async_trait]
-impl RequestInterceptor for AuthnInterceptor {
-    async fn intercept(&self, mut req: Request<Body>) -> Result<Request<Body>, Status> {
-        match req
-            .headers()
-            .get("authorization")
-            .and_then(|v| v.to_str().ok())
-        {
-            Some(auth_header) => {
-                let token = self.extract_bearer_token(auth_header)?;
-                let claims = self.validate_jwt(token)?;
-                tracing::debug!("JWT validation successful");
-
-                req.extensions_mut().insert(claims);
-                tracing::debug!("Claims added to request extensions");
-                Ok(req)
-            }
-            None => {
-                tracing::warn!("Request missing Authorization header");
-                Err(Status::unauthenticated("Authorization header missing"))
-            }
-        }
     }
 }

@@ -1,8 +1,8 @@
-pub mod entry;
-pub mod index;
 pub mod claims;
-pub mod permissions;
+pub mod entry;
 pub mod glob;
+pub mod index;
+pub mod permissions;
 
 use thiserror::Error;
 
