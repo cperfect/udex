@@ -28,11 +28,11 @@ fn resolve_placeholders(
     let mut url = url.to_string();
 
     for (var, placeholder) in [
-        ("DB_HOST",     "${DB_HOST}"),
-        ("DB_PORT",     "${DB_PORT}"),
-        ("DB_USER",     "${DB_USER}"),
+        ("DB_HOST", "${DB_HOST}"),
+        ("DB_PORT", "${DB_PORT}"),
+        ("DB_USER", "${DB_USER}"),
         ("DB_PASSWORD", "${DB_PASSWORD}"),
-        ("DB_NAME",     "${DB_NAME}"),
+        ("DB_NAME", "${DB_NAME}"),
     ] {
         if let Some(value) = lookup(var) {
             url = url.replace(placeholder, &value);
@@ -53,17 +53,23 @@ impl DatastoreConfig {
     /// Validate the datastore configuration.
     pub fn validate(&self) -> Result<(), DatastoreConfigError> {
         if self.connection_url.is_empty() {
-            return Err(DatastoreConfigError::Validation("connection_url cannot be empty".to_string()));
+            return Err(DatastoreConfigError::Validation(
+                "connection_url cannot be empty".to_string(),
+            ));
         }
-        
+
         if self.max_connections == 0 {
-            return Err(DatastoreConfigError::Validation("max_connections must be greater than 0".to_string()));
+            return Err(DatastoreConfigError::Validation(
+                "max_connections must be greater than 0".to_string(),
+            ));
         }
-        
+
         if self.min_connections > self.max_connections {
-            return Err(DatastoreConfigError::Validation("min_connections cannot be greater than max_connections".to_string()));
+            return Err(DatastoreConfigError::Validation(
+                "min_connections cannot be greater than max_connections".to_string(),
+            ));
         }
-        
+
         Ok(())
     }
 
@@ -96,21 +102,21 @@ mod tests {
             connection_timeout: Duration::from_secs(10),
             query_timeout: Duration::from_secs(30),
         };
-        
+
         // Test empty connection URL
         config.connection_url = String::new();
         assert!(config.validate().is_err());
-        
+
         // Test invalid max_connections
         config.connection_url = "postgres://localhost:5432/udex".to_string();
         config.max_connections = 0;
         assert!(config.validate().is_err());
-        
+
         // Test min_connections > max_connections
         config.max_connections = 5;
         config.min_connections = 10;
         assert!(config.validate().is_err());
-        
+
         // Test valid config
         config.min_connections = 2;
         assert!(config.validate().is_ok());
@@ -120,27 +126,28 @@ mod tests {
     fn test_connection_url_substitution() {
         let lookup = |k: &str| -> Option<String> {
             match k {
-                "DB_HOST"     => Some("localhost".to_string()),
-                "DB_PORT"     => Some("5432".to_string()),
-                "DB_USER"     => Some("test_user".to_string()),
+                "DB_HOST" => Some("localhost".to_string()),
+                "DB_PORT" => Some("5432".to_string()),
+                "DB_USER" => Some("test_user".to_string()),
                 "DB_PASSWORD" => Some("test_pass".to_string()),
-                "DB_NAME"     => Some("test_db".to_string()),
-                _             => None,
+                "DB_NAME" => Some("test_db".to_string()),
+                _ => None,
             }
         };
 
         let url = resolve_placeholders(
             "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}",
             lookup,
-        ).expect("all placeholders should be resolved");
+        )
+        .expect("all placeholders should be resolved");
         assert_eq!(url, "postgres://test_user:test_pass@localhost:5432/test_db");
 
         // Unresolved placeholder should return an error
-        let result = resolve_placeholders(
-            "postgres://user:pass@${DB_HOST}:5432/db",
-            |_| None,
-        );
+        let result = resolve_placeholders("postgres://user:pass@${DB_HOST}:5432/db", |_| None);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("unresolved placeholder"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("unresolved placeholder"));
     }
 }

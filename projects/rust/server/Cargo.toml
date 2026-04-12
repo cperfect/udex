@@ -20,25 +20,28 @@ prost = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tower-http = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 uuid = { workspace = true }
 jsonwebtoken = { workspace = true }
 validator = { version = "0.20", features = ["derive"] }
+# Reserved for the distributed tracing steel thread (OTLP export, span propagation)
 opentelemetry = "0.29.1"
 opentelemetry-otlp = "0.29.0"
 opentelemetry_sdk = "0.29.0"
 tokio-rustls = "0.26.2"
-testcontainers = { workspace = true }
-testcontainers-modules ={ workspace = true }
-tokio-shared-rt = { workspace = true }
 time = { workspace = true }
 
 [dev-dependencies]
 udex-datastore = { path = "../datastore", features = ["integration_test"]}
 tokio = { workspace = true }
-tracing-subscriber = { workspace = true }
+tracing-test = { workspace = true }
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true }
+tokio-shared-rt = { workspace = true }
 tonic = { workspace = true }
 maybe-once = { workspace = true } 
 rstest = { workspace = true }

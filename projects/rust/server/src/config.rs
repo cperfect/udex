@@ -36,7 +36,7 @@ pub struct TlsConfig {
 }
 
 // Authentication and Authorization configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AuthNzConfig {
     /// JWT public key path for token validation (ECDSA public key in PEM format)
     pub jwt_public_key_path: Option<String>,
@@ -84,16 +84,6 @@ impl Default for TlsConfig {
     }
 }
 
-impl Default for AuthNzConfig {
-    fn default() -> Self {
-        Self {
-            jwt_public_key_path: None,
-            jwt_issuer: None,
-            jwt_audience: None,
-        }
-    }
-}
-
 impl AuthNzConfig {
     // Validate the AuthNZ configuration.
     pub fn validate(&self) -> Result<(), crate::Error> {
@@ -121,7 +111,6 @@ impl AuthNzConfig {
                 "jwt_public_key_path cannot be empty".to_string(),
             ));
         }
-
 
         // Validate JWT issuer
         if jwt_issuer.trim().is_empty() {

@@ -25,7 +25,8 @@ impl AuthnInterceptor {
             })?)
             .map_err(|e| {
                 Error::ConfigValidation(format!("Failed to read jwt_public_key_path: {}", e))
-            }).map(|key| {
+            })
+            .map(|key| {
                 DecodingKey::from_ec_pem(key.as_bytes()).map_err(|e| {
                     Error::ConfigValidation(format!("Failed to create decoding key: {}", e))
                 })
@@ -56,6 +57,7 @@ impl AuthnInterceptor {
         })
     }
 
+    #[allow(clippy::result_large_err)]
     fn extract_bearer_token<'a>(&self, auth_header: &'a str) -> Result<&'a str, Status> {
         if let Some(token) = auth_header.strip_prefix("Bearer ") {
             Ok(token.trim())
@@ -66,6 +68,7 @@ impl AuthnInterceptor {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn validate_jwt(&self, token: &str) -> Result<Claims, Status> {
         let mut validation = Validation::new(Algorithm::ES256);
         validation.set_issuer(&[&self.expected_issuer]);
@@ -74,20 +77,15 @@ impl AuthnInterceptor {
         let claims = match decode::<Claims>(token, &self.public_key, &validation) {
             Ok(token_data) => Ok(token_data.claims),
             Err(err) => {
-                // TODO(major): replace println! with tracing::warn! - adopt tracing crate for
-                // structured, levelled logging. Use tracing::warn! here as JWT errors are
-                // expected in normal operation (e.g. expired tokens) and should not be noise.
-                println!("JWT validation error: {:?}", err);
+                tracing::warn!(error = ?err, "JWT validation error");
                 Err(Status::unauthenticated("Invalid JWT token"))
             }
-        }.or_else(|_| {
-            Err(Status::unauthenticated("Failed to decode JWT token"))
-        })?;
+        }?;
 
         // validate the public claims
-        claims.custom_validate_public().map_err(|e| {
-            Status::unauthenticated(format!("JWT validation failed: {}", e))
-        })?;
+        claims
+            .custom_validate_public()
+            .map_err(|e| Status::unauthenticated(format!("JWT validation failed: {}", e)))?;
 
         Ok(claims)
     }
@@ -115,16 +113,79 @@ impl RequestInterceptor for AuthnInterceptor {
             Some(auth_header) => {
                 let token = self.extract_bearer_token(auth_header)?;
                 let claims = self.validate_jwt(token)?;
-                // TODO(major): replace println! with tracing::debug! (see above)
-                println!("JWT validation successful for token");
+                tracing::debug!("JWT validation successful");
 
-                //add the claims to the request extensions
                 req.extensions_mut().insert(claims);
-                // TODO(major): replace println! with tracing::debug! (see above)
-                println!("Claims added to request extensions");
+                tracing::debug!("Claims added to request extensions");
                 Ok(req)
             }
-            None => Err(Status::unauthenticated("Authorization header missing")),
+            None => {
+                tracing::warn!("Request missing Authorization header");
+                Err(Status::unauthenticated("Authorization header missing"))
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::AuthNzConfig;
+    use tracing_test::traced_test;
+
+    fn test_interceptor() -> AuthnInterceptor {
+        AuthnInterceptor::new(AuthNzConfig {
+            jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
+            jwt_issuer: Some("test-issuer".to_string()),
+            jwt_audience: Some("test-audience".to_string()),
+        })
+        .expect("Failed to create test AuthnInterceptor")
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_invalid_jwt_emits_warn() {
+        let interceptor = test_interceptor();
+        let result = interceptor.validate_jwt("this.is.not.a.valid.jwt");
+        assert!(result.is_err());
+        assert!(logs_contain("JWT validation error"));
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_jwt_wrong_issuer_emits_warn() {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize;
+
+        // Build a JWT signed with the real key but with the wrong issuer.
+        // This passes signature validation but fails issuer validation,
+        // confirming the warn fires for that specific code path.
+        let claims = Claims::new(
+            "test-user".to_string(),
+            "wrong-issuer".to_string(),
+            "test-audience".to_string(),
+            now + 3600,
+            now,
+        );
+
+        let private_key = std::fs::read_to_string("tests/jwt/signing_private_key.pem")
+            .expect("Failed to read signing private key");
+        let encoding_key =
+            EncodingKey::from_ec_pem(private_key.as_bytes()).expect("Failed to create EncodingKey");
+
+        let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
+        header.typ = Some("JWT".to_string());
+
+        let token = encode(&header, &claims, &encoding_key).expect("Failed to encode JWT");
+
+        let interceptor = test_interceptor();
+        let result = interceptor.validate_jwt(&token);
+        assert!(result.is_err());
+        assert!(logs_contain("JWT validation error"));
     }
 }

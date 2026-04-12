@@ -4,9 +4,9 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgArgumentBuffer, Database, Encode, Type};
 use thiserror::Error;
-use uuid::Uuid;
-use udex_api::index::{Index, IndexUpdate};
 use udex_api::entry::Context;
+use udex_api::index::{Index, IndexUpdate};
+use uuid::Uuid;
 
 use crate::config::DatastoreConfig;
 
@@ -67,7 +67,6 @@ pub struct BulkOperationError {
     source: crate::Error,
 }
 
-
 /// Wrapper type for Uuid to implement SQL traits
 #[derive(Debug, Clone, Copy)]
 pub struct UuidWrapper(pub Uuid);
@@ -90,7 +89,7 @@ impl<'q> Encode<'q, sqlx::Postgres> for UuidWrapper {
     }
 }
 
-impl<'q> Type<sqlx::Postgres> for UuidWrapper {
+impl Type<sqlx::Postgres> for UuidWrapper {
     fn type_info() -> sqlx::postgres::PgTypeInfo {
         sqlx::postgres::PgTypeInfo::with_name("uuid")
     }
@@ -122,9 +121,10 @@ pub enum EntryReadResult {
 /// Trait for datastore operations
 #[async_trait::async_trait]
 pub trait Datastore: Send + Sync {
-
     /// Initialize a datastore with the config and return a new instance.
-    async fn init(config: DatastoreConfig) -> Result<Box<Self>, Error> where Self: Sized;
+    async fn init(config: DatastoreConfig) -> Result<Box<Self>, Error>
+    where
+        Self: Sized;
 
     /// Checks the server is healthy
     async fn is_healthy(&self) -> Result<bool, Error>;
@@ -137,7 +137,12 @@ pub trait Datastore: Send + Sync {
 
     /// Update an existing index (only mutable fields)
     /// i.e. all but the name
-    async fn update_index(&self, name: &str, update: IndexUpdate, updated_by: &str) -> Result<Index, Error>;
+    async fn update_index(
+        &self,
+        name: &str,
+        update: IndexUpdate,
+        updated_by: &str,
+    ) -> Result<Index, Error>;
 
     /// List all indices
     async fn list_indices(&self) -> Result<Vec<Index>, Error>;
@@ -157,16 +162,21 @@ pub trait Datastore: Send + Sync {
 
     /// Perform multiple entry write operations in a single transaction.
     /// Any failure will rollback all operations.
-    async fn bulk_entry_write(&self, operations: Vec<EntryWriteOperation>) -> Result<(), BulkOperationError>;
+    async fn bulk_entry_write(
+        &self,
+        operations: Vec<EntryWriteOperation>,
+    ) -> Result<(), BulkOperationError>;
 
     /// Perform multiple entry read operations in a single transaction.
     /// All reads will be executed in a single transaction and will have the same isolation level.
-    async fn bulk_entry_read(&self, operations: Vec<EntryReadOperation>) -> Result<Vec<EntryReadResult>, BulkOperationError>;
+    async fn bulk_entry_read(
+        &self,
+        operations: Vec<EntryReadOperation>,
+    ) -> Result<Vec<EntryReadResult>, BulkOperationError>;
 
     /// The database type for this datastore
     type Database: Database;
 }
-
 
 /// Trait for datastore migrations
 #[async_trait::async_trait]
@@ -190,6 +200,6 @@ pub trait Migrator: Send + Sync {
                 current_version, latest_version
             )));
         }
-        Ok(())  
+        Ok(())
     }
 }

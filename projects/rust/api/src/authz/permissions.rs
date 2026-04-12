@@ -1,12 +1,14 @@
-use crate::authz::{claims::Claims, Error};
-use prost::Message;
 use super::glob::matches_glob;
-use regex::Regex;
+use crate::authz::{claims::Claims, Error};
 use lazy_static::lazy_static;
-
+use prost::Message;
+use regex::Regex;
 
 /// Trait to define the permissions required for a message
-pub trait Permissable<M> where M: Message { 
+pub trait Permissable<M>
+where
+    M: Message,
+{
     fn required_permissions(&self) -> Vec<String>;
 }
 lazy_static! {
@@ -16,50 +18,59 @@ lazy_static! {
 
 fn validate_permission(permission: &str) -> Result<(), Error> {
     if permission.is_empty() {
-        return Err(Error::InvalidPermissionError("Permission cannot be empty".to_string()));
+        return Err(Error::InvalidPermissionError(
+            "Permission cannot be empty".to_string(),
+        ));
     }
     // Add more validation rules as needed
     if !PERMISSION_REGEX.is_match(permission) {
-        return Err(Error::InvalidPermissionError(format!("Invalid permission format: {}", permission)));
+        return Err(Error::InvalidPermissionError(format!(
+            "Invalid permission format: {}",
+            permission
+        )));
     }
     Ok(())
 }
 
-pub fn is_permitted<M>(message: &M, claims: &Claims) -> Result<bool, Error> where M: Message + Permissable<M> {
+pub fn is_permitted<M>(message: &M, claims: &Claims) -> Result<bool, Error>
+where
+    M: Message + Permissable<M>,
+{
     let required_permissions = message.required_permissions();
-    
+
     // Get user permissions from claims
-    let user_permissions: Vec<&str> = if let Some(permissions_value) = claims.get_extras().get("permissions") {
-        if let Some(permissions_array) = permissions_value.as_array() {
-            let mut validated_permissions = Vec::new();
-            for p in permissions_array.iter() {
-                if let Some(s) = p.as_str() {
-                    // Validate permission and return error if invalid
-                    validate_permission(s)?;
-                    validated_permissions.push(s);
+    let user_permissions: Vec<&str> =
+        if let Some(permissions_value) = claims.get_extras().get("permissions") {
+            if let Some(permissions_array) = permissions_value.as_array() {
+                let mut validated_permissions = Vec::new();
+                for p in permissions_array.iter() {
+                    if let Some(s) = p.as_str() {
+                        // Validate permission and return error if invalid
+                        validate_permission(s)?;
+                        validated_permissions.push(s);
+                    }
+                    // Non-string permissions are silently ignored (existing behavior for mixed arrays)
                 }
-                // Non-string permissions are silently ignored (existing behavior for mixed arrays)
+                validated_permissions
+            } else {
+                tracing::warn!("Permissions in claims are not an array, treating as empty");
+                Vec::new()
             }
-            validated_permissions
         } else {
-            // TODO(major): replace println! with tracing::warn! - adopt tracing crate for
-            // structured, levelled logging throughout the codebase.
-            println!("Permissions in claims are not an array, treating as empty");
+            tracing::warn!("No permissions found in claims, treating as empty");
             Vec::new()
-        }
-    } else {
-        // TODO(major): replace println! with tracing::warn! (see above)
-        println!("No permissions found in claims, treating as empty");
-        Vec::new()
-    };
-    
+        };
+
     // Check that all required permissions are present in user permissions
     for required_permission in required_permissions {
-        if !user_permissions.iter().any(|p| matches_glob(p, &required_permission)) {
+        if !user_permissions
+            .iter()
+            .any(|p| matches_glob(p, &required_permission))
+        {
             return Ok(false);
         }
     }
-    
+
     Ok(true)
 }
 
@@ -68,6 +79,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::collections::HashMap;
+    use tracing_test::traced_test;
 
     // Test message structs that implement prost::Message for testing
     #[derive(Clone, PartialEq, ::prost::Message)]
@@ -97,7 +109,11 @@ mod tests {
 
     impl Permissable<TestMultiplePermissionsMessage> for TestMultiplePermissionsMessage {
         fn required_permissions(&self) -> Vec<String> {
-            vec!["test:read".to_string(), "test:write".to_string(), "test:admin".to_string()]
+            vec![
+                "test:read".to_string(),
+                "test:write".to_string(),
+                "test:admin".to_string(),
+            ]
         }
     }
 
@@ -251,10 +267,10 @@ mod tests {
         };
         let claims = create_claims_with_permissions(vec![
             "test:read",
-            "test:write", 
+            "test:write",
             "test:admin",
             "extra:permission",
-            "another:permission"
+            "another:permission",
         ]);
 
         let result = is_permitted(&message, &claims);
@@ -355,7 +371,10 @@ mod tests {
 
         let result = is_permitted(&message, &claims);
         assert!(result.is_err()); // Should fail due to invalid uppercase format
-        assert_eq!(result.unwrap_err().to_string(), "Invalid permission: Invalid permission format: TEST:READ");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid permission: Invalid permission format: TEST:READ"
+        );
     }
 
     #[test]
@@ -375,7 +394,7 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test".to_string(),
         };
-        
+
         // Create claims with permissions field as a string instead of array
         let mut claims = Claims::new(
             "test-user".to_string(),
@@ -400,7 +419,7 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test".to_string(),
         };
-        
+
         // Create claims with permissions field as an object instead of array
         let mut claims = Claims::new(
             "test-user".to_string(),
@@ -425,7 +444,7 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test".to_string(),
         };
-        
+
         // Create claims with permissions field as a number instead of array
         let mut claims = Claims::new(
             "test-user".to_string(),
@@ -450,7 +469,7 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test".to_string(),
         };
-        
+
         // Create claims with permissions field as a boolean instead of array
         let mut claims = Claims::new(
             "test-user".to_string(),
@@ -475,7 +494,7 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test".to_string(),
         };
-        
+
         // Create claims with permissions field as null instead of array
         let mut claims = Claims::new(
             "test-user".to_string(),
@@ -500,14 +519,20 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test".to_string(),
         };
-        
+
         // Create claims with an invalid permission format
-        let claims = create_claims_with_permissions(vec!["valid:permission", "invalid:permission:CAPS_bad?"]);
+        let claims = create_claims_with_permissions(vec![
+            "valid:permission",
+            "invalid:permission:CAPS_bad?",
+        ]);
 
         let result = is_permitted(&message, &claims);
         assert!(result.is_err());
         //check we get the expected Error::InvalidPermissionError
-        assert_eq!(result.unwrap_err().to_string(), "Invalid permission: Invalid permission format: invalid:permission:CAPS_bad?");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid permission: Invalid permission format: invalid:permission:CAPS_bad?"
+        );
     }
 
     #[test]
@@ -515,14 +540,41 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test".to_string(),
         };
-        
+
         // Create claims with a permission that has three wildcards
         let claims = create_claims_with_permissions(vec!["test:read:write:***"]);
 
         let result = is_permitted(&message, &claims);
         assert!(result.is_err());
         //check we get the expected Error::InvalidPermissionError
-        assert_eq!(result.unwrap_err().to_string(), "Invalid permission: Invalid permission format: test:read:write:***");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid permission: Invalid permission format: test:read:write:***"
+        );
+    }
+
+    // --- Logging tests ---
+
+    #[traced_test]
+    #[test]
+    fn test_malformed_permissions_emits_warn() {
+        let message = TestSinglePermissionMessage {
+            data: "test".to_string(),
+        };
+        let claims = create_claims_with_malformed_permissions();
+        let _ = is_permitted(&message, &claims);
+        assert!(logs_contain("Permissions in claims are not an array"));
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_missing_permissions_emits_warn() {
+        let message = TestSinglePermissionMessage {
+            data: "test".to_string(),
+        };
+        let claims = create_claims_without_permissions();
+        let _ = is_permitted(&message, &claims);
+        assert!(logs_contain("No permissions found in claims"));
     }
 
     #[test]
@@ -533,7 +585,7 @@ mod tests {
         assert!(PERMISSION_REGEX.is_match("foo:bar*"));
         assert!(PERMISSION_REGEX.is_match("foo:**"));
         assert!(PERMISSION_REGEX.is_match("udex:index:v1:read"));
-        
+
         // Test that invalid patterns are rejected
         assert!(!PERMISSION_REGEX.is_match("invalid:CAPS"));
         assert!(!PERMISSION_REGEX.is_match("test:***"));
@@ -545,7 +597,7 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test:foo:bar".to_string(),
         };
-        
+
         // Create claims with single wildcard permissions
         let claims = create_claims_with_permissions(vec!["test:*"]);
 
@@ -559,7 +611,7 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test:foo:bar".to_string(),
         };
-        
+
         // Create claims with double wildcard permissions
         let claims = create_claims_with_permissions(vec!["test:**"]);
 
@@ -573,7 +625,7 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test:foo:bar".to_string(),
         };
-        
+
         // Create claims with wildcard-only permissions
         let claims = create_claims_with_permissions(vec!["*", "**"]);
 
@@ -587,9 +639,10 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test:foo:bar".to_string(),
         };
-        
+
         // Create claims with mixed wildcard patterns - test:read* should match test:read
-        let claims = create_claims_with_permissions(vec!["udex:*:service:**", "test:read*", "api:**:read"]);
+        let claims =
+            create_claims_with_permissions(vec!["udex:*:service:**", "test:read*", "api:**:read"]);
 
         let result = is_permitted(&message, &claims);
         assert!(result.is_ok());
@@ -601,7 +654,7 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test:foo:bar".to_string(),
         };
-        
+
         // Create claims with multiple single wildcards in different segments
         let claims = create_claims_with_permissions(vec!["service*:data*:read*"]);
 
@@ -616,7 +669,7 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test:foo:bar".to_string(),
         };
-        
+
         // Create claims with multiple double wildcards
         let claims = create_claims_with_permissions(vec!["service**:data**:read**"]);
 
@@ -631,7 +684,7 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test:foo:bar".to_string(),
         };
-        
+
         // Create claims with alternating single and double wildcards that match test:read
         let claims = create_claims_with_permissions(vec!["test*:read**"]);
 
@@ -645,14 +698,14 @@ mod tests {
         // Test that valid wildcard patterns pass validation
         let valid_patterns = vec![
             "test:*",
-            "service:**", 
+            "service:**",
             "foo*:bar**",
             "*",
             "**",
             "udex:index*:v1**:read",
-            "a*:b**:c*:d**"
+            "a*:b**:c*:d**",
         ];
-        
+
         for pattern in valid_patterns {
             let result = validate_permission(pattern);
             assert!(result.is_ok(), "Pattern '{}' should be valid", pattern);
@@ -663,12 +716,12 @@ mod tests {
     fn test_wildcard_validation_failure() {
         // Test that invalid wildcard patterns fail validation
         let invalid_patterns = vec![
-            "test:***",           // Three wildcards not allowed
-            "service:****",       // Four wildcards not allowed  
-            "foo:*****",         // Five wildcards not allowed
-            "test:bar***:baz",   // Three wildcards in middle segment
+            "test:***",        // Three wildcards not allowed
+            "service:****",    // Four wildcards not allowed
+            "foo:*****",       // Five wildcards not allowed
+            "test:bar***:baz", // Three wildcards in middle segment
         ];
-        
+
         for pattern in invalid_patterns {
             let result = validate_permission(pattern);
             assert!(result.is_err(), "Pattern '{}' should be invalid", pattern);
@@ -680,27 +733,33 @@ mod tests {
         let message = TestSinglePermissionMessage {
             data: "test:foo:bar".to_string(),
         };
-        
+
         // Test various complex but valid wildcard combinations
         // Note: The TestSinglePermissionMessage requires "test:read" permission
         let test_cases = vec![
-            ("test:**", true),           // Double wildcard should match
-            ("test:*", true),            // Single wildcard after colon should match
-            ("test:read", true),         // Exact match should work
-            ("other:*", false),          // Different prefix shouldn't match
-            ("test*", false),            // Single wildcard on segment doesn't match across colons
-            ("*:*", true),               // Wildcard pattern that matches test:read
-            ("*:read", true),            // Wildcard first segment, exact second
+            ("test:**", true),   // Double wildcard should match
+            ("test:*", true),    // Single wildcard after colon should match
+            ("test:read", true), // Exact match should work
+            ("other:*", false),  // Different prefix shouldn't match
+            ("test*", false),    // Single wildcard on segment doesn't match across colons
+            ("*:*", true),       // Wildcard pattern that matches test:read
+            ("*:read", true),    // Wildcard first segment, exact second
         ];
-        
+
         for (permission_pattern, should_match) in test_cases {
             let claims = create_claims_with_permissions(vec![permission_pattern]);
             let result = is_permitted(&message, &claims);
-            
-            assert!(result.is_ok(), "Permission validation should succeed for pattern '{}'", permission_pattern);
-            assert_eq!(result.unwrap(), should_match, 
-                "Pattern '{}' should {} match 'test:read'", 
-                permission_pattern, 
+
+            assert!(
+                result.is_ok(),
+                "Permission validation should succeed for pattern '{}'",
+                permission_pattern
+            );
+            assert_eq!(
+                result.unwrap(),
+                should_match,
+                "Pattern '{}' should {} match 'test:read'",
+                permission_pattern,
                 if should_match { "" } else { "not" }
             );
         }

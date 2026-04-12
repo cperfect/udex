@@ -3,10 +3,17 @@
 
 use std::{collections::HashMap, sync::Arc};
 use tonic::{Request, Response, Status};
-use udex_api::{entry::{
-    entry_service_server::EntryService as EntryServiceTrait, BulkReadEntryOperationRequest, BulkReadEntryOperationResponse, BulkReadEntryOperationResult, BulkWriteEntryOperationRequest, BulkWriteEntryOperationResponse, BulkWriteEntryOperationResult, Context, ContextInput, CreateEntryRequest, CreateEntryResponse, DeleteEntryRequest, DeleteEntryResponse, LookupContextByKeyRequest, LookupContextByKeyResponse, LookupKeysByContextRequest, LookupKeysByContextResponse
-}, index::{index_service_server::IndexService, ListIndicesRequest},
-    hash::{ContextHasher, sha1_context_hash}
+use udex_api::{
+    entry::{
+        entry_service_server::EntryService as EntryServiceTrait, BulkReadEntryOperationRequest,
+        BulkReadEntryOperationResponse, BulkReadEntryOperationResult,
+        BulkWriteEntryOperationRequest, BulkWriteEntryOperationResponse,
+        BulkWriteEntryOperationResult, Context, ContextInput, CreateEntryRequest,
+        CreateEntryResponse, DeleteEntryRequest, DeleteEntryResponse, LookupContextByKeyRequest,
+        LookupContextByKeyResponse, LookupKeysByContextRequest, LookupKeysByContextResponse,
+    },
+    hash::{sha1_context_hash, ContextHasher},
+    index::{index_service_server::IndexService, ListIndicesRequest},
 };
 use udex_datastore::{
     Datastore, Entry, EntryReadOperation, EntryReadResult, EntryWriteOperation,
@@ -44,7 +51,6 @@ where
 {
     /// Creates a new EntryServer instance.
     pub fn new(datastore: Arc<D>) -> Self {
-
         let index_hasher_fns: HashMap<String, ContextHasher> = HashMap::new();
 
         Self {
@@ -55,7 +61,6 @@ where
 
     /// Initializes the EntryService.
     pub async fn init(&mut self, index_service: Arc<dyn IndexService>) -> Result<(), Error> {
-        
         // Initialize the index map from the index service
         let indexes = index_service
             .list_indices(tonic::Request::new(ListIndicesRequest {}))
@@ -67,7 +72,8 @@ where
         for index in &indexes {
             match index.hash_algorithm {
                 h if h == udex_api::index::HashAlgorithm::Sha1 as i32 => {
-                   self.index_hasher_fns.insert(index.name.clone(), sha1_context_hash);
+                    self.index_hasher_fns
+                        .insert(index.name.clone(), sha1_context_hash);
                 }
                 // Add more hash algorithms as needed
                 _ => {
@@ -81,10 +87,15 @@ where
 
         Ok(())
     }
-    
+
     /// Converts a ContextInput to a Context by generating a hash.
     /// Uses the default hash algorithm (SHA-1) for context identification.
-    fn context_input_to_context(&self, index_name: String, input: ContextInput) -> Result<Context, Status> {
+    #[allow(clippy::result_large_err)]
+    fn context_input_to_context(
+        &self,
+        index_name: String,
+        input: ContextInput,
+    ) -> Result<Context, Status> {
         let hasher_fn = self
             .index_hasher_fns
             .get(&index_name)
@@ -110,43 +121,57 @@ where
     }
 
     /// Converts a datastore error to a tonic Status.
+    ///
+    /// Internal errors (Database, Transaction, Serialization, etc.) are logged at error level here,
+    /// at the network boundary, before being converted to an opaque Status::internal response.
     fn datastore_error_to_status(&self, error: DatastoreError) -> Status {
         match error {
             DatastoreError::EntryForKeyNotFound(key) => {
-                        Status::not_found(format!("Entry not found for key: {}", key))
-                    }
+                Status::not_found(format!("Entry not found for key: {}", key))
+            }
             DatastoreError::EntryForContextNotFound(context) => {
-                        Status::not_found(format!("Entry not found for context: {}", context))
-                    }
+                Status::not_found(format!("Entry not found for context: {}", context))
+            }
             DatastoreError::DuplicateKey(key) => {
-                        Status::already_exists(format!("Entry already exists for key: {}", key))
-                    }
+                Status::already_exists(format!("Entry already exists for key: {}", key))
+            }
             DatastoreError::InvalidContext(msg) => {
-                        Status::invalid_argument(format!("Invalid context: {}", msg))
-                    }
+                Status::invalid_argument(format!("Invalid context: {}", msg))
+            }
             DatastoreError::InvalidIndex(msg) => {
-                        Status::invalid_argument(format!("Invalid index: {}", msg))
-                    }
-            DatastoreError::DatabaseNotInitialized(msg) => {
-                        Status::failed_precondition(format!("Database not initialized: {}", msg))
-                    }
-            DatastoreError::NotImplemented(msg) => {
-                        Status::unimplemented(format!("Not implemented: {}", msg))
-                    }
-            DatastoreError::Database(e) => Status::internal(format!("Database error: {}", e)),
-            DatastoreError::Transaction(msg) => {
-                        Status::internal(format!("Transaction error: {}", msg))
-                    }
-            DatastoreError::Serialization(e) => {
-                        Status::internal(format!("Serialization error: {}", e))
-                    }
-            DatastoreError::DataConversion(msg) => {
-                        Status::internal(format!("Data conversion error: {}", msg))
-                    }
+                Status::invalid_argument(format!("Invalid index: {}", msg))
+            }
             DatastoreError::InvalidIndexUpdate(_) => {
-                        Status::invalid_argument("Invalid index update")
-                    }
-            DatastoreError::Migration(msg) => Status::internal(format!("Migration error: {}", msg))
+                Status::invalid_argument("Invalid index update")
+            }
+            DatastoreError::DatabaseNotInitialized(msg) => {
+                tracing::error!(error = %msg, "Database not initialized");
+                Status::failed_precondition("Service unavailable")
+            }
+            DatastoreError::NotImplemented(msg) => {
+                tracing::error!(error = %msg, "Unimplemented datastore operation called");
+                Status::unimplemented("Not implemented")
+            }
+            DatastoreError::Database(e) => {
+                tracing::error!(error = %e, "Database error");
+                Status::internal("Internal server error")
+            }
+            DatastoreError::Transaction(msg) => {
+                tracing::error!(error = %msg, "Transaction error");
+                Status::internal("Internal server error")
+            }
+            DatastoreError::Serialization(e) => {
+                tracing::error!(error = %e, "Serialization error");
+                Status::internal("Internal server error")
+            }
+            DatastoreError::DataConversion(msg) => {
+                tracing::error!(error = %msg, "Data conversion error");
+                Status::internal("Internal server error")
+            }
+            DatastoreError::Migration(msg) => {
+                tracing::error!(error = %msg, "Migration error");
+                Status::internal("Internal server error")
+            }
         }
     }
 }
@@ -199,7 +224,7 @@ where
 
         let response = CreateEntryResponse {
             key: key.to_string(),
-            context_hash: context_hash,
+            context_hash,
         };
 
         Ok(Response::new(response))
@@ -331,7 +356,8 @@ where
                     let key = Uuid::new_v4();
 
                     // Convert context input to context with hash
-                    let context = self.context_input_to_context(req.index_name.clone(), context_input)?;
+                    let context =
+                        self.context_input_to_context(req.index_name.clone(), context_input)?;
 
                     // save this for the response before moving the context below
                     let context_hash = context.hash.clone();
@@ -348,7 +374,7 @@ where
                     // Prepare response result
                     let create_response = CreateEntryResponse {
                         key: key.to_string(),
-                        context_hash: context_hash,
+                        context_hash,
                     };
 
                     response_results.push(BulkWriteEntryOperationResult {

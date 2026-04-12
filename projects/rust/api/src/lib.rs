@@ -6,24 +6,24 @@
 //! This crate contains the generated gRPC API definitions and client/server stubs for Udex.
 //! The API is generated from protobuf definitions in the `../protobuf` directory.
 
-pub mod generated;
 pub mod authz;
+pub mod generated;
 pub mod hash;
 
 // Re-export the generated modules for convenience
-pub use generated::udex::index::v1 as index;
+pub use generated::google::protobuf;
 pub use generated::udex::entry::v1 as entry;
 pub use generated::udex::healthz::v1 as healthz;
-pub use generated::google::protobuf;
+pub use generated::udex::index::v1 as index;
 
 use time::OffsetDateTime;
 // Re-export common types
-pub use tonic;
 pub use prost;
 pub use prost_types;
+pub use tonic;
 
-use thiserror::Error;
 use crate::generated::google;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -60,16 +60,16 @@ pub fn offset_datetime_to_google_timestamp(
 
 /// Creates a Google protobuf Timestamp representing the current time.
 /// This is a convenience function for creating timestamps with the current system time.
-/// 
+///
 /// # Returns
-/// 
+///
 /// A `google::protobuf::Timestamp` representing the current time.
-/// 
+///
 /// # Example
-/// 
+///
 /// ```
 /// use udex_api::now_timestamp;
-/// 
+///
 /// let timestamp = now_timestamp();
 /// assert!(timestamp.seconds > 0);
 /// ```
@@ -77,7 +77,7 @@ pub fn now_timestamp() -> google::protobuf::Timestamp {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("System time should be after Unix epoch");
-    
+
     google::protobuf::Timestamp {
         seconds: now.as_secs() as i64,
         nanos: now.subsec_nanos() as i32,
@@ -91,15 +91,24 @@ mod tests {
     #[test]
     fn test_now_timestamp() {
         let timestamp = now_timestamp();
-        
+
         // Check that timestamp is reasonable (after 2020-01-01 and before 2100-01-01)
         let year_2020_timestamp = 1577836800; // 2020-01-01 00:00:00 UTC
         let year_2100_timestamp = 4102444800; // 2100-01-01 00:00:00 UTC
-        
-        assert!(timestamp.seconds > year_2020_timestamp, "Timestamp should be after 2020");
-        assert!(timestamp.seconds < year_2100_timestamp, "Timestamp should be before 2100");
+
+        assert!(
+            timestamp.seconds > year_2020_timestamp,
+            "Timestamp should be after 2020"
+        );
+        assert!(
+            timestamp.seconds < year_2100_timestamp,
+            "Timestamp should be before 2100"
+        );
         assert!(timestamp.nanos >= 0, "Nanos should be non-negative");
-        assert!(timestamp.nanos < 1_000_000_000, "Nanos should be less than 1 second");
+        assert!(
+            timestamp.nanos < 1_000_000_000,
+            "Nanos should be less than 1 second"
+        );
     }
 
     #[test]
@@ -107,7 +116,7 @@ mod tests {
         let timestamp1 = now_timestamp();
         std::thread::sleep(std::time::Duration::from_millis(1));
         let timestamp2 = now_timestamp();
-        
+
         // Second timestamp should be greater than or equal to first
         assert!(timestamp2.seconds >= timestamp1.seconds);
         if timestamp2.seconds == timestamp1.seconds {
@@ -118,16 +127,19 @@ mod tests {
     #[test]
     fn test_google_timestamp_to_offset_datetime_conversion() {
         let timestamp = now_timestamp();
-        let converted = google_timestamp_to_offset_datetime(Some(timestamp)).unwrap().unwrap();
-        
+        let converted = google_timestamp_to_offset_datetime(Some(timestamp))
+            .unwrap()
+            .unwrap();
+
         // Convert back and check seconds match
-        let back_converted = offset_datetime_to_google_timestamp(Some(converted)).unwrap().unwrap();
+        let back_converted = offset_datetime_to_google_timestamp(Some(converted))
+            .unwrap()
+            .unwrap();
         assert_eq!(back_converted.seconds, timestamp.seconds);
-        
+
         // Note: The existing conversion functions use different precision,
         // so nanos may not match exactly. Just verify the timestamp is valid.
         assert!(back_converted.nanos >= 0);
         assert!(back_converted.nanos < 1_000_000_000);
     }
 }
-

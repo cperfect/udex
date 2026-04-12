@@ -5,8 +5,8 @@ use std::sync::Arc;
 use tonic::{Request, Response, Status};
 use udex_api::index::{
     index_service_server::IndexService as IndexServiceTrait, CreateIndexRequest,
-    CreateIndexResponse, DescribeRequest, DescribeResponse, Index,
-    IndexUpdate, ListIndicesRequest, ListIndicesResponse, UpdateIndexRequest, UpdateIndexResponse,
+    CreateIndexResponse, DescribeRequest, DescribeResponse, Index, IndexUpdate, ListIndicesRequest,
+    ListIndicesResponse, UpdateIndexRequest, UpdateIndexResponse,
 };
 use udex_datastore::Datastore;
 
@@ -33,7 +33,7 @@ where
         self.datastore
             .create_index(index)
             .await
-            .map_err(|e| Error::Datastore(e))
+            .map_err(Error::Datastore)
     }
 
     async fn update_index_internal(
@@ -46,7 +46,7 @@ where
         self.datastore
             .update_index(name, update, updated_by)
             .await
-            .map_err(|e| Error::Datastore(e))
+            .map_err(Error::Datastore)
     }
 
     async fn list_indices_internal(&self) -> Result<Vec<Index>, Error> {
@@ -54,7 +54,7 @@ where
         self.datastore
             .list_indices()
             .await
-            .map_err(|e| Error::Datastore(e))
+            .map_err(Error::Datastore)
     }
 
     pub async fn init(&self, init_indexes: Vec<UpdateIndexRequest>) -> Result<(), Error> {
@@ -134,7 +134,10 @@ where
                 updated_by: None,
             };
 
-            if let Some(existing) = existing_indices.iter().find(|i| i.name == index_request.name) {
+            if let Some(existing) = existing_indices
+                .iter()
+                .find(|i| i.name == index_request.name)
+            {
                 // check if index requested is different from existing
                 if existing.description != index.description
                     || existing.max_bulk_operations != index.max_bulk_operations
@@ -177,7 +180,6 @@ impl<D> IndexServiceTrait for IndexService<D>
 where
     D: Datastore + Send + Sync + 'static,
 {
-
     /// Returns information about a specific index.
     async fn describe(
         &self,
@@ -198,7 +200,8 @@ where
                 if error_msg.contains("no rows returned") || error_msg.contains("RowNotFound") {
                     Err(Status::not_found(format!("Index '{}' not found", req.name)))
                 } else {
-                    Err(Status::internal(format!("Failed to get index: {}", e)))
+                    tracing::error!(error = %e, index = %req.name, "Failed to get index");
+                    Err(Status::internal("Internal server error"))
                 }
             }
         }
@@ -229,10 +232,12 @@ where
                 "max_kv_pairs_per_context must be >= 1",
             ));
         }
-        udex_api::index::HashAlgorithm::try_from(req.hash_algorithm)
-            .map_err(|_| Status::invalid_argument(
-                format!("unsupported hash_algorithm value: {}", req.hash_algorithm)
-            ))?;
+        udex_api::index::HashAlgorithm::try_from(req.hash_algorithm).map_err(|_| {
+            Status::invalid_argument(format!(
+                "unsupported hash_algorithm value: {}",
+                req.hash_algorithm
+            ))
+        })?;
 
         let index = Index {
             name: req.name,
@@ -250,11 +255,12 @@ where
 
         self.create_index_internal(index.clone())
             .await
-            .map_err(|e| Status::internal(format!("Failed to create index: {}", e)))?;
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to create index");
+                Status::internal("Internal server error")
+            })?;
 
-        Ok(Response::new(CreateIndexResponse {
-            index: Some(index),
-        }))
+        Ok(Response::new(CreateIndexResponse { index: Some(index) }))
     }
 
     /// Updates an existing index's mutable fields.
@@ -302,7 +308,8 @@ where
                 Ok(Response::new(response))
             }
             Err(e) => {
-                Err(Status::internal(format!("Failed to list indices: {}", e)))
+                tracing::error!(error = %e, "Failed to list indices");
+                Err(Status::internal("Internal server error"))
             }
         }
     }

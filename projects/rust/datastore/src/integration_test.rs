@@ -1,18 +1,15 @@
+use crate::{config::DatastoreConfig, postgres::PostgresDatastore, Datastore, Migrator};
 /// This file contains helpers for integration tests
 use maybe_once::tokio::{Data, MaybeOnceAsync};
 use sqlx::postgres::PgPoolOptions;
-use std::sync::{Arc, OnceLock, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use uuid::Uuid;
-use crate::{
-    config::DatastoreConfig, postgres::PostgresDatastore, Datastore, Migrator,
-};
 
 // See https://github.com/ufoscout/maybe-once/blob/master/examples/testcontainers/src/postgres_async.rs.
 pub type MaybeOnceType = (
     // useful stuff for the tests
     PostgresDatastore,
     Arc<sqlx::PgPool>,
-
     // Database name for inspection/manual cleanup
     String,
 );
@@ -50,7 +47,10 @@ fn cleanup_on_exit() {
                 let rt = tokio::runtime::Runtime::new().unwrap();
                 rt.block_on(async {
                     if let Err(e) = cleanup_test_database_internal(&db_name).await {
-                        eprintln!("Warning: Failed to cleanup test database '{}': {}", db_name, e);
+                        eprintln!(
+                            "Warning: Failed to cleanup test database '{}': {}",
+                            db_name, e
+                        );
                     } else {
                         println!("Test database '{}' cleaned up successfully", db_name);
                     }
@@ -128,7 +128,10 @@ pub async fn init_postgres() -> MaybeOnceType {
 
     // Run migrations on the test database
     println!("Running migrations on test database...");
-    datastore.migrate().await.expect("Datastore migration failed");
+    datastore
+        .migrate()
+        .await
+        .expect("Datastore migration failed");
     println!("Migrations completed successfully");
 
     // Register database name for cleanup on exit
@@ -192,15 +195,11 @@ async fn cleanup_test_database_internal(db_name: &str) -> Result<(), Box<dyn std
         "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{}' AND pid <> pg_backend_pid()",
         db_name
     );
-    let _ = sqlx::query(&terminate_query)
-        .execute(&admin_pool)
-        .await;
+    let _ = sqlx::query(&terminate_query).execute(&admin_pool).await;
 
     // Drop the test database
     let drop_db_query = format!("DROP DATABASE IF EXISTS {}", db_name);
-    sqlx::query(&drop_db_query)
-        .execute(&admin_pool)
-        .await?;
+    sqlx::query(&drop_db_query).execute(&admin_pool).await?;
 
     println!("Test database '{}' dropped successfully", db_name);
 

@@ -7,7 +7,10 @@
 	"service": "devcontainer",
 	"workspaceFolder": "/workspace",
 	"remoteEnv": {
-		"DATABASE_URL": "postgres://postgres:admin@localhost:5432/postgres"
+		"DATABASE_URL": "postgres://postgres:admin@localhost:5432/postgres",
+		"RUST_BACKTRACE": "1",
+		// info globally; debug for udex crates only. Set to "trace" locally for full output.
+		"RUST_LOG": "info,udex=debug"
 	},
 	"features": {
 		"ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
@@ -22,7 +25,8 @@
 		// },
 		"ghcr.io/warrenbuckley/codespace-features/sqlite:1": {},
 		"ghcr.io/devcontainers/features/node:1": {},
-		"ghcr.io/devcontainers-extra/features/claude-code:1": {}
+		"ghcr.io/devcontainers-extra/features/claude-code:1": {},
+		"ghcr.io/guiyomh/features/vim:0": {}
 	},
 
 	// Use 'mounts' to make the cargo cache persistent in a Docker Volume.

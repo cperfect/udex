@@ -6,16 +6,17 @@
 //! This crate contains the core server implementation for Udex, including
 //! the gRPC service implementations for Entry and Index services.
 
+mod authn;
 pub mod config;
 pub mod entry;
-pub mod index;
 pub mod healthz;
+pub mod index;
+pub mod logging;
 pub mod server;
-mod authn;
 
 pub use entry::EntryService;
-pub use index::IndexService;
 pub use healthz::HealthzService;
+pub use index::IndexService;
 
 use thiserror::Error;
 

@@ -100,7 +100,8 @@ mod tests {
             "iat": now,
             "role": "admin",
             "permissions": ["read", "write"]
-        }).to_string();
+        })
+        .to_string();
         //parse them so we can check they are equal json objects
         // e.g. order of keys doesn't matter
         assert_eq!(

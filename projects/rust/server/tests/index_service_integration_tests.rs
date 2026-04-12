@@ -1,16 +1,15 @@
 /// Integration tests for the index service
 use maybe_once::tokio::{Data, MaybeOnceAsync};
 use rstest::*;
-use udex_api::index::{
-    index_service_server::IndexService as IndexServiceTrait, CreateIndexRequest, DescribeRequest, HashAlgorithm, IndexUpdate, ListIndicesRequest, UpdateIndexRequest
-};
-use udex_datastore::{postgres::PostgresDatastore};
-use udex_server::{HealthCheck, IndexService};
 use std::sync::{Arc, OnceLock};
 use tonic::Request;
-use udex_datastore::integration_test::{
-    init_postgres
+use udex_api::index::{
+    index_service_server::IndexService as IndexServiceTrait, CreateIndexRequest, DescribeRequest,
+    HashAlgorithm, IndexUpdate, ListIndicesRequest, UpdateIndexRequest,
 };
+use udex_datastore::integration_test::init_postgres;
+use udex_datastore::postgres::PostgresDatastore;
+use udex_server::{logging, HealthCheck, IndexService};
 
 // See https://github.com/ufoscout/maybe-once/blob/master/examples/testcontainers/src/postgres_async.rs.
 type MaybeOnceType = (
@@ -22,7 +21,7 @@ type MaybeOnceType = (
 /// Starts a Postgres container shared between all tests.
 /// It will be stopped when the tests terminate.
 async fn init_index_service() -> MaybeOnceType {
-    println!("Initializing index service...");
+    logging::init_test_tracing();
 
     let datastore_fixtures = init_postgres().await;
     let datastore = Arc::from(datastore_fixtures.0);
@@ -43,7 +42,10 @@ async fn init_index_service() -> MaybeOnceType {
     };
 
     // initialize the index service with the static index
-    index_server.init(vec![init_index.clone()]).await.expect("Failed to initialize index service");
+    index_server
+        .init(vec![init_index.clone()])
+        .await
+        .expect("Failed to initialize index service");
 
     (index_server, datastore_fixtures.2)
 }
@@ -62,9 +64,12 @@ pub async fn data(serial: bool) -> Data<'static, MaybeOnceType> {
 async fn test_index_server_init() {
     let data = data(false).await;
     let index_server = &data.0;
-   
+
     // Check that the index server is healthy
-    let is_healthy = index_server.is_healthy().await.expect("Health check failed");
+    let is_healthy = index_server
+        .is_healthy()
+        .await
+        .expect("Health check failed");
     assert!(is_healthy, "Index server should be healthy");
 }
 
@@ -79,13 +84,19 @@ async fn test_describe_valid_input() {
         name: "test_index".to_string(),
     });
     let result = index_server.describe(request).await;
-    
+
     // Should return success since the test_index was created during initialization
-    assert!(result.is_ok(), "Describe should return success for existing index");
-    
+    assert!(
+        result.is_ok(),
+        "Describe should return success for existing index"
+    );
+
     let response = result.unwrap().into_inner();
-    assert!(response.index.is_some(), "Response should contain index data");
-    
+    assert!(
+        response.index.is_some(),
+        "Response should contain index data"
+    );
+
     let index = response.index.unwrap();
     assert_eq!(index.name, "test_index");
 }
@@ -101,9 +112,12 @@ async fn test_describe_empty_name() {
         name: "".to_string(),
     });
     let result = index_server.describe(request).await;
-    
-    assert!(result.is_err(), "Describe with empty name should return an error");
-    
+
+    assert!(
+        result.is_err(),
+        "Describe with empty name should return an error"
+    );
+
     if let Err(status) = result {
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
         assert!(status.message().contains("index name is required"));
@@ -128,9 +142,17 @@ async fn test_create_index_valid_input() {
     });
     let result = index_server.create_index(request).await;
 
-    assert!(result.is_ok(), "Create index with valid input should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Create index with valid input should succeed: {:?}",
+        result.err()
+    );
 
-    let index = result.unwrap().into_inner().index.expect("Response should contain the created index");
+    let index = result
+        .unwrap()
+        .into_inner()
+        .index
+        .expect("Response should contain the created index");
     assert_eq!(index.name, "created_test_index");
     assert_eq!(index.description, "A newly created index");
     assert_eq!(index.max_bulk_operations, 50);
@@ -159,7 +181,10 @@ async fn test_create_index_unsupported_hash_algorithm() {
     });
     let result = index_server.create_index(request).await;
 
-    assert!(result.is_err(), "Create index with unknown hash_algorithm value should fail");
+    assert!(
+        result.is_err(),
+        "Create index with unknown hash_algorithm value should fail"
+    );
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(status.message().contains("unsupported hash_algorithm"));
@@ -183,7 +208,11 @@ async fn test_create_index_duplicate_name() {
         hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
-    assert!(result.is_ok(), "First create should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "First create should succeed: {:?}",
+        result.err()
+    );
 
     // Second creation with same name should fail
     let request = Request::new(CreateIndexRequest {
@@ -219,9 +248,12 @@ async fn test_create_index_empty_name() {
         hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
-    
-    assert!(result.is_err(), "Create index with empty name should return an error");
-    
+
+    assert!(
+        result.is_err(),
+        "Create index with empty name should return an error"
+    );
+
     if let Err(status) = result {
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
         assert!(status.message().contains("index name is required"));
@@ -245,12 +277,17 @@ async fn test_create_index_invalid_max_bulk_operations() {
         hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
-    
-    assert!(result.is_err(), "Create index with invalid max_bulk_operations should return an error");
-    
+
+    assert!(
+        result.is_err(),
+        "Create index with invalid max_bulk_operations should return an error"
+    );
+
     if let Err(status) = result {
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
-        assert!(status.message().contains("max_bulk_operations must be >= 1"));
+        assert!(status
+            .message()
+            .contains("max_bulk_operations must be >= 1"));
     }
 }
 
@@ -271,9 +308,12 @@ async fn test_create_index_invalid_max_key_length() {
         hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
-    
-    assert!(result.is_err(), "Create index with invalid max_key_length should return an error");
-    
+
+    assert!(
+        result.is_err(),
+        "Create index with invalid max_key_length should return an error"
+    );
+
     if let Err(status) = result {
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
         assert!(status.message().contains("max_key_length must be >= 1"));
@@ -297,9 +337,12 @@ async fn test_create_index_invalid_max_value_length() {
         hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
-    
-    assert!(result.is_err(), "Create index with invalid max_value_length should return an error");
-    
+
+    assert!(
+        result.is_err(),
+        "Create index with invalid max_value_length should return an error"
+    );
+
     if let Err(status) = result {
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
         assert!(status.message().contains("max_value_length must be >= 1"));
@@ -323,12 +366,17 @@ async fn test_create_index_invalid_max_kv_pairs_per_context() {
         hash_algorithm: HashAlgorithm::Sha1 as i32,
     });
     let result = index_server.create_index(request).await;
-    
-    assert!(result.is_err(), "Create index with invalid max_kv_pairs_per_context should return an error");
-    
+
+    assert!(
+        result.is_err(),
+        "Create index with invalid max_kv_pairs_per_context should return an error"
+    );
+
     if let Err(status) = result {
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
-        assert!(status.message().contains("max_kv_pairs_per_context must be >= 1"));
+        assert!(status
+            .message()
+            .contains("max_kv_pairs_per_context must be >= 1"));
     }
 }
 
@@ -350,7 +398,10 @@ async fn test_create_index_invalid_hash_algorithm() {
     });
     let result = index_server.create_index(request).await;
 
-    assert!(result.is_err(), "Create index with invalid hash_algorithm should return an error");
+    assert!(
+        result.is_err(),
+        "Create index with invalid hash_algorithm should return an error"
+    );
 
     if let Err(status) = result {
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
@@ -377,15 +428,19 @@ async fn test_update_index_valid_input() {
         }),
     });
     let result = index_server.update_index(request).await;
-    
-    assert!(result.is_err(), "Update index should return an error (index doesn't exist)");
-    
+
+    assert!(
+        result.is_err(),
+        "Update index should return an error (index doesn't exist)"
+    );
+
     if let Err(status) = result {
         // Since we're yet to actually implement the functionality,
         // the error should Unimplemented as we are not checking the datastore.
         assert!(
             status.code() == tonic::Code::Unimplemented || status.code() == tonic::Code::NotFound,
-            "Expected Unimplemented or NotFound error, got: {:?}", status.code()
+            "Expected Unimplemented or NotFound error, got: {:?}",
+            status.code()
         );
         println!("Error message: {}", status.message());
     }
@@ -410,9 +465,12 @@ async fn test_update_index_empty_name() {
         }),
     });
     let result = index_server.update_index(request).await;
-    
-    assert!(result.is_err(), "Update index with empty name should return an error");
-    
+
+    assert!(
+        result.is_err(),
+        "Update index with empty name should return an error"
+    );
+
     if let Err(status) = result {
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
         assert!(status.message().contains("index name is required"));
@@ -428,16 +486,22 @@ async fn test_list_indices() {
 
     let request = Request::new(ListIndicesRequest {});
     let result = index_server.list_indices(request).await;
-    
+
     assert!(result.is_ok(), "List indices should return success");
-    
+
     let response = result.unwrap().into_inner();
-    assert!(!response.indices.is_empty(), "Should return at least one index (test_index)");
-    
+    assert!(
+        !response.indices.is_empty(),
+        "Should return at least one index (test_index)"
+    );
+
     // Verify that the test index is in the list
     let test_index = response.indices.iter().find(|i| i.name == "test_index");
-    assert!(test_index.is_some(), "test_index should be in the list of indices");
-    
+    assert!(
+        test_index.is_some(),
+        "test_index should be in the list of indices"
+    );
+
     let test_index = test_index.unwrap();
     assert_eq!(test_index.description, "Test index description");
     assert_eq!(test_index.hash_algorithm, HashAlgorithm::Sha1 as i32);
@@ -455,9 +519,12 @@ async fn test_update_index_missing_update() {
         update: None,
     });
     let result = index_server.update_index(request).await;
-    
-    assert!(result.is_err(), "Update index with missing update should return an error");
-    
+
+    assert!(
+        result.is_err(),
+        "Update index with missing update should return an error"
+    );
+
     if let Err(status) = result {
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
         assert!(status.message().contains("update fields are required"));
@@ -483,12 +550,17 @@ async fn test_update_index_empty_update() {
         }),
     });
     let result = index_server.update_index(request).await;
-    
-    assert!(result.is_err(), "Update index with empty update should return an error");
-    
+
+    assert!(
+        result.is_err(),
+        "Update index with empty update should return an error"
+    );
+
     if let Err(status) = result {
         assert_eq!(status.code(), tonic::Code::InvalidArgument);
-        assert!(status.message().contains("at least one field must be provided"));
+        assert!(status
+            .message()
+            .contains("at least one field must be provided"));
     }
 }
 
@@ -533,9 +605,9 @@ async fn test_validation_error_consistency() {
     for invalid_request in invalid_requests {
         let request = Request::new(invalid_request);
         let result = index_server.create_index(request).await;
-        
+
         assert!(result.is_err(), "Invalid request should return an error");
-        
+
         if let Err(status) = result {
             assert_eq!(status.code(), tonic::Code::InvalidArgument);
             // All validation errors should be InvalidArgument
