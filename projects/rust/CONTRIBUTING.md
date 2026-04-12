@@ -72,6 +72,7 @@ Two Claude Code skills are available to assist with code quality:
 1. **errors SHOULD be called `<SomethingUseful>Error`** i.e. explicitly have the word Error at the end of the name
 
 ### Perform Local Checks before committing
+(unless no rust code was changed)
 - `cargo fmt --check`
 - `cargo clippy`
 - `cargo test`
