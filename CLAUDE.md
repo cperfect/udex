@@ -110,3 +110,6 @@ Steel threads are organized as directories under `intent/st/`:
 ## Author
 
 vscode
+
+## Directives
+-- Ignore [THOUGHTS.md](./THOUGHTS.md) unless specificially told otherwise

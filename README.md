@@ -24,7 +24,3 @@ This project is developed using [Claude Code](https://claude.ai/code) (Anthropic
 
 ## Workspace
 Udex will be developed in a git monorepo. Some kind of build tooling will be required that support polyglot projects - e.g. Nx. The entire workspaces will be used via a vscode devcontainer.
-
-
-## Questions/Issues
-Should many keys to one context per index be allowed or should there only be a one to one entry? The latter would map better to a KV style datastore and semantics but require the creation of more contexts (and entries) and for "sources" to distinguish between them (e.g. based on integration party?)
