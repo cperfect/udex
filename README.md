@@ -1,11 +1,52 @@
 Udex
 =====
 
+[![CI](https://github.com/cperfect/udex/actions/workflows/01-Validation.yml/badge.svg)](https://github.com/cperfect/udex/actions/workflows/01-Validation.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+> **Status**: Early development — not yet production ready. APIs and data models are subject to change.
+
 ## Overview
 
 Udex is a universal lookup directory for entities — lightweight, fast, and efficient for high transaction volumes across organisational and regulatory boundaries. It maps globally unique keys to contexts, enabling systems to integrate without exposing internal entity identifiers across boundaries.
 
 For full detail on the data model, operations, components, security model, and design principles, see [docs/intent/ARCHITECTURE.md](docs/intent/ARCHITECTURE.md).
+
+## Getting Started
+
+### Prerequisites
+
+- **Rust** (stable) — install via [rustup](https://rustup.rs/)
+- **Docker** — used to run a local PostgreSQL instance for integration tests
+- **protoc** (Protocol Buffers compiler) — required to build the API crate from `.proto` definitions
+
+  ```bash
+  # macOS
+  brew install protobuf
+
+  # Debian/Ubuntu
+  apt-get install protobuf-compiler
+  ```
+
+A [VS Code dev container](.devcontainer) is provided that installs all prerequisites automatically — this is the recommended way to get a consistent environment.
+
+### Build & Test
+
+```bash
+# Clone the repository
+git clone https://github.com/cperfect/udex.git && cd udex
+
+# Start PostgreSQL (or use the dev container, which starts it automatically)
+docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
+
+# Build the workspace
+cargo build
+
+# Run the full test suite
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres cargo test
+```
+
+See [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) for the full pre-commit checklist and local check commands.
 
 ## Contributing Guides
 
@@ -22,5 +63,6 @@ This project is developed using [Claude Code](https://claude.ai/code) (Anthropic
 * **Versioning**: Udex is semantically versioned.
 * _(Deferred)_ **Observability**: OpenTelemetry tracing and metrics.
 
-## Workspace
-Udex will be developed in a git monorepo. Some kind of build tooling will be required that support polyglot projects - e.g. Nx. The entire workspaces will be used via a vscode devcontainer.
+## License
+
+MIT — see [LICENSE](LICENSE).

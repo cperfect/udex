@@ -60,6 +60,7 @@ Tests **MUST** be automated and reliable. Flakey tests are broken tests — fix 
 1. **Commits SHOULD conform to the Conventional Commits standard** see https://www.conventionalcommits.org/en/v1.0.0/#summary
 1. **The Git Workflow WILL BE Trunk Based**
 1. **Shell scripting SHOULD be minimised** — prefer CLI tooling, Makefiles, or application code over shell scripts. Shell scripts are hard to test, port, and maintain.
+1. **No error should just be ignored** - either it is worth noticing or it isn't an error
 ### Testing
 1. **Tests MUST be automated**
 1. **Tests SHOULD be reliable** flakey tests are broken tests. Either fix what is being tested of fix the tests.
