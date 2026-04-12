@@ -1,21 +1,12 @@
-/// Integration tests verifying that serve() initialises the tracing subscriber.
+/// Integration tests verifying that init_tracing() installs a global tracing subscriber.
 ///
 /// These tests live in their own file so they compile into a separate test binary,
 /// giving them an isolated global subscriber state — tests in other binaries
 /// cannot interfere with `tracing::dispatcher::has_been_set()` here.
+///
+/// The "not initialised" check lives in logging_not_initialised_test.rs so it
+/// gets its own binary with no competing tests that install a subscriber.
 use udex_server::logging;
-
-#[test]
-fn test_logging_not_initialised_before_init_tracing() {
-    // Sanity check: in a fresh process, no global subscriber should be set yet.
-    // This relies on the test binary having no other tests that call init_tracing()
-    // or install a subscriber before this test runs. Since this is the only test
-    // in this binary, that is guaranteed.
-    assert!(
-        !tracing::dispatcher::has_been_set(),
-        "No global subscriber should be set before init_tracing() is called"
-    );
-}
 
 #[test]
 fn test_init_tracing_installs_global_subscriber() {
