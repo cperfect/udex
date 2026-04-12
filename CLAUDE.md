@@ -4,9 +4,9 @@ This is an Intent v2.8.0 project.
 
 ## Guidelines
 
-Full guidelines are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) and [projects/rust/DEVELOPMENT.md](projects/rust/DEVELOPMENT.md). Key rules to always apply:
+Full guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md) and [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md). Key rules to always apply:
 
-### General — see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+### General — see [CONTRIBUTING.md](CONTRIBUTING.md)
 
 - Think of the Next Guy: write for the person reading this under pressure at 2am.
 - State is hard: minimise it; prefer stateless design.
@@ -16,7 +16,7 @@ Full guidelines are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) and [projects/
 - Commits MUST follow Conventional Commits; Git workflow is Trunk Based.
 - Minimise shell scripting.
 
-### Architecture — see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+### Architecture — see [CONTRIBUTING.md](CONTRIBUTING.md)
 
 - Server MUST be stateless; all persistent state lives in the datastore.
 - Datastore concerns (transactions, scaling, distribution) MUST be opaque to the application.
@@ -24,12 +24,12 @@ Full guidelines are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) and [projects/
 - Datastores without TLS MUST NOT be supported.
 - Configuration MUST NOT be mutated at runtime.
 
-### Testing — see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+### Testing — see [CONTRIBUTING.md](CONTRIBUTING.md)
 
 - Tests MUST be automated and reliable (flakey tests are broken tests).
 - Prefer integration test coverage over unit tests (Test Diamond).
 
-### Rust — see [projects/rust/DEVELOPMENT.md](projects/rust/DEVELOPMENT.md)
+### Rust — see [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md)
 
 - Follow the Rust Style Guide (`rustfmt`) and Rust API Design Guidelines.
 - Use `thiserror`; name error types with an `Error` suffix; never expose third-party error types.

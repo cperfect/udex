@@ -99,8 +99,8 @@ Udex configuration will only support secrets by injection (e.g. Datastore creden
 
 ## Developer Guides
 
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) — general development principles, guidelines, and testing standards for all contributors
-- [projects/rust/DEVELOPMENT.md](projects/rust/DEVELOPMENT.md) — Rust-specific coding standards, error conventions, and local check commands
+- [CONTRIBUTING.md](CONTRIBUTING.md) — general development principles, guidelines, and testing standards for all contributors
+- [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) — Rust-specific coding standards, error conventions, and local check commands
 
 ## Development & Implementation
 * Development will be API spec driven using Protobuf version 3: server, client, datamodels and SDKs will be generated from this and then extended and elaborated as necessary.
