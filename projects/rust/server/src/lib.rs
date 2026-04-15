@@ -17,6 +17,7 @@ pub mod server;
 pub use entry::EntryService;
 pub use healthz::HealthzService;
 pub use index::IndexService;
+pub use server::start;
 
 use thiserror::Error;
 

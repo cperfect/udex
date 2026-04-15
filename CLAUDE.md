@@ -117,3 +117,5 @@ vscode
 
 ## Directives
 -- Ignore [THOUGHTS.md](./THOUGHTS.md) unless specificially told otherwise
+-- Use the intent wp commands to create/start/finish work packages 
+-- When committing on intent Work Packages make sure the updates to the steel thread docs are committed with the changes to the work packages

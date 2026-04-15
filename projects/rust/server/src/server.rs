@@ -14,6 +14,22 @@ use udex_api::{
     index::index_service_server::IndexServiceServer,
 };
 use udex_datastore::Datastore;
+use udex_datastore::{config::DatastoreConfig, postgres::PostgresDatastore, Migrator}; // trait must be in scope for .migrate() to be callable
+
+/// Initialises the PostgreSQL datastore, runs migrations, and starts the server.
+///
+/// This is the primary entry point for production use. For tests, use [`serve`]
+/// directly with a pre-built datastore.
+pub async fn start(
+    server_config: ServerConfig,
+    datastore_config: DatastoreConfig,
+) -> Result<(), Error> {
+    let datastore = PostgresDatastore::init(datastore_config)
+        .await
+        .map_err(Error::Datastore)?;
+    datastore.migrate().await.map_err(Error::Datastore)?;
+    serve(server_config, *datastore).await
+}
 
 /// Starts the Udex server with the provided configuration and datastore.
 pub async fn serve<D>(config: ServerConfig, datastore: D) -> Result<(), Error>

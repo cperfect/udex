@@ -59,7 +59,8 @@ This project is developed using [Claude Code](https://claude.ai/code) (Anthropic
 ## Tech Stack
 
 * **API spec**: Protobuf v3 — server, client, data models, and SDKs are generated from proto definitions.
-* **Language**: Rust — server built on [tokio](https://docs.rs/tokio) with [tonic](https://docs.rs/tonic) for gRPC. _(Deferred)_ Optional REST interface via Hyper.
+* **Language**: Rust — server and CLI built on [tokio](https://docs.rs/tokio) with [tonic](https://docs.rs/tonic) for gRPC. _(Deferred)_ Optional REST interface via Hyper.
+* **CLI**: `udex` binary — manages server lifecycle, indices, and entries; offline JWT inspection and context hashing. See [projects/rust/cli/README.md](projects/rust/cli/README.md).
 * **Versioning**: Udex is semantically versioned.
 * _(Deferred)_ **Observability**: OpenTelemetry tracing and metrics.
 
