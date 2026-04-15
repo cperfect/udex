@@ -119,6 +119,14 @@ impl UdexConfig {
     pub fn validate(&self) -> Result<()> {
         let mut errors: Vec<String> = Vec::new();
 
+        // server
+        if self.server.bind_address.parse::<std::net::SocketAddr>().is_err() {
+            errors.push(format!(
+                "invalid bind_address {:?}: must be a valid socket address (e.g. \"0.0.0.0:50051\")",
+                self.server.bind_address
+            ));
+        }
+
         // datastore
         if self.datastore.connection_url.trim().is_empty() {
             errors.push("datastore.connection_url must not be empty".to_string());
@@ -238,6 +246,13 @@ mod tests {
         UdexConfig::default()
             .validate()
             .expect("default config should be valid");
+    }
+
+    #[test]
+    fn test_invalid_bind_address_is_invalid() {
+        let mut cfg = UdexConfig::default();
+        cfg.server.bind_address = "not-an-address".to_string();
+        assert!(cfg.validate().is_err());
     }
 
     #[test]
