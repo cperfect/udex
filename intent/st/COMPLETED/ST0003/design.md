@@ -56,19 +56,7 @@ The output is identical to CI. A failed local scan shows the same findings that 
 
 ### `.trivy.yaml`
 
-```yaml
-fs:
-  scanners:
-    - vuln          # CVEs in Cargo.lock and other manifests
-    - secret        # Hardcoded credentials, API keys, tokens
-    - misconfig     # IaC and config file misconfigurations
-  severity:
-    - MEDIUM
-    - HIGH
-    - CRITICAL
-  exit-code: 1
-  ignorefile: .trivyignore
-```
+The canonical source is the `.trivy.yaml` file at the repo root. For available options see the [Trivy config file reference — scan options](https://trivy.dev/docs/latest/references/configuration/config-file/#scan-options).
 
 ### `.trivyignore`
 
