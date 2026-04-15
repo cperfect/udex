@@ -12,9 +12,10 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
   wget apt-transport-https gnupg lsb-release
 
 # Install Trivy (security scanner) — same version used in CI
-RUN wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor -o /usr/share/keyrings/trivy.gpg \
+# Commands match the official Trivy Debian install docs: https://trivy.dev/docs/latest/getting-started/installation/
+RUN wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg > /dev/null \
   && echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
-     > /etc/apt/sources.list.d/trivy.list \
+     | tee -a /etc/apt/sources.list.d/trivy.list \
   && apt-get update \
   && apt-get -y install --no-install-recommends trivy
 

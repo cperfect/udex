@@ -59,6 +59,18 @@ trivy fs --config .trivy.yaml .
 
 Findings at MEDIUM severity or higher cause a non-zero exit and will block merging on GitHub. To suppress an accepted finding, add its ID to `.trivyignore` with a comment explaining the rationale.
 
+Outside the devcontainer, install Trivy first:
+
+```bash
+# macOS
+brew install trivy
+
+# Debian/Ubuntu (from official Trivy apt repo)
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+sudo apt-get update && sudo apt-get install trivy
+```
+
 ## Contributing Guides
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — general development principles, guidelines, and testing standards for all contributors
