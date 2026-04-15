@@ -76,15 +76,16 @@ fn test_no_subcommand_exits_nonzero() {
     udex().assert().failure();
 }
 
-// --- stubs exit non-zero with error message ---
+// --- commands exit non-zero without a server ---
 
 #[test]
-fn test_index_list_stub_exits_nonzero() {
+fn test_index_list_fails_without_server() {
+    // index list is implemented; with no server running it fails with a connection error.
     udex()
         .args(["index", "list"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not implemented"));
+        .stderr(predicate::str::contains("failed to connect"));
 }
 
 #[test]

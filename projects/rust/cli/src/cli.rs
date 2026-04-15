@@ -139,9 +139,18 @@ pub struct IndexCreateArgs {
     /// Human-readable description
     #[arg(long)]
     pub description: Option<String>,
-    /// Maximum number of bulk operations per request
-    #[arg(long)]
-    pub bulk_limit: Option<u32>,
+    /// Maximum number of bulk operations per request [default: 100]
+    #[arg(long, default_value = "100")]
+    pub bulk_limit: u32,
+    /// Maximum key length in bytes [default: 256]
+    #[arg(long, default_value = "256")]
+    pub max_key_length: u32,
+    /// Maximum value length in bytes [default: 1024]
+    #[arg(long, default_value = "1024")]
+    pub max_value_length: u32,
+    /// Maximum number of key-value pairs per context [default: 32]
+    #[arg(long, default_value = "32")]
+    pub max_context_pairs: u32,
 }
 
 /// Arguments for `udex index get`.

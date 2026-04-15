@@ -2,32 +2,166 @@
 
 //! Handlers for `udex index` subcommands.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use tabled::{Table, Tabled};
+use udex_api::index::index_service_client::IndexServiceClient;
+use udex_api::index::{
+    CreateIndexRequest, DescribeRequest, ListIndicesRequest, UpdateIndexRequest,
+};
 
 use crate::cli::{IndexCreateArgs, IndexDeleteArgs, IndexGetArgs, IndexUpdateArgs, OutputFormat};
 use crate::client::ClientConfig;
 
+// ---------------------------------------------------------------------------
+// Table display
+// ---------------------------------------------------------------------------
+
+#[derive(Tabled)]
+struct IndexRow {
+    #[tabled(rename = "Name")]
+    name: String,
+    #[tabled(rename = "Description")]
+    description: String,
+    #[tabled(rename = "Bulk Limit")]
+    max_bulk_operations: i32,
+    #[tabled(rename = "Max Key Len")]
+    max_key_length: i32,
+    #[tabled(rename = "Max Val Len")]
+    max_value_length: i32,
+    #[tabled(rename = "Max Context Pairs")]
+    max_kv_pairs_per_context: i32,
+}
+
+impl From<udex_api::index::Index> for IndexRow {
+    fn from(i: udex_api::index::Index) -> Self {
+        IndexRow {
+            name: i.name,
+            description: i.description,
+            max_bulk_operations: i.max_bulk_operations,
+            max_key_length: i.max_key_length,
+            max_value_length: i.max_value_length,
+            max_kv_pairs_per_context: i.max_kv_pairs_per_context,
+        }
+    }
+}
+
+fn print_index(index: udex_api::index::Index, output: &OutputFormat) -> Result<()> {
+    match output {
+        OutputFormat::Table => {
+            println!("{}", Table::new([IndexRow::from(index)]));
+        }
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&index)?);
+        }
+        OutputFormat::Yaml => {
+            print!("{}", serde_yaml::to_string(&index)?);
+        }
+    }
+    Ok(())
+}
+
+fn print_indices(indices: Vec<udex_api::index::Index>, output: &OutputFormat) -> Result<()> {
+    match output {
+        OutputFormat::Table => {
+            let rows: Vec<IndexRow> = indices.into_iter().map(IndexRow::from).collect();
+            println!("{}", Table::new(rows));
+        }
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&indices)?);
+        }
+        OutputFormat::Yaml => {
+            print!("{}", serde_yaml::to_string(&indices)?);
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Command handlers
+// ---------------------------------------------------------------------------
+
 /// List all indices.
-pub async fn list(_client: ClientConfig, _output: &OutputFormat) -> Result<()> {
-    anyhow::bail!("not implemented")
+pub async fn list(client: ClientConfig, output: &OutputFormat) -> Result<()> {
+    let channel = client.channel().await?;
+    let mut grpc = IndexServiceClient::with_interceptor(channel, client.interceptor());
+
+    let resp = grpc
+        .list_indices(ListIndicesRequest {})
+        .await
+        .context("list_indices RPC failed")?;
+
+    print_indices(resp.into_inner().indices, output)
 }
 
 /// Create a new index.
-pub async fn create(_client: ClientConfig, _args: IndexCreateArgs) -> Result<()> {
-    anyhow::bail!("not implemented")
+pub async fn create(client: ClientConfig, args: IndexCreateArgs) -> Result<()> {
+    let channel = client.channel().await?;
+    let mut grpc = IndexServiceClient::with_interceptor(channel, client.interceptor());
+
+    let resp = grpc
+        .create_index(CreateIndexRequest {
+            name: args.name,
+            description: args.description.unwrap_or_default(),
+            max_bulk_operations: args.bulk_limit as i32,
+            max_key_length: args.max_key_length as i32,
+            max_value_length: args.max_value_length as i32,
+            max_kv_pairs_per_context: args.max_context_pairs as i32,
+            hash_algorithm: udex_api::index::HashAlgorithm::Sha1 as i32,
+        })
+        .await
+        .context("create_index RPC failed")?;
+
+    let index = resp
+        .into_inner()
+        .index
+        .context("server returned empty index")?;
+    print_index(index, &OutputFormat::Table)
 }
 
 /// Get an index by name.
-pub async fn get(_client: ClientConfig, _args: IndexGetArgs, _output: &OutputFormat) -> Result<()> {
-    anyhow::bail!("not implemented")
+pub async fn get(client: ClientConfig, args: IndexGetArgs, output: &OutputFormat) -> Result<()> {
+    let channel = client.channel().await?;
+    let mut grpc = IndexServiceClient::with_interceptor(channel, client.interceptor());
+
+    let resp = grpc
+        .describe(DescribeRequest { name: args.name })
+        .await
+        .context("describe RPC failed")?;
+
+    let index = resp
+        .into_inner()
+        .index
+        .context("server returned empty index")?;
+    print_index(index, output)
 }
 
 /// Update an existing index.
-pub async fn update(_client: ClientConfig, _args: IndexUpdateArgs) -> Result<()> {
-    anyhow::bail!("not implemented")
+pub async fn update(client: ClientConfig, args: IndexUpdateArgs) -> Result<()> {
+    let channel = client.channel().await?;
+    let mut grpc = IndexServiceClient::with_interceptor(channel, client.interceptor());
+
+    let update = udex_api::index::IndexUpdate {
+        description: args.description,
+        max_bulk_operations: args.bulk_limit.map(|v| v as i32),
+        ..Default::default()
+    };
+
+    let resp = grpc
+        .update_index(UpdateIndexRequest {
+            name: args.name,
+            update: Some(update),
+        })
+        .await
+        .context("update_index RPC failed")?;
+
+    let index = resp
+        .into_inner()
+        .index
+        .context("server returned empty index")?;
+    print_index(index, &OutputFormat::Table)
 }
 
 /// Delete an index.
 pub async fn delete(_client: ClientConfig, _args: IndexDeleteArgs) -> Result<()> {
-    anyhow::bail!("not implemented")
+    anyhow::bail!("index delete is not yet implemented by the server")
 }

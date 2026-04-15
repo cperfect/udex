@@ -16,6 +16,11 @@ use client::ClientConfig;
 
 #[tokio::main]
 async fn main() {
+    // Install the rustls crypto provider before any TLS connections are made.
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("failed to install rustls CryptoProvider");
+
     let cli = Cli::parse();
 
     // If --verbose is set and RUST_LOG is not already configured, default to debug.
