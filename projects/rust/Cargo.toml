@@ -48,6 +48,8 @@ jsonwebtoken = { version = "9.3" }
 
 # CLI
 clap = { version = "4", features = ["derive", "env"] }
+toml = "0.8"
+tempfile = "3"
 
 # Build dependencies
 tonic-build = "0.13"

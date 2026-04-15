@@ -21,12 +21,14 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 tabled = "0.19"
+toml = { workspace = true }
 jsonwebtoken = { workspace = true }
 time = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
 predicates = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true }
 
 [[bin]]

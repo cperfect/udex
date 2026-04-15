@@ -4,6 +4,7 @@
 
 mod cli;
 mod commands;
+mod config;
 
 use clap::Parser;
 
@@ -18,7 +19,7 @@ async fn main() {
     let result = run(cli).await;
 
     if let Err(e) = result {
-        eprintln!("error: {e}");
+        eprintln!("error: {e:#}");
         std::process::exit(1);
     }
 }

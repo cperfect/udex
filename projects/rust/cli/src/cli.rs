@@ -104,7 +104,7 @@ pub enum ConfigCommands {
 pub struct ConfigInitArgs {
     /// Path to write the configuration file
     #[arg(long, default_value = "udex.toml")]
-    pub output: PathBuf,
+    pub path: PathBuf,
 }
 
 /// Arguments for `udex config validate`.
