@@ -3,6 +3,7 @@ scan:
     - vuln          # CVEs in Cargo.lock and other dependency manifests
     - secret        # Hardcoded credentials, API keys, tokens
     - misconfig     # IaC and config file misconfigurations
+    - license       # Dependency licence detection
   severity:
     - MEDIUM
     - HIGH
