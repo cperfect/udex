@@ -3,7 +3,7 @@ verblock: "15 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-03
 title: "Add 02-Security GitHub Actions workflow"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: Add 02-Security GitHub Actions workflow
