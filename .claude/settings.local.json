@@ -12,7 +12,8 @@
       "WebFetch(domain:nrc.github.io)",
       "WebFetch(domain:rust-lang.github.io)",
       "Bash(intent wp:*)",
-      "Bash(cargo test:*)"
+      "Bash(cargo test:*)",
+      "Bash(intent st:*)"
     ]
   }
 }
