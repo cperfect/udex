@@ -22,3 +22,5 @@ jobs:
           scan-type: fs
           scan-ref: .
           trivy-config: .trivy.yaml
+          exit-code: '1'
+          severity: 'MEDIUM,HIGH,CRITICAL'

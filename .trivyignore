@@ -3,7 +3,12 @@
 # Suppress acknowledged findings that have been reviewed and accepted.
 # Format: one finding ID per line, with a comment explaining the rationale.
 #
-# Example:
-#   CVE-2021-12345  # Not exploitable — affected code path not reachable in this binary
-#
 # See https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/#trivyignore
+
+# .devcontainer/Dockerfile — devcontainer-specific suppressions
+DS-0002  # Not applicable: this is a devcontainer, not an application container.
+         # The base image (mcr.microsoft.com/vscode/devcontainers/rust) switches
+         # to the non-root 'vscode' user at runtime via its own entrypoint.
+         # Adding a USER instruction here would break the devcontainer lifecycle.
+DS-0026  # Not applicable: HEALTHCHECK is meaningless for a devcontainer —
+         # VS Code manages the container lifecycle directly.
