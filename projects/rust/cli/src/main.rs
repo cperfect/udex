@@ -58,9 +58,10 @@ fn grpc_exit_code(e: &anyhow::Error) -> i32 {
 
     // anyhow::Error implements AsRef<dyn Error + 'static>, giving us an entry
     // point whose source() returns &(dyn Error + 'static) — which supports
-    // downcast_ref. This lets us inspect the chain without changing any handler.
+    // downcast_ref. Start from root itself so a bare (unwrapped) tonic::Status
+    // or tonic::transport::Error is also matched.
     let root: &(dyn StdError + 'static) = e.as_ref();
-    let mut src = root.source();
+    let mut src: Option<&(dyn StdError + 'static)> = Some(root);
     while let Some(cause) = src {
         if let Some(status) = cause.downcast_ref::<tonic::Status>() {
             return match status.code() {
@@ -133,6 +134,11 @@ mod tests {
         anyhow::Error::from(tonic::Status::new(code, "test")).context("rpc failed")
     }
 
+    // Bare status — no .context() wrapper — root IS the tonic::Status.
+    fn bare_status(code: tonic::Code) -> anyhow::Error {
+        anyhow::Error::from(tonic::Status::new(code, "test"))
+    }
+
     #[test]
     fn exit_code_not_found() {
         assert_eq!(
@@ -193,5 +199,19 @@ mod tests {
     fn exit_code_non_grpc_error() {
         let e = anyhow::anyhow!("something went wrong");
         assert_eq!(grpc_exit_code(&e), 1);
+    }
+
+    // Bare tonic::Status (no .context() wrapper) — root itself must be matched.
+    #[test]
+    fn exit_code_bare_status_not_found() {
+        assert_eq!(grpc_exit_code(&bare_status(tonic::Code::NotFound)), 2);
+    }
+
+    #[test]
+    fn exit_code_bare_status_unauthenticated() {
+        assert_eq!(
+            grpc_exit_code(&bare_status(tonic::Code::Unauthenticated)),
+            5
+        );
     }
 }
