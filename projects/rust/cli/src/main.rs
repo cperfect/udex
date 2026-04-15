@@ -15,32 +15,23 @@ use cli::{
 use client::ClientConfig;
 
 fn main() {
-    // Parse CLI args synchronously to check verbose flag.
+    // Parse args and set RUST_LOG *before* creating the Tokio runtime.
+    // set_var is UB when called from a multi-threaded process; doing it here
+    // guarantees no runtime threads exist yet.
     let cli = Cli::parse();
-
-    // If --verbose is set and RUST_LOG is not already configured, default to debug.
-    // SAFETY: This runs before any threads are created, so it's safe to mutate the
-    // process environment.
     if cli.verbose && std::env::var("RUST_LOG").is_err() {
+        // SAFETY: single-threaded at this point — Tokio runtime not yet started.
         unsafe { std::env::set_var("RUST_LOG", "debug") };
     }
 
-    // Now construct the Tokio runtime and run async_main.
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("failed to build tokio runtime")
-        .block_on(async_main(cli));
-}
-
-#[allow(clippy::needless_return)]
-async fn async_main(cli: Cli) {
     // Install the rustls crypto provider before any TLS connections are made.
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
         .expect("failed to install rustls CryptoProvider");
 
-    let result = run(cli).await;
+    let result = tokio::runtime::Runtime::new()
+        .expect("failed to create Tokio runtime")
+        .block_on(run(cli));
 
     if let Err(e) = result {
         eprintln!("error: {e:#}");
