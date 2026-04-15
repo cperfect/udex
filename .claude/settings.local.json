@@ -1,4 +1,7 @@
 {
+  "env": {
+    "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1"
+  },
   "permissions": {
     "allow": [
       "Bash(cargo build:*)",
@@ -13,7 +16,9 @@
       "WebFetch(domain:rust-lang.github.io)",
       "Bash(intent wp:*)",
       "Bash(cargo test:*)",
-      "Bash(intent st:*)"
+      "Bash(intent st:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo clippy:*)"
     ]
   }
 }
