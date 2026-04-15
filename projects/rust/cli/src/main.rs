@@ -49,14 +49,20 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
 
         Commands::Index { command } => match command {
             IndexCommands::List => commands::index::list(client_cfg, &cli.output).await,
-            IndexCommands::Create(args) => commands::index::create(client_cfg, args).await,
+            IndexCommands::Create(args) => {
+                commands::index::create(client_cfg, args, &cli.output).await
+            }
             IndexCommands::Get(args) => commands::index::get(client_cfg, args, &cli.output).await,
-            IndexCommands::Update(args) => commands::index::update(client_cfg, args).await,
+            IndexCommands::Update(args) => {
+                commands::index::update(client_cfg, args, &cli.output).await
+            }
             IndexCommands::Delete(args) => commands::index::delete(client_cfg, args).await,
         },
 
         Commands::Entry { command } => match command {
-            EntryCommands::Create(args) => commands::entry::create(client_cfg, args).await,
+            EntryCommands::Create(args) => {
+                commands::entry::create(client_cfg, args, &cli.output).await
+            }
             EntryCommands::Get(args) => commands::entry::get(client_cfg, args, &cli.output).await,
             EntryCommands::Lookup(args) => {
                 commands::entry::lookup(client_cfg, args, &cli.output).await

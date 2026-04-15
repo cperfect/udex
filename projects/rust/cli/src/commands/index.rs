@@ -94,7 +94,11 @@ pub async fn list(client: ClientConfig, output: &OutputFormat) -> Result<()> {
 }
 
 /// Create a new index.
-pub async fn create(client: ClientConfig, args: IndexCreateArgs) -> Result<()> {
+pub async fn create(
+    client: ClientConfig,
+    args: IndexCreateArgs,
+    output: &OutputFormat,
+) -> Result<()> {
     let channel = client.channel().await?;
     let mut grpc = IndexServiceClient::with_interceptor(channel, client.interceptor());
 
@@ -115,7 +119,7 @@ pub async fn create(client: ClientConfig, args: IndexCreateArgs) -> Result<()> {
         .into_inner()
         .index
         .context("server returned empty index")?;
-    print_index(index, &OutputFormat::Table)
+    print_index(index, output)
 }
 
 /// Get an index by name.
@@ -136,7 +140,11 @@ pub async fn get(client: ClientConfig, args: IndexGetArgs, output: &OutputFormat
 }
 
 /// Update an existing index.
-pub async fn update(client: ClientConfig, args: IndexUpdateArgs) -> Result<()> {
+pub async fn update(
+    client: ClientConfig,
+    args: IndexUpdateArgs,
+    output: &OutputFormat,
+) -> Result<()> {
     let channel = client.channel().await?;
     let mut grpc = IndexServiceClient::with_interceptor(channel, client.interceptor());
 
@@ -158,7 +166,7 @@ pub async fn update(client: ClientConfig, args: IndexUpdateArgs) -> Result<()> {
         .into_inner()
         .index
         .context("server returned empty index")?;
-    print_index(index, &OutputFormat::Table)
+    print_index(index, output)
 }
 
 /// Delete an index.

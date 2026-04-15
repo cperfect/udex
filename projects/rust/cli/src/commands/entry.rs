@@ -77,9 +77,11 @@ fn value_to_string(v: Option<Value>) -> String {
 // ---------------------------------------------------------------------------
 
 /// Create a new entry.
-pub async fn create(client: ClientConfig, args: EntryCreateArgs) -> Result<()> {
-    // create always prints as table; full output-format support lands in WP-09
-    let output = OutputFormat::Table;
+pub async fn create(
+    client: ClientConfig,
+    args: EntryCreateArgs,
+    output: &OutputFormat,
+) -> Result<()> {
     let context = build_context_input(&args.context)?;
 
     let channel = client.channel().await?;
