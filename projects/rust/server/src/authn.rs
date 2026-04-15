@@ -89,7 +89,6 @@ impl AuthnInterceptor {
 
         Ok(claims)
     }
-
 }
 
 #[tonic::async_trait]
