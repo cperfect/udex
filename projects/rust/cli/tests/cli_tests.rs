@@ -126,14 +126,22 @@ fn test_context_hash_is_deterministic() {
     let out1 = udex()
         .args(["context", "hash", "--context", "a=1", "--context", "b=2"])
         .output()
-        .unwrap()
-        .stdout;
+        .unwrap();
     let out2 = udex()
         .args(["context", "hash", "--context", "b=2", "--context", "a=1"])
         .output()
-        .unwrap()
-        .stdout;
-    assert_eq!(out1, out2, "hash must be order-independent");
+        .unwrap();
+    assert!(
+        out1.status.success(),
+        "first invocation failed\nstderr: {}",
+        String::from_utf8_lossy(&out1.stderr)
+    );
+    assert!(
+        out2.status.success(),
+        "second invocation failed\nstderr: {}",
+        String::from_utf8_lossy(&out2.stderr)
+    );
+    assert_eq!(out1.stdout, out2.stdout, "hash must be order-independent");
 }
 
 #[test]
