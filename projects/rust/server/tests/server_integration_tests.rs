@@ -15,7 +15,7 @@ use udex_server::{config::ServerConfig, logging, server};
 const SERVER_BIND_ADDR: &str = "127.0.0.1:50052"; // different from default  to avoid conflicts
 const ID_PREFIX: &str = "server-integration-test";
 
-// See https://github.com/ufoscout/maybe-once/blob/master/examples/testcontainers/src/postgres_async.rs.
+// See https://github.com/ufoscout/maybe-once for the MaybeOnceAsync pattern used here.
 type MaybeOnceType = (
     String,                      // index name
     ServerConfig,                // so we can find out the server bind address etc.

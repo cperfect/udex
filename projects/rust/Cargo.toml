@@ -50,8 +50,6 @@ jsonwebtoken = { version = "9.3" }
 tonic-build = "0.13"
 
 # Dev dependencies
-testcontainers = { version = "0.24.0", features = ["blocking"] }
-testcontainers-modules = { version = "0.12.1", features = ["postgres"] }
 tokio-shared-rt = "0.1.0"
 maybe-once = { version = "0.17.4", features = ["tokio"] }
 rstest = "0.25.0"

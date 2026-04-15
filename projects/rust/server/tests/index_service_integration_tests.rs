@@ -11,7 +11,7 @@ use udex_datastore::integration_test::init_postgres;
 use udex_datastore::postgres::PostgresDatastore;
 use udex_server::{logging, HealthCheck, IndexService};
 
-// See https://github.com/ufoscout/maybe-once/blob/master/examples/testcontainers/src/postgres_async.rs.
+// See https://github.com/ufoscout/maybe-once for the MaybeOnceAsync pattern used here.
 type MaybeOnceType = (
     IndexService<PostgresDatastore>,
     String, // database name for cleanup (kept in scope for automatic cleanup via ctor)

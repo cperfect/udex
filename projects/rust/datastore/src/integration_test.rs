@@ -5,7 +5,7 @@ use sqlx::postgres::PgPoolOptions;
 use std::sync::{Arc, Mutex, OnceLock};
 use uuid::Uuid;
 
-// See https://github.com/ufoscout/maybe-once/blob/master/examples/testcontainers/src/postgres_async.rs.
+// See https://github.com/ufoscout/maybe-once for the MaybeOnceAsync pattern used here.
 pub type MaybeOnceType = (
     // useful stuff for the tests
     PostgresDatastore,

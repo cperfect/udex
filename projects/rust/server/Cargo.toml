@@ -39,8 +39,6 @@ time = { workspace = true }
 udex-datastore = { path = "../datastore", features = ["integration_test"]}
 tokio = { workspace = true }
 tracing-test = { workspace = true }
-testcontainers = { workspace = true }
-testcontainers-modules = { workspace = true }
 tokio-shared-rt = { workspace = true }
 tonic = { workspace = true }
 maybe-once = { workspace = true } 

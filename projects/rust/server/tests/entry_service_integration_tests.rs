@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 const ID_PREFIX: &str = "entry_service_integration_test_";
 
-// See https://github.com/ufoscout/maybe-once/blob/master/examples/testcontainers/src/postgres_async.rs.
+// See https://github.com/ufoscout/maybe-once for the MaybeOnceAsync pattern used here.
 type MaybeOnceType = (
     EntryService<PostgresDatastore>,
     String, // index name
