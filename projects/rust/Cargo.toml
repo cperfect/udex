@@ -47,7 +47,7 @@ sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-rustls", "postgres
 jsonwebtoken = { version = "9.3" }
 
 # CLI
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 
 # Build dependencies
 tonic-build = "0.13"

@@ -2,6 +2,57 @@
 
 //! Udex CLI — `udex` binary entry point.
 
-fn main() {
-    println!("udex");
+mod cli;
+mod commands;
+
+use clap::Parser;
+
+use cli::{
+    Cli, Commands, ConfigCommands, ContextCommands, EntryCommands, IndexCommands, TokenCommands,
+};
+
+#[tokio::main]
+async fn main() {
+    let cli = Cli::parse();
+
+    let result = run(cli).await;
+
+    if let Err(e) = result {
+        eprintln!("error: {e}");
+        std::process::exit(1);
+    }
+}
+
+async fn run(cli: Cli) -> anyhow::Result<()> {
+    match cli.command {
+        Commands::Serve(args) => commands::serve::run(args).await,
+
+        Commands::Config { command } => match command {
+            ConfigCommands::Init(args) => commands::config::init(args),
+            ConfigCommands::Validate(args) => commands::config::validate(args),
+        },
+
+        Commands::Index { command } => match command {
+            IndexCommands::List => commands::index::list(&cli.output).await,
+            IndexCommands::Create(args) => commands::index::create(args).await,
+            IndexCommands::Get(args) => commands::index::get(args, &cli.output).await,
+            IndexCommands::Update(args) => commands::index::update(args).await,
+            IndexCommands::Delete(args) => commands::index::delete(args).await,
+        },
+
+        Commands::Entry { command } => match command {
+            EntryCommands::Create(args) => commands::entry::create(args).await,
+            EntryCommands::Get(args) => commands::entry::get(args, &cli.output).await,
+            EntryCommands::Lookup(args) => commands::entry::lookup(args, &cli.output).await,
+            EntryCommands::Delete(args) => commands::entry::delete(args).await,
+        },
+
+        Commands::Token { command } => match command {
+            TokenCommands::Inspect(args) => commands::token::inspect(args),
+        },
+
+        Commands::Context { command } => match command {
+            ContextCommands::Hash(args) => commands::context::hash(args),
+        },
+    }
 }
