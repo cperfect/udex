@@ -89,19 +89,58 @@ fn test_index_list_fails_without_server() {
 }
 
 #[test]
-fn test_token_inspect_stub_exits_nonzero() {
+fn test_token_inspect_rejects_invalid_token() {
     udex()
-        .args(["token", "inspect", "some.jwt.token"])
+        .args(["token", "inspect", "not.a.jwt"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not implemented"));
+        .stderr(predicate::str::contains("invalid JWT"));
 }
 
 #[test]
-fn test_context_hash_stub_exits_nonzero() {
+fn test_token_inspect_decodes_valid_token() {
+    // Standard jwt.io example token (HS256, no expiry)
+    let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\
+        .eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ\
+        .SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+    udex()
+        .args(["token", "inspect", token])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Header"))
+        .stdout(predicate::str::contains("Claims"))
+        .stdout(predicate::str::contains("HS256"));
+}
+
+#[test]
+fn test_context_hash_prints_hex_string() {
     udex()
         .args(["context", "hash", "--context", "key=value"])
         .assert()
+        .success()
+        .stdout(predicate::str::is_match("^[0-9a-f]{40}\n$").unwrap());
+}
+
+#[test]
+fn test_context_hash_is_deterministic() {
+    let out1 = udex()
+        .args(["context", "hash", "--context", "a=1", "--context", "b=2"])
+        .output()
+        .unwrap()
+        .stdout;
+    let out2 = udex()
+        .args(["context", "hash", "--context", "b=2", "--context", "a=1"])
+        .output()
+        .unwrap()
+        .stdout;
+    assert_eq!(out1, out2, "hash must be order-independent");
+}
+
+#[test]
+fn test_context_hash_rejects_invalid_pair() {
+    udex()
+        .args(["context", "hash", "--context", "no-equals-sign"])
+        .assert()
         .failure()
-        .stderr(predicate::str::contains("not implemented"));
+        .stderr(predicate::str::contains("KEY=VALUE"));
 }
