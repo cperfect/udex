@@ -1,0 +1,4 @@
+reviews:
+  # Request changes (not just comments) when major or higher issues are found.
+  # Combined with the branch protection rule below, this blocks merging.
+  request_changes_workflow: true
