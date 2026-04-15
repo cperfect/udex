@@ -3,7 +3,7 @@ verblock: "15 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-04
 title: "Document local usage in repo README / devcontainer docs"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-04: Document local usage in repo README / devcontainer docs

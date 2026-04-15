@@ -1,7 +1,7 @@
 ---
 verblock: "15 Apr 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: Not Started
+status: WIP
 slug: implement-security-scanning-of-repository
 created: 20260415
 completed:
