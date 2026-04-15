@@ -16,6 +16,11 @@ use cli::{
 async fn main() {
     let cli = Cli::parse();
 
+    // If --verbose is set and RUST_LOG is not already configured, default to debug.
+    if cli.verbose && std::env::var("RUST_LOG").is_err() {
+        unsafe { std::env::set_var("RUST_LOG", "debug") };
+    }
+
     let result = run(cli).await;
 
     if let Err(e) = result {

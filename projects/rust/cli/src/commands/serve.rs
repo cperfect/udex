@@ -2,11 +2,24 @@
 
 //! Handler for `udex serve`.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::cli::ServeArgs;
+use crate::config::UdexConfig;
 
 /// Start the Udex gRPC server in the foreground.
-pub async fn run(_args: ServeArgs) -> Result<()> {
-    anyhow::bail!("not implemented")
+///
+/// Loads configuration from the resolved path, validates it, initialises the
+/// PostgreSQL datastore (running migrations), and starts the gRPC server.
+/// Runs until interrupted (Ctrl+C / SIGTERM).
+pub async fn run(args: ServeArgs) -> Result<()> {
+    let cfg = UdexConfig::load(&args.config)?;
+    cfg.validate()?;
+
+    let server_config = cfg.to_server_config()?;
+    let datastore_config = cfg.to_datastore_config();
+
+    udex_server::start(server_config, datastore_config)
+        .await
+        .context("server exited with an error")
 }

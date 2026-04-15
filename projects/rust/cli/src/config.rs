@@ -184,6 +184,49 @@ impl UdexConfig {
             ))
         }
     }
+
+    /// Convert to the server's [`udex_server::config::ServerConfig`].
+    ///
+    /// `init_indexes` is always empty — indices are created at runtime via
+    /// `udex index create` rather than being statically configured.
+    pub fn to_server_config(&self) -> Result<udex_server::config::ServerConfig> {
+        let bind_address = self
+            .server
+            .bind_address
+            .parse()
+            .with_context(|| format!("invalid bind_address: {}", self.server.bind_address))?;
+
+        Ok(udex_server::config::ServerConfig {
+            bind_address,
+            request_timeout: std::time::Duration::from_secs(self.server.request_timeout_secs),
+            max_connections: self.server.max_connections,
+            max_message_size: self.server.max_message_size_bytes,
+            tls: udex_server::config::TlsConfig {
+                cert_path: self.server.tls.cert_path.clone(),
+                key_path: self.server.tls.key_path.clone(),
+                ca_cert_path: self.server.tls.ca_cert_path.clone(),
+            },
+            authnz: udex_server::config::AuthNzConfig {
+                jwt_public_key_path: self.server.authnz.jwt_public_key_path.clone(),
+                jwt_issuer: self.server.authnz.jwt_issuer.clone(),
+                jwt_audience: self.server.authnz.jwt_audience.clone(),
+            },
+            init_indexes: vec![],
+        })
+    }
+
+    /// Convert to the datastore's [`udex_datastore::config::DatastoreConfig`].
+    pub fn to_datastore_config(&self) -> udex_datastore::config::DatastoreConfig {
+        udex_datastore::config::DatastoreConfig {
+            connection_url: self.datastore.connection_url.clone(),
+            max_connections: self.datastore.max_connections,
+            min_connections: self.datastore.min_connections,
+            connection_timeout: std::time::Duration::from_secs(
+                self.datastore.connection_timeout_secs,
+            ),
+            query_timeout: std::time::Duration::from_secs(self.datastore.query_timeout_secs),
+        }
+    }
 }
 
 #[cfg(test)]
