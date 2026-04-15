@@ -3,6 +3,7 @@
 //! Udex CLI — `udex` binary entry point.
 
 mod cli;
+mod client;
 mod commands;
 mod config;
 
@@ -11,6 +12,7 @@ use clap::Parser;
 use cli::{
     Cli, Commands, ConfigCommands, ContextCommands, EntryCommands, IndexCommands, TokenCommands,
 };
+use client::ClientConfig;
 
 #[tokio::main]
 async fn main() {
@@ -30,6 +32,8 @@ async fn main() {
 }
 
 async fn run(cli: Cli) -> anyhow::Result<()> {
+    let client_cfg = ClientConfig::from_cli(&cli);
+
     match cli.command {
         Commands::Serve(args) => commands::serve::run(args).await,
 
@@ -39,18 +43,20 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
         },
 
         Commands::Index { command } => match command {
-            IndexCommands::List => commands::index::list(&cli.output).await,
-            IndexCommands::Create(args) => commands::index::create(args).await,
-            IndexCommands::Get(args) => commands::index::get(args, &cli.output).await,
-            IndexCommands::Update(args) => commands::index::update(args).await,
-            IndexCommands::Delete(args) => commands::index::delete(args).await,
+            IndexCommands::List => commands::index::list(client_cfg, &cli.output).await,
+            IndexCommands::Create(args) => commands::index::create(client_cfg, args).await,
+            IndexCommands::Get(args) => commands::index::get(client_cfg, args, &cli.output).await,
+            IndexCommands::Update(args) => commands::index::update(client_cfg, args).await,
+            IndexCommands::Delete(args) => commands::index::delete(client_cfg, args).await,
         },
 
         Commands::Entry { command } => match command {
-            EntryCommands::Create(args) => commands::entry::create(args).await,
-            EntryCommands::Get(args) => commands::entry::get(args, &cli.output).await,
-            EntryCommands::Lookup(args) => commands::entry::lookup(args, &cli.output).await,
-            EntryCommands::Delete(args) => commands::entry::delete(args).await,
+            EntryCommands::Create(args) => commands::entry::create(client_cfg, args).await,
+            EntryCommands::Get(args) => commands::entry::get(client_cfg, args, &cli.output).await,
+            EntryCommands::Lookup(args) => {
+                commands::entry::lookup(client_cfg, args, &cli.output).await
+            }
+            EntryCommands::Delete(args) => commands::entry::delete(client_cfg, args).await,
         },
 
         Commands::Token { command } => match command {

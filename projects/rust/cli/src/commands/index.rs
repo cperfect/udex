@@ -5,28 +5,29 @@
 use anyhow::Result;
 
 use crate::cli::{IndexCreateArgs, IndexDeleteArgs, IndexGetArgs, IndexUpdateArgs, OutputFormat};
+use crate::client::ClientConfig;
 
 /// List all indices.
-pub async fn list(_output: &OutputFormat) -> Result<()> {
+pub async fn list(_client: ClientConfig, _output: &OutputFormat) -> Result<()> {
     anyhow::bail!("not implemented")
 }
 
 /// Create a new index.
-pub async fn create(_args: IndexCreateArgs) -> Result<()> {
+pub async fn create(_client: ClientConfig, _args: IndexCreateArgs) -> Result<()> {
     anyhow::bail!("not implemented")
 }
 
 /// Get an index by name.
-pub async fn get(_args: IndexGetArgs, _output: &OutputFormat) -> Result<()> {
+pub async fn get(_client: ClientConfig, _args: IndexGetArgs, _output: &OutputFormat) -> Result<()> {
     anyhow::bail!("not implemented")
 }
 
 /// Update an existing index.
-pub async fn update(_args: IndexUpdateArgs) -> Result<()> {
+pub async fn update(_client: ClientConfig, _args: IndexUpdateArgs) -> Result<()> {
     anyhow::bail!("not implemented")
 }
 
 /// Delete an index.
-pub async fn delete(_args: IndexDeleteArgs) -> Result<()> {
+pub async fn delete(_client: ClientConfig, _args: IndexDeleteArgs) -> Result<()> {
     anyhow::bail!("not implemented")
 }

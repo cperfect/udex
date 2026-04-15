@@ -5,23 +5,28 @@
 use anyhow::Result;
 
 use crate::cli::{EntryCreateArgs, EntryDeleteArgs, EntryGetArgs, EntryLookupArgs, OutputFormat};
+use crate::client::ClientConfig;
 
 /// Create a new entry.
-pub async fn create(_args: EntryCreateArgs) -> Result<()> {
+pub async fn create(_client: ClientConfig, _args: EntryCreateArgs) -> Result<()> {
     anyhow::bail!("not implemented")
 }
 
 /// Get an entry by key.
-pub async fn get(_args: EntryGetArgs, _output: &OutputFormat) -> Result<()> {
+pub async fn get(_client: ClientConfig, _args: EntryGetArgs, _output: &OutputFormat) -> Result<()> {
     anyhow::bail!("not implemented")
 }
 
 /// Reverse-lookup entries by context.
-pub async fn lookup(_args: EntryLookupArgs, _output: &OutputFormat) -> Result<()> {
+pub async fn lookup(
+    _client: ClientConfig,
+    _args: EntryLookupArgs,
+    _output: &OutputFormat,
+) -> Result<()> {
     anyhow::bail!("not implemented")
 }
 
 /// Delete an entry by key.
-pub async fn delete(_args: EntryDeleteArgs) -> Result<()> {
+pub async fn delete(_client: ClientConfig, _args: EntryDeleteArgs) -> Result<()> {
     anyhow::bail!("not implemented")
 }
