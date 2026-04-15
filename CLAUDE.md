@@ -35,6 +35,10 @@ Full guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md) and [projects/rust/CON
 - Use `thiserror`; name error types with an `Error` suffix; never expose third-party error types.
 - Before committing: `cargo fmt --check`, `cargo clippy`, `cargo test`.
 
+### Markdown
+
+- Every fenced code block MUST have a language identifier (e.g. ` ```rust `, ` ```bash `, ` ```yaml `, ` ```text `). Never write a bare ` ``` ` fence.
+
 ### Project Conventions
 
 - **The Highlander Rule**: Never duplicate code paths or logic for the same concern — check `intent/llm/MODULES.md` first.

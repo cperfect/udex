@@ -1,0 +1,12 @@
+scan:
+  scanners:
+    - vuln          # CVEs in Cargo.lock and other dependency manifests
+    - secret        # Hardcoded credentials, API keys, tokens
+    - misconfig     # IaC and config file misconfigurations
+    - license       # Dependency licence detection
+  severity:
+    - MEDIUM
+    - HIGH
+    - CRITICAL
+  exit-code: 1      # Non-zero exit when issues at or above severity threshold are found
+  ignorefile: .trivyignore

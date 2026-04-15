@@ -2,6 +2,7 @@ Udex
 =====
 
 [![CI](https://github.com/cperfect/udex/actions/workflows/01-Validation.yml/badge.svg)](https://github.com/cperfect/udex/actions/workflows/01-Validation.yml)
+[![Security](https://github.com/cperfect/udex/actions/workflows/02-Security.yml/badge.svg)](https://github.com/cperfect/udex/actions/workflows/02-Security.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Status**: Early development — not yet production ready. APIs and data models are subject to change.
@@ -47,6 +48,28 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres cargo test
 ```
 
 See [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) for the full pre-commit checklist and local check commands.
+
+### Security scanning
+
+[Trivy](https://trivy.dev) is pre-installed in the dev container. To run the same scan that CI runs:
+
+```bash
+trivy fs --config .trivy.yaml .
+```
+
+Findings at MEDIUM severity or higher cause a non-zero exit and will block merging on GitHub. To suppress an accepted finding, add its ID to `.trivyignore` with a comment explaining the rationale.
+
+Outside the devcontainer, install Trivy first:
+
+```bash
+# macOS
+brew install trivy
+
+# Debian/Ubuntu (from official Trivy apt repo)
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+sudo apt-get update && sudo apt-get install trivy
+```
 
 ## Contributing Guides
 

@@ -1,10 +1,10 @@
 ---
 verblock: "05 Apr 2026:v0.1: vscode - Initial version; 11 Apr 2026:v1.0: vscode - All WPs complete, marked Done"
 intent_version: 2.4.0
-status: Done
+status: Completed
 slug: add-structured-logging
 created: 20260405
-completed: 20260411
+completed: 20260415
 ---
 
 # ST0001: Add structured logging
