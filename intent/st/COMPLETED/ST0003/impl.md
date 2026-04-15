@@ -20,7 +20,7 @@ trivy fs --config .trivy.yaml .
 
 ### Suppress an accepted finding
 
-```
+```text
 # .trivyignore
 CVE-2021-12345  # Not exploitable — affected code path is unreachable in this binary
 ```
