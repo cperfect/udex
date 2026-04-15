@@ -1,7 +1,7 @@
 ---
 verblock: "15 Apr 2026:v0.1: vscode - Initial version; 15 Apr 2026:v0.2: vscode - All WPs complete"
 intent_version: 2.4.0
-status: Done
+status: Completed
 slug: command-line-interface
 created: 20260415
 completed: 20260415
