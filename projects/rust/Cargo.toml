@@ -2,8 +2,8 @@
 members = [
     "api",
     "datastore",
-    "server"
-    # "cli" - temporarily excluded until implementation exists
+    "server",
+    "cli",
 ]
 resolver = "2"
 
@@ -46,11 +46,16 @@ sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-rustls", "postgres
 # Authentication
 jsonwebtoken = { version = "9.3" }
 
+# CLI
+clap = { version = "4", features = ["derive"] }
+
 # Build dependencies
 tonic-build = "0.13"
 
 # Dev dependencies
 tokio-shared-rt = "0.1.0"
+assert_cmd = "2"
+predicates = "3"
 maybe-once = { version = "0.17.4", features = ["tokio"] }
 rstest = "0.25.0"
 mockall = "0.13.1"
