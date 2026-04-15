@@ -86,7 +86,22 @@ udex entry get my-index --key <uuid> --output yaml
 ## Development
 
 ```bash
+# Build (debug)
 cargo build -p udex-cli
-cargo test -p udex-cli
+
+# Build (release)
+cargo build -p udex-cli --release
+
+# Run via cargo (all args after -- are passed to the binary)
 cargo run -p udex-cli -- --help
+cargo run -p udex-cli -- index list
+
+# Run the built binary directly
+./target/debug/udex --help
+./target/release/udex index list   # after release build
+
+# Test
+cargo test -p udex-cli
 ```
+
+All `cargo` commands must be run from the `projects/rust/` workspace root, or pass `--manifest-path projects/rust/Cargo.toml` from the repo root.
