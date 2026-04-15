@@ -32,8 +32,53 @@ async fn main() {
 
     if let Err(e) = result {
         eprintln!("error: {e:#}");
-        std::process::exit(1);
+        std::process::exit(grpc_exit_code(&e));
     }
+}
+
+/// Map an error to a distinct exit code.
+///
+/// Walks the `anyhow` source chain looking for a `tonic::Status` (gRPC-level
+/// errors) or a `tonic::transport::Error` (transport-level failures). Falls
+/// back to 1 for anything else.
+///
+/// | Exit | Cause |
+/// |------|-------|
+/// |  1   | unclassified / internal error |
+/// |  2   | gRPC NOT_FOUND |
+/// |  3   | gRPC ALREADY_EXISTS |
+/// |  4   | gRPC INVALID_ARGUMENT / FAILED_PRECONDITION / OUT_OF_RANGE |
+/// |  5   | gRPC UNAUTHENTICATED |
+/// |  6   | gRPC PERMISSION_DENIED |
+/// |  7   | gRPC UNAVAILABLE / DEADLINE_EXCEEDED |
+/// |  8   | transport failure (connection refused, TLS error, DNS failure) |
+fn grpc_exit_code(e: &anyhow::Error) -> i32 {
+    use std::error::Error as StdError;
+    use tonic::Code;
+
+    // anyhow::Error implements AsRef<dyn Error + 'static>, giving us an entry
+    // point whose source() returns &(dyn Error + 'static) — which supports
+    // downcast_ref. This lets us inspect the chain without changing any handler.
+    let root: &(dyn StdError + 'static) = e.as_ref();
+    let mut src = root.source();
+    while let Some(cause) = src {
+        if let Some(status) = cause.downcast_ref::<tonic::Status>() {
+            return match status.code() {
+                Code::NotFound => 2,
+                Code::AlreadyExists => 3,
+                Code::InvalidArgument | Code::FailedPrecondition | Code::OutOfRange => 4,
+                Code::Unauthenticated => 5,
+                Code::PermissionDenied => 6,
+                Code::Unavailable | Code::DeadlineExceeded => 7,
+                _ => 1,
+            };
+        }
+        if cause.downcast_ref::<tonic::transport::Error>().is_some() {
+            return 8;
+        }
+        src = cause.source();
+    }
+    1
 }
 
 async fn run(cli: Cli) -> anyhow::Result<()> {
@@ -77,5 +122,76 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
         Commands::Context { command } => match command {
             ContextCommands::Hash(args) => commands::context::hash(args),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn anyhow_from_status(code: tonic::Code) -> anyhow::Error {
+        anyhow::Error::from(tonic::Status::new(code, "test")).context("rpc failed")
+    }
+
+    #[test]
+    fn exit_code_not_found() {
+        assert_eq!(
+            grpc_exit_code(&anyhow_from_status(tonic::Code::NotFound)),
+            2
+        );
+    }
+
+    #[test]
+    fn exit_code_already_exists() {
+        assert_eq!(
+            grpc_exit_code(&anyhow_from_status(tonic::Code::AlreadyExists)),
+            3
+        );
+    }
+
+    #[test]
+    fn exit_code_invalid_argument() {
+        assert_eq!(
+            grpc_exit_code(&anyhow_from_status(tonic::Code::InvalidArgument)),
+            4
+        );
+    }
+
+    #[test]
+    fn exit_code_unauthenticated() {
+        assert_eq!(
+            grpc_exit_code(&anyhow_from_status(tonic::Code::Unauthenticated)),
+            5
+        );
+    }
+
+    #[test]
+    fn exit_code_permission_denied() {
+        assert_eq!(
+            grpc_exit_code(&anyhow_from_status(tonic::Code::PermissionDenied)),
+            6
+        );
+    }
+
+    #[test]
+    fn exit_code_unavailable() {
+        assert_eq!(
+            grpc_exit_code(&anyhow_from_status(tonic::Code::Unavailable)),
+            7
+        );
+    }
+
+    #[test]
+    fn exit_code_deadline_exceeded() {
+        assert_eq!(
+            grpc_exit_code(&anyhow_from_status(tonic::Code::DeadlineExceeded)),
+            7
+        );
+    }
+
+    #[test]
+    fn exit_code_non_grpc_error() {
+        let e = anyhow::anyhow!("something went wrong");
+        assert_eq!(grpc_exit_code(&e), 1);
     }
 }

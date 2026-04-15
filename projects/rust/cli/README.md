@@ -83,6 +83,20 @@ udex index list --output json
 udex entry get my-index --key <uuid> --output yaml
 ```
 
+## Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | success |
+| 1 | unclassified / internal error |
+| 2 | not found (gRPC `NOT_FOUND`) |
+| 3 | already exists (gRPC `ALREADY_EXISTS`) |
+| 4 | invalid input (gRPC `INVALID_ARGUMENT`, `FAILED_PRECONDITION`, or `OUT_OF_RANGE`) |
+| 5 | unauthenticated — missing or invalid token (gRPC `UNAUTHENTICATED`) |
+| 6 | permission denied (gRPC `PERMISSION_DENIED`) |
+| 7 | server unavailable or timed out (gRPC `UNAVAILABLE` / `DEADLINE_EXCEEDED`) |
+| 8 | transport failure — connection refused, TLS error, or DNS failure |
+
 ## Development
 
 ```bash

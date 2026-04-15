@@ -8,7 +8,11 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 /// Universal lookup directory CLI.
 #[derive(Parser)]
-#[command(name = "udex", about = "Universal lookup directory for entities")]
+#[command(
+    name = "udex",
+    about = "Universal lookup directory for entities",
+    after_help = "EXIT CODES\n  0  success\n  1  internal error\n  2  not found\n  3  already exists\n  4  invalid input\n  5  unauthenticated\n  6  permission denied\n  7  server unavailable / timeout\n  8  transport failure (connection refused, TLS, DNS)"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,

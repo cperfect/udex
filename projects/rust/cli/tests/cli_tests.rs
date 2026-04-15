@@ -80,11 +80,11 @@ fn test_no_subcommand_exits_nonzero() {
 
 #[test]
 fn test_index_list_fails_without_server() {
-    // index list is implemented; with no server running it fails with a connection error.
+    // Transport-level failure (connection refused) → exit code 8.
     udex()
         .args(["index", "list"])
         .assert()
-        .failure()
+        .code(8)
         .stderr(predicate::str::contains("failed to connect"));
 }
 

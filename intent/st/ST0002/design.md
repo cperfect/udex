@@ -140,9 +140,23 @@ udex context hash --context <key=value>...    # compute and print context hash
 
 ## Error Handling
 
-- Non-zero exit code on any error (gRPC status codes map to exit codes)
-- Errors printed to stderr; data output to stdout
-- `--verbose` flag enables tracing output (uses `init_tracing()` from `udex-server::logging`)
+Errors are printed to stderr; data output goes to stdout. `--verbose` enables tracing output.
+
+Both gRPC status codes and transport-level errors produce distinct exit codes so callers can branch without parsing error messages:
+
+| Exit | Cause |
+|------|-------|
+| 0 | success |
+| 1 | unclassified / internal error |
+| 2 | gRPC `NOT_FOUND` |
+| 3 | gRPC `ALREADY_EXISTS` |
+| 4 | gRPC `INVALID_ARGUMENT`, `FAILED_PRECONDITION`, or `OUT_OF_RANGE` |
+| 5 | gRPC `UNAUTHENTICATED` |
+| 6 | gRPC `PERMISSION_DENIED` |
+| 7 | gRPC `UNAVAILABLE` or `DEADLINE_EXCEEDED` (server reachable but overloaded/timing out) |
+| 8 | Transport connection failure (connection refused, TLS error, DNS failure) |
+
+The implementation walks the `anyhow` error-source chain looking for a `tonic::Status` (gRPC codes → 2–7) or `tonic::transport::Error` (transport failures → 8). Non-gRPC errors exit 1.
 
 ## Testing Strategy
 
