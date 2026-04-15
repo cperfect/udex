@@ -158,9 +158,15 @@ pub async fn update(
     let channel = client.channel().await?;
     let mut grpc = IndexServiceClient::with_interceptor(channel, client.interceptor());
 
+    let max_bulk_operations = args
+        .bulk_limit
+        .map(i32::try_from)
+        .transpose()
+        .map_err(|_| anyhow::anyhow!("bulk_limit too large (must fit in i32)"))?;
+
     let update = udex_api::index::IndexUpdate {
         description: args.description,
-        max_bulk_operations: args.bulk_limit.map(|v| v as i32),
+        max_bulk_operations,
         ..Default::default()
     };
 
