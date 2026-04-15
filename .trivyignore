@@ -1,0 +1,9 @@
+# Trivy ignore file
+#
+# Suppress acknowledged findings that have been reviewed and accepted.
+# Format: one finding ID per line, with a comment explaining the rationale.
+#
+# Example:
+#   CVE-2021-12345  # Not exploitable — affected code path not reachable in this binary
+#
+# See https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/#trivyignore

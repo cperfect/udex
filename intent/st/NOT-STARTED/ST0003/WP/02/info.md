@@ -3,7 +3,7 @@ verblock: "15 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Add .trivy.yaml config and .trivyignore"
 scope: Small
-status: WIP
+status: Done
 ---
 
 # WP-02: Add .trivy.yaml config and .trivyignore
