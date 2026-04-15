@@ -144,6 +144,36 @@ udex context hash --context <key=value>...    # compute and print context hash
 - Errors printed to stderr; data output to stdout
 - `--verbose` flag enables tracing output (uses `init_tracing()` from `udex-server::logging`)
 
+## Testing Strategy
+
+### Offline commands
+
+`assert_cmd` spawns the `udex` binary as a subprocess and asserts on exit code, stdout, and stderr. No infrastructure needed.
+
+### Online commands
+
+Same pattern as `server_integration_tests.rs`:
+
+1. `init_postgres()` — creates a fresh isolated database from `DATABASE_URL` (provided by devcontainer docker-compose)
+2. Start the server in-process via `server::serve()` as a background tokio task, using the test TLS certs (`tests/certs/`) and JWT keys (`tests/jwt/`) already present in the server crate
+3. Generate a test JWT with `generate_test_claims()` + `EncodingKey::from_ec_pem()`
+4. Invoke the `udex` binary via `assert_cmd` with env vars set:
+   - `UDEX_SERVER=https://127.0.0.1:<test_port>`
+   - `UDEX_TOKEN=<generated_jwt>`
+   - `UDEX_CA_CERT=<path_to_test_ca_cert>`
+
+The `init_server()` helper will be duplicated into `cli/tests/` rather than extracted to a shared crate — the project guideline explicitly favours copying over premature abstraction. Extract to a shared test-support crate only if a third consumer appears.
+
+### Test infrastructure summary
+
+| Test type | Tool | Infrastructure |
+|---|---|---|
+| Offline commands | `assert_cmd` | None |
+| Online commands | `assert_cmd` + in-process server | `DATABASE_URL` (devcontainer) |
+| Help / usage errors | `assert_cmd` | None |
+
+`assert_cmd` and `predicates` are the only new test dependencies required.
+
 ## Alternatives Considered
 
 **Subcommands on the server binary**: Rejected — the server crate is a library with no `main.rs`. Adding CLI concerns there would conflate two responsibilities. A dedicated crate is cleaner.
