@@ -6,6 +6,7 @@
 - [x] WP-02: Add .trivy.yaml config and .trivyignore
 - [x] WP-03: Add 02-Security GitHub Actions workflow
 - [x] WP-04: Document local usage in repo README / devcontainer docs
+- [x] WP-05: Add weekly scheduled full-codebase Trivy scan
 
 ## Task Notes
 
