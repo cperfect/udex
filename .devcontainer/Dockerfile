@@ -8,7 +8,15 @@ FROM mcr.microsoft.com/vscode/devcontainers/rust:0-1-${VARIANT}
 # [Optional] Uncomment this section to install additional packages.
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
   && apt-get -y install --no-install-recommends \
-  protobuf-compiler libprotobuf-dev
+  protobuf-compiler libprotobuf-dev \
+  wget apt-transport-https gnupg lsb-release
+
+# Install Trivy (security scanner) — same version used in CI
+RUN wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor -o /usr/share/keyrings/trivy.gpg \
+  && echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
+     > /etc/apt/sources.list.d/trivy.list \
+  && apt-get update \
+  && apt-get -y install --no-install-recommends trivy
 
 # install intent
 # Clone the repository
