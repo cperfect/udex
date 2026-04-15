@@ -18,7 +18,7 @@ The binary serves two distinct modes:
 
 One `udex` binary replaces the notion of a separate server binary. The server crate remains a library; `udex serve` is the entry point for running the server.
 
-```
+```bash
 udex serve                      # start the server (foreground)
 udex config init                # generate a default config file
 udex config validate            # validate an existing config file
@@ -98,21 +98,21 @@ The CLI crate depends on `udex-server` (for `udex serve`) and `udex-api` (for gR
 
 ### Server
 
-```
+```bash
 udex serve [--config <PATH>]
 ```
 Starts the gRPC server in the foreground. Reads config from the resolved config file (D4). Exits on SIGTERM/Ctrl+C.
 
 ### Config
 
-```
+```bash
 udex config init [--output <PATH>]      # write default config to ./udex.toml (or --output)
 udex config validate [--config <PATH>]  # load, resolve, validate; exit non-zero on error
 ```
 
 ### Index (requires running server + auth)
 
-```
+```bash
 udex index list
 udex index create <name> [--bulk-limit <n>] [--description <text>]
 udex index get <name>
@@ -122,7 +122,7 @@ udex index delete <name>
 
 ### Entry (requires running server + auth)
 
-```
+```bash
 udex entry create <index> --context <key=value>...
 udex entry get <index> --key <uuid>
 udex entry lookup <index> --context <key=value>...
@@ -133,7 +133,7 @@ Context key/value pairs are passed as repeated `--context key=value` flags. Pars
 
 ### Offline utilities
 
-```
+```bash
 udex token inspect <TOKEN>                    # decode JWT header+claims (no signature verification)
 udex context hash --context <key=value>...    # compute and print context hash
 ```
