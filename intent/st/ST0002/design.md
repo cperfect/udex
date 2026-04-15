@@ -117,7 +117,7 @@ udex index list
 udex index create <name> [--bulk-limit <n>] [--description <text>]
 udex index get <name>
 udex index update <name> [--bulk-limit <n>] [--description <text>]
-udex index delete <name>
+# udex index delete <name>  — hidden; DeleteIndex RPC not yet defined in the proto
 ```
 
 ### Entry (requires running server + auth)

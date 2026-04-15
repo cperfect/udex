@@ -135,7 +135,7 @@ This call is the first thing in `main()`. Forgetting it causes a panic at channe
 
 ### `udex index delete` is stubbed
 
-`IndexServiceClient` has no `delete_index` RPC in the current protobuf definition. The handler calls `anyhow::bail!("index delete is not yet implemented by the server")` and exits 1. This is intentional; the stub exists so the CLI argument surface is complete and backwards-compatible once the RPC is added.
+`IndexServiceClient` has no `delete_index` RPC in the current protobuf definition. The subcommand is registered but marked `#[command(hide = true)]` in `cli.rs` so it does not appear in `--help`. The handler still calls `anyhow::bail!` and exits 1 if invoked. Once the RPC is added to `udex.index.v1.proto` and the server handler is implemented, remove the `hide` attribute and implement the client call in `commands/index.rs`.
 
 ### `u32` → `i32` conversions for proto fields
 
@@ -153,6 +153,6 @@ The `--verbose` flag sets `RUST_LOG=debug` only when `RUST_LOG` is not already s
 
 - **`tonic::transport::Error` cannot be constructed in unit tests**: Attempted to write a unit test for exit code 8 by constructing a `tonic::transport::Error` from `std::io::Error`, but the `From` impl is not public. Removed the unit test; transport-failure exit code 8 is covered by the integration test `test_index_list_fails_without_server` which expects `.code(8)` from a real connection-refused error.
 
-- **`IndexServiceClient` has no delete RPC**: The proto for `IndexService` does not define a `DeleteIndex` method. Rather than silently ignoring the `delete` subcommand or removing it from the CLI surface, the handler stubs with a descriptive `bail!` so operators get a clear message and the argument surface stays stable.
+- **`IndexServiceClient` has no delete RPC**: The proto for `IndexService` does not define a `DeleteIndex` method. Rather than removing it from the CLI surface, the subcommand is hidden with `#[command(hide = true)]` so it is absent from `--help` but the argument surface is stable for when the RPC is added. The handler still `bail!`s if invoked directly.
 
 - **Transport errors vs. gRPC UNAVAILABLE confusion**: Early versions mapped both transport failures (connection refused) and gRPC `UNAVAILABLE` to exit 7. This made it impossible for callers to distinguish "server is overloaded" from "cannot reach the server at all". Resolved by splitting: gRPC status codes → 2–7, transport-level `tonic::transport::Error` → 8.

@@ -38,6 +38,9 @@ udex index get my-index
 udex index update my-index [--description "..."] [--bulk-limit 200]
 ```
 
+> **Note:** `udex index delete` is not yet available — the server-side RPC does not exist.
+> The subcommand is hidden from `--help` until it is implemented.
+
 ### Entry operations
 
 ```bash
