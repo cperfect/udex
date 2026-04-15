@@ -27,18 +27,10 @@ pub enum Error {
 
     #[error("Server error: {0}")]
     ServerError(String),
-    /// Type of error that occurs when a requested operation is not implemented
-    #[error("Not implemented: {0}")]
-    NotImplemented(String),
 
     /// Validation error
     #[error("Config validation failed: {0}")]
     ConfigValidation(String),
-
-    #[error("Authentication error: {0}")]
-    Authentication(String),
-    // #[error("Authorization error: {0}")]
-    // Authorization(String),
 }
 
 #[tonic::async_trait]

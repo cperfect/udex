@@ -90,16 +90,6 @@ impl AuthnInterceptor {
         Ok(claims)
     }
 
-    // fn validate_api_key(&self, token: &str) -> Result<(), Status> {
-    //     let api_key = self.config.api_key.as_ref()
-    //         .ok_or_else(|| Status::unauthenticated("API key not configured"))?;
-
-    //     if token == format!("Bearer {}", api_key).as_str() {
-    //         Ok(())
-    //     } else {
-    //         Err(Status::unauthenticated("Invalid API key"))
-    //     }
-    // }
 }
 
 #[tonic::async_trait]

@@ -63,11 +63,6 @@ impl Default for ServerConfig {
 impl ServerConfig {
     /// Validate the server configuration.
     pub fn validate(&self) -> Result<(), crate::Error> {
-        // if self.bind_address.ip().is_unspecified() {
-        //     return Err(ConfigError::Validation("bind_address cannot be unspecified".to_string()));
-        // }
-        //validate the authnz configuration
-        // Validate the AuthNZ configuration
         self.authnz.validate()?;
 
         Ok(())

@@ -19,15 +19,12 @@ use udex_api::{google_timestamp_to_offset_datetime, offset_datetime_to_google_ti
 use uuid::Uuid;
 
 pub struct PostgresDatastore {
-    #[allow(dead_code)]
-    config: DatastoreConfig,
     pool: Arc<PgPool>,
 }
 
 impl PostgresDatastore {
-    fn new(config: DatastoreConfig, pool: PgPool) -> Self {
+    fn new(_config: DatastoreConfig, pool: PgPool) -> Self {
         Self {
-            config,
             pool: Arc::new(pool),
         }
     }

@@ -18,22 +18,6 @@ type MaybeOnceType = (
     String, // database name for cleanup (kept in scope for automatic cleanup via ctor)
 );
 
-// fn create_sample_index(name: &str) -> Index {
-//     Index {
-//         name: name.to_string(),
-//         description: "Test index".to_string(),
-//         max_bulk_operations: 100,
-//         max_key_length: 256,
-//         max_value_length: 1024,
-//         max_kv_pairs_per_context: 50,
-//         hash_algorithm: HashAlgorithm::Sha1 as i32,
-//         created_at: Some(udex_api::now_timestamp()),
-//         created_by: "test_user".to_string(),
-//         updated_at: None,
-//         updated_by: None,
-//     }
-// }
-
 /// Initializer function.
 /// Starts a Postgres container shared between all tests.
 /// It will be stopped when the tests terminate.
