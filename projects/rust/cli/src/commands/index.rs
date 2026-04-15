@@ -102,14 +102,24 @@ pub async fn create(
     let channel = client.channel().await?;
     let mut grpc = IndexServiceClient::with_interceptor(channel, client.interceptor());
 
+    use std::convert::TryFrom;
+    let max_bulk_operations = i32::try_from(args.bulk_limit)
+        .map_err(|_| anyhow::anyhow!("bulk_limit too large (must fit in i32)"))?;
+    let max_key_length = i32::try_from(args.max_key_length)
+        .map_err(|_| anyhow::anyhow!("max_key_length too large (must fit in i32)"))?;
+    let max_value_length = i32::try_from(args.max_value_length)
+        .map_err(|_| anyhow::anyhow!("max_value_length too large (must fit in i32)"))?;
+    let max_kv_pairs_per_context = i32::try_from(args.max_context_pairs)
+        .map_err(|_| anyhow::anyhow!("max_context_pairs too large (must fit in i32)"))?;
+
     let resp = grpc
         .create_index(CreateIndexRequest {
             name: args.name,
             description: args.description.unwrap_or_default(),
-            max_bulk_operations: args.bulk_limit as i32,
-            max_key_length: args.max_key_length as i32,
-            max_value_length: args.max_value_length as i32,
-            max_kv_pairs_per_context: args.max_context_pairs as i32,
+            max_bulk_operations,
+            max_key_length,
+            max_value_length,
+            max_kv_pairs_per_context,
             hash_algorithm: udex_api::index::HashAlgorithm::Sha1 as i32,
         })
         .await
