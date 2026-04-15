@@ -27,3 +27,10 @@ GHSA-9f94-5g5w-gf6r  # Not exploitable: logic error in CRL Distribution Point ma
                      # aws-lc-sys is consumed exclusively via aws-lc-rs → rustls (confirmed
                      # via `cargo tree --invert aws-lc-sys`; no other consumer exists).
                      # Advisory: https://github.com/advisories/GHSA-9f94-5g5w-gf6r
+GHSA-hfpc-8r3f-gw53  # Not exploitable: signature validation bypass in PKCS7_verify().
+                     # PKCS7_verify() is an OpenSSL-compatible C API used for S/MIME
+                     # and code signing — not for TLS. Rustls validates certificates via
+                     # rustls-webpki using raw DER-encoded X.509; it has no PKCS#7 code
+                     # path. aws-lc-sys is consumed exclusively via aws-lc-rs → rustls;
+                     # PKCS7_verify() is never called anywhere in this dependency tree.
+                     # Advisory: https://github.com/advisories/GHSA-hfpc-8r3f-gw53
