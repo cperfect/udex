@@ -10,17 +10,20 @@ status: Done
 
 ## Objective
 
-[Clear statement of what this work package aims to accomplish]
+Add a GitHub Actions workflow that runs the Trivy scan on every push and PR to main, failing the build when MEDIUM or higher findings are detected, so insecure changes cannot be merged.
 
 ## Deliverables
 
-- [List of concrete deliverables]
+- `.github/workflows/02-Security.yml` — workflow using `aquasecurity/trivy-action@v0.35.0`, triggered on push, PR, weekly schedule, and manual dispatch; `exit-code: 1` and `severity: MEDIUM,HIGH,CRITICAL` set on the action step
 
 ## Acceptance Criteria
 
-- [ ] Criterion 1
-- [ ] Criterion 2
+- [x] Workflow runs on push and PR to main
+- [x] Workflow runs on manual dispatch (`workflow_dispatch`)
+- [x] Workflow runs on a weekly Monday schedule
+- [x] Action fails (exit code 1) when MEDIUM+ findings are present
+- [x] `Trivy Security Scan` status check available to add to branch protection rule
 
 ## Dependencies
 
-- [List any dependencies on other WPs or external factors]
+- WP-02 (`.trivy.yaml` config)

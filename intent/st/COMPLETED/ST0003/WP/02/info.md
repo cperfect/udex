@@ -10,17 +10,20 @@ status: Done
 
 ## Objective
 
-[Clear statement of what this work package aims to accomplish]
+Create the shared Trivy configuration file and an acknowledgement file for accepted findings, so local and CI scans use identical settings.
 
 ## Deliverables
 
-- [List of concrete deliverables]
+- `.trivy.yaml` — shared scan config: vuln, secret, misconfig, and license scanners; blocks on MEDIUM/HIGH/CRITICAL (exit-code 1)
+- `.trivyignore` — baseline suppression file with instructions for adding accepted findings with rationale
 
 ## Acceptance Criteria
 
-- [ ] Criterion 1
-- [ ] Criterion 2
+- [x] `.trivy.yaml` present at repo root with all four scanners configured
+- [x] `exit-code: 1` set so scans fail on MEDIUM+ findings
+- [x] `.trivyignore` present with documented suppression format
+- [x] `trivy fs --config .trivy.yaml .` runs successfully locally
 
 ## Dependencies
 
-- [List any dependencies on other WPs or external factors]
+- WP-01 (Trivy installed in devcontainer)

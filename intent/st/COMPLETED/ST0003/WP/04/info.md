@@ -10,17 +10,22 @@ status: Done
 
 ## Objective
 
-[Clear statement of what this work package aims to accomplish]
+Ensure developers know how to run Trivy locally (inside and outside the devcontainer) and understand the blocking behaviour, without needing to read the CI config.
 
 ## Deliverables
 
-- [List of concrete deliverables]
+- `README.md` — Security scanning section with the local run command, explanation of the MEDIUM+ blocking threshold, suppression instructions, and install steps for non-devcontainer users (macOS and Debian/Ubuntu)
+- `README.md` — Security badge linking to the `02-Security` workflow
 
 ## Acceptance Criteria
 
-- [ ] Criterion 1
-- [ ] Criterion 2
+- [x] `README.md` has a Security scanning section under Getting Started
+- [x] Local run command (`trivy fs --config .trivy.yaml .`) documented
+- [x] Blocking threshold (MEDIUM+) explained
+- [x] `.trivyignore` suppression workflow explained
+- [x] Install instructions provided for non-devcontainer developers
+- [x] Security badge added to README header
 
 ## Dependencies
 
-- [List any dependencies on other WPs or external factors]
+- WP-01, WP-02, WP-03

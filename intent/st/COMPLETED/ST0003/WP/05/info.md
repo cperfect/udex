@@ -10,17 +10,17 @@ status: Done
 
 ## Objective
 
-[Clear statement of what this work package aims to accomplish]
+Schedule an automatic weekly Trivy scan of the main branch so newly published CVEs are caught between PRs, not just at PR time.
 
 ## Deliverables
 
-- [List of concrete deliverables]
+- `.github/workflows/02-Security.yml` — `schedule` trigger added (`0 6 * * 1`, every Monday at 06:00 UTC) and `workflow_dispatch` added for on-demand manual runs
 
 ## Acceptance Criteria
 
-- [ ] Criterion 1
-- [ ] Criterion 2
+- [x] Workflow has a `schedule` trigger firing every Monday at 06:00 UTC
+- [x] Workflow has a `workflow_dispatch` trigger for manual runs from the GitHub Actions UI
 
 ## Dependencies
 
-- [List any dependencies on other WPs or external factors]
+- WP-03 (02-Security workflow)
