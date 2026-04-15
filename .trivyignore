@@ -34,3 +34,11 @@ GHSA-hfpc-8r3f-gw53  # Not exploitable: signature validation bypass in PKCS7_ver
                      # path. aws-lc-sys is consumed exclusively via aws-lc-rs → rustls;
                      # PKCS7_verify() is never called anywhere in this dependency tree.
                      # Advisory: https://github.com/advisories/GHSA-hfpc-8r3f-gw53
+GHSA-vw5v-4f2q-w9xf  # Not exploitable: distinct from GHSA-hfpc-8r3f-gw53 but same
+                     # root cause — both are in PKCS7_verify(). This one bypasses
+                     # certificate chain validation for all-but-final signers in a
+                     # multi-signer PKCS#7 object (vs. signature verification in issue 3).
+                     # PKCS7_verify() is never called in this dependency tree; aws-lc-sys
+                     # is consumed exclusively via aws-lc-rs → rustls which has no
+                     # PKCS#7 code path.
+                     # Advisory: https://github.com/advisories/GHSA-vw5v-4f2q-w9xf
