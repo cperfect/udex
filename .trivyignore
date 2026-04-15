@@ -18,3 +18,12 @@ GHSA-65p9-r9h6-22vj  # Not exploitable: timing side-channel in AES-CCM decryptio
                      # (EVP_aes_128/192/256_ccm). aws-lc-sys enters via rustls, which
                      # exclusively uses AES-GCM and ChaCha20-Poly1305 cipher suites
                      # (TLS 1.3). The AES-CCM EVP CIPHER API is never invoked.
+GHSA-9f94-5g5w-gf6r  # Not exploitable: logic error in CRL Distribution Point matching
+                     # requires X509_V_FLAG_CRL_CHECK to be enabled. This is an
+                     # OpenSSL-compatible C API flag that is structurally inaccessible
+                     # through rustls's Rust API surface — no consumer of rustls can
+                     # set it, even intentionally. CRL validation is performed entirely
+                     # by rustls-webpki, not the AWS-LC X.509 stack.
+                     # aws-lc-sys is consumed exclusively via aws-lc-rs → rustls (confirmed
+                     # via `cargo tree --invert aws-lc-sys`; no other consumer exists).
+                     # Advisory: https://github.com/advisories/GHSA-9f94-5g5w-gf6r
