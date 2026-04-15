@@ -14,7 +14,7 @@ use udex_api::{
     index::index_service_server::IndexServiceServer,
 };
 use udex_datastore::Datastore;
-use udex_datastore::{config::DatastoreConfig, postgres::PostgresDatastore, Migrator};
+use udex_datastore::{config::DatastoreConfig, postgres::PostgresDatastore, Migrator}; // trait must be in scope for .migrate() to be callable
 
 /// Initialises the PostgreSQL datastore, runs migrations, and starts the server.
 ///
