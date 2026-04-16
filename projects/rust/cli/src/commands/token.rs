@@ -3,8 +3,6 @@
 //! Handler for `udex token` subcommands.
 
 use anyhow::{Context, Result};
-use jsonwebtoken::{DecodingKey, Validation};
-use std::collections::HashSet;
 
 use crate::cli::TokenInspectArgs;
 
@@ -15,32 +13,8 @@ use crate::cli::TokenInspectArgs;
 pub fn inspect(args: TokenInspectArgs) -> Result<()> {
     let header = jsonwebtoken::decode_header(&args.token).context("invalid JWT header")?;
 
-    // Decode claims without verifying signature or checking standard claims.
-    let mut validation = Validation::default();
-    validation.insecure_disable_signature_validation();
-    validation.required_spec_claims = HashSet::new();
-    // Accept any algorithm since we're not verifying.
-    validation.algorithms = vec![
-        jsonwebtoken::Algorithm::HS256,
-        jsonwebtoken::Algorithm::HS384,
-        jsonwebtoken::Algorithm::HS512,
-        jsonwebtoken::Algorithm::RS256,
-        jsonwebtoken::Algorithm::RS384,
-        jsonwebtoken::Algorithm::RS512,
-        jsonwebtoken::Algorithm::ES256,
-        jsonwebtoken::Algorithm::ES384,
-        jsonwebtoken::Algorithm::PS256,
-        jsonwebtoken::Algorithm::PS384,
-        jsonwebtoken::Algorithm::PS512,
-        jsonwebtoken::Algorithm::EdDSA,
-    ];
-
-    let token_data = jsonwebtoken::decode::<serde_json::Value>(
-        &args.token,
-        &DecodingKey::from_secret(&[]),
-        &validation,
-    )
-    .context("invalid JWT claims")?;
+    let token_data = jsonwebtoken::dangerous::insecure_decode::<serde_json::Value>(&args.token)
+        .context("invalid JWT claims")?;
 
     println!("=== Header ===");
     println!("{}", serde_json::to_string_pretty(&header)?);

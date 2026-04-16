@@ -44,7 +44,7 @@ serde_yaml = "0.9"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "time"] }
 
 # Authentication
-jsonwebtoken = { version = "9.3" }
+jsonwebtoken = { version = "10.3", features = ["use_pem", "aws_lc_rs"] }
 
 # CLI
 clap = { version = "4", features = ["derive", "env"] }

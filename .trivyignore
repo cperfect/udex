@@ -12,3 +12,62 @@ DS-0002  # Not applicable: this is a devcontainer, not an application container.
          # Adding a USER instruction here would break the devcontainer lifecycle.
 DS-0026  # Not applicable: HEALTHCHECK is meaningless for a devcontainer —
          # VS Code manages the container lifecycle directly.
+
+# projects/rust/Cargo.lock — aws-lc-sys (via aws-lc-rs → rustls)
+GHSA-65p9-r9h6-22vj  # Not exploitable: timing side-channel in AES-CCM decryption
+                     # (EVP_aes_128/192/256_ccm). aws-lc-sys enters via rustls, which
+                     # exclusively uses AES-GCM and ChaCha20-Poly1305 cipher suites
+                     # (TLS 1.3). The AES-CCM EVP CIPHER API is never invoked.
+GHSA-9f94-5g5w-gf6r  # Not exploitable: logic error in CRL Distribution Point matching
+                     # requires X509_V_FLAG_CRL_CHECK to be enabled. This is an
+                     # OpenSSL-compatible C API flag that is structurally inaccessible
+                     # through both consumers of aws-lc-rs:
+                     #   1. rustls — CRL validation is performed by rustls-webpki, not the
+                     #      AWS-LC X.509 stack; no rustls API surface can set this flag.
+                     #   2. jsonwebtoken (aws_lc_rs feature) — performs ECDSA signature
+                     #      verification only; has no X.509 CRL validation code path.
+                     # Advisory: https://github.com/advisories/GHSA-9f94-5g5w-gf6r
+GHSA-hfpc-8r3f-gw53  # Not exploitable: signature validation bypass in PKCS7_verify().
+                     # PKCS7_verify() is an OpenSSL-compatible C API used for S/MIME
+                     # and code signing — not for TLS. Rustls validates certificates via
+                     # rustls-webpki using raw DER-encoded X.509; it has no PKCS#7 code
+                     # path. aws-lc-sys is consumed exclusively via aws-lc-rs → rustls;
+                     # PKCS7_verify() is never called anywhere in this dependency tree.
+                     # Advisory: https://github.com/advisories/GHSA-hfpc-8r3f-gw53
+GHSA-vw5v-4f2q-w9xf  # Not exploitable: distinct from GHSA-hfpc-8r3f-gw53 but same
+                     # root cause — both are in PKCS7_verify(). This one bypasses
+                     # certificate chain validation for all-but-final signers in a
+                     # multi-signer PKCS#7 object (vs. signature verification in issue 3).
+                     # PKCS7_verify() is never called in this dependency tree; aws-lc-sys
+                     # is consumed exclusively via aws-lc-rs → rustls which has no
+                     # PKCS#7 code path.
+                     # Advisory: https://github.com/advisories/GHSA-vw5v-4f2q-w9xf
+
+# projects/rust/Cargo.lock — rand 0.8.5
+#
+# FIXME: Cannot be patched without upstream action. The fix is in rand 0.9.3+,
+# but all three consumers pin rand = "0.8":
+#   - sqlx-postgres (sqlx v0.8.x)
+#   - sqlx-mysql    (sqlx v0.8.x)
+#   - backoff       (v0.4.x)
+# To resolve: wait for sqlx 0.9+ and backoff 0.5+ (or whatever version bumps
+# rand to 0.9), then run `cargo update` and remove this suppression.
+# Track upstream: https://github.com/launchbadge/sqlx/issues (sqlx rand bump)
+#                 https://github.com/ihrwein/backoff/issues (backoff rand bump)
+GHSA-cq8v-f236-94qc  # Not exploitable: aliased mutable references in ThreadRng
+                     # reseeding (rand::thread_rng + log feature interaction).
+                     # Requires ALL FIVE conditions simultaneously:
+                     #   1. rand compiled with both `log` AND `thread_rng` features
+                     #   2. A custom log-crate Logger installed in the process
+                     #   3. That logger calls rand::rng() from inside a log callback
+                     #   4. ThreadRng reseeding triggers (every 64 KB of output)
+                     #   5. Trace-level logging active, or warn-level with getrandom
+                     #      unable to provide entropy
+                     # None of these conditions hold: our logging stack is tracing +
+                     # tracing-subscriber with no log-crate bridge that calls into
+                     # rand. No consumer (sqlx, backoff) injects rand calls into
+                     # log callbacks.
+                     # Cannot be patched without upstream: fix is in rand 0.9.3;
+                     # all consumers declare rand = "0.8" — see FIXME above.
+                     # Advisory: https://github.com/advisories/GHSA-cq8v-f236-94qc
+                     # RUSTSEC: https://rustsec.org/advisories/RUSTSEC-2026-0097.html
