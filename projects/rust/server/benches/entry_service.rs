@@ -5,50 +5,130 @@
 //! Run with: `cargo bench --bench entry_service`
 //! Compile-check only (no DB): `cargo bench --bench entry_service --no-run`
 //!
+//! Benchmark naming convention: `entry/<operation>` (e.g. `entry/create`).
 //! See `benches/common/mod.rs` for harness setup details.
 
 mod common;
 
-use criterion::{criterion_group, criterion_main, Criterion};
-use udex_api::entry::{ContextInput, CreateEntryRequest, KeyValuePair, Value};
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use udex_api::entry::{
+    CreateEntryRequest, DeleteEntryRequest, LookupContextByKeyRequest, LookupKeysByContextRequest,
+};
 
-/// Smoke benchmark: one `create_entry` round-trip through the full gRPC stack.
+/// `entry/create` — insert one entry through the full gRPC stack.
 ///
-/// Each iteration inserts a new entry row (server-generated UUID key) against
-/// a fixed context. The context is shared by hash in the DB — multiple entries
-/// can reference the same context — so this exercises the hot path without
-/// redundant context inserts after the first iteration.
+/// Each iteration produces a new server-generated UUID entry row against a
+/// shared context (the context is reused by hash — see schema). This
+/// measures the hot path: auth, routing, context lookup, and entry insert.
 fn bench_create_entry(c: &mut Criterion) {
     let fix = common::fixture();
 
     c.bench_function("entry/create", |b| {
         b.to_async(fix.rt()).iter(|| async {
             let mut client = fix.entry_client();
-
-            let req = fix.authed(CreateEntryRequest {
-                index_name: fix.index_name.clone(),
-                context: Some(ContextInput {
-                    pairs: vec![KeyValuePair {
-                        key: "bench_user_id".to_string(),
-                        value: Some(Value {
-                            value: Some(udex_api::entry::value::Value::StringValue(
-                                "bench_user_001".to_string(),
-                            )),
-                        }),
-                        kek_id: None,
-                    }],
-                    dek: None,
-                    kek_id: None,
-                }),
-            });
-
             client
-                .create_entry(req)
+                .create_entry(fix.authed(CreateEntryRequest {
+                    index_name: fix.index_name.clone(),
+                    context: Some(common::BenchFixture::bench_context()),
+                }))
                 .await
-                .expect("create_entry bench iteration failed");
+                .expect("create_entry failed");
         });
     });
 }
 
-criterion_group!(benches, bench_create_entry);
+/// `entry/get_by_key` — lookup context by entry key (entry exists).
+///
+/// Uses the seed entry created during fixture setup — no per-iteration
+/// database writes, isolating read performance.
+fn bench_get_by_key(c: &mut Criterion) {
+    let fix = common::fixture();
+
+    c.bench_function("entry/get_by_key", |b| {
+        b.to_async(fix.rt()).iter(|| async {
+            let mut client = fix.entry_client();
+            client
+                .lookup_context_by_key(fix.authed(LookupContextByKeyRequest {
+                    index_name: fix.index_name.clone(),
+                    key: fix.seed_entry_key.clone(),
+                }))
+                .await
+                .expect("lookup_context_by_key failed");
+        });
+    });
+}
+
+/// `entry/get_by_context` — lookup entry keys by context hash (single result).
+///
+/// Uses the seed entry's context hash. Multiple entries may share the same
+/// context, so this benchmarks the context→keys resolution path.
+fn bench_get_by_context(c: &mut Criterion) {
+    let fix = common::fixture();
+
+    c.bench_function("entry/get_by_context", |b| {
+        b.to_async(fix.rt()).iter(|| async {
+            let mut client = fix.entry_client();
+            client
+                .lookup_keys_by_context(fix.authed(LookupKeysByContextRequest {
+                    index_name: fix.index_name.clone(),
+                    context_hash: fix.seed_context_hash.clone(),
+                }))
+                .await
+                .expect("lookup_keys_by_context failed");
+        });
+    });
+}
+
+/// `entry/delete` — delete one entry.
+///
+/// Uses `iter_batched` so each measured iteration gets a freshly-created
+/// entry to delete. Setup runs outside Criterion's timing window via
+/// `rt.block_on`, isolating pure delete latency. Plain `iter_batched`
+/// (not `to_async`) is used because `AsyncBencher::iter_batched` requires
+/// a synchronous setup closure.
+fn bench_delete_entry(c: &mut Criterion) {
+    let fix = common::fixture();
+
+    c.bench_function("entry/delete", |b| {
+        b.iter_batched(
+            // Setup: create a disposable entry outside the timing window.
+            || {
+                fix.rt().block_on(async {
+                    let mut client = fix.entry_client();
+                    client
+                        .create_entry(fix.authed(CreateEntryRequest {
+                            index_name: fix.index_name.clone(),
+                            context: Some(common::BenchFixture::bench_context()),
+                        }))
+                        .await
+                        .expect("create entry for delete bench setup")
+                        .into_inner()
+                        .key
+                })
+            },
+            // Routine: delete the entry — this is what Criterion times.
+            |key| {
+                fix.rt().block_on(async move {
+                    let mut client = fix.entry_client();
+                    client
+                        .delete_entry(fix.authed(DeleteEntryRequest {
+                            index_name: fix.index_name.clone(),
+                            key,
+                        }))
+                        .await
+                        .expect("delete_entry failed");
+                })
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
+criterion_group!(
+    benches,
+    bench_create_entry,
+    bench_get_by_key,
+    bench_get_by_context,
+    bench_delete_entry,
+);
 criterion_main!(benches);

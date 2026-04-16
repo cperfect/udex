@@ -15,6 +15,7 @@ use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use udex_api::authz::claims::Claims;
 use udex_api::entry::entry_service_client::EntryServiceClient;
+use udex_api::entry::{ContextInput, CreateEntryRequest, KeyValuePair, Value};
 use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
 use udex_server::{config::ServerConfig, server};
@@ -32,6 +33,11 @@ pub struct BenchFixture {
     channel: Channel,
     pub index_name: String,
     bearer_token: String,
+    /// Key of a pre-created seed entry — used by read benchmarks so they
+    /// don't need per-iteration setup.
+    pub seed_entry_key: String,
+    /// Context hash of the seed entry — used by `get_by_context` benchmarks.
+    pub seed_context_hash: String,
     // Held to prevent the server task and database from being dropped.
     _server_handle: tokio::task::JoinHandle<()>,
     _db_name: String,
@@ -60,6 +66,24 @@ impl BenchFixture {
     pub fn rt(&self) -> &tokio::runtime::Runtime {
         &self.rt
     }
+
+    /// Returns a standard single-pair context input used for seeding and
+    /// per-iteration entry creation in benchmarks.
+    pub fn bench_context() -> ContextInput {
+        ContextInput {
+            pairs: vec![KeyValuePair {
+                key: "bench_user_id".to_string(),
+                value: Some(Value {
+                    value: Some(udex_api::entry::value::Value::StringValue(
+                        "bench_user_001".to_string(),
+                    )),
+                }),
+                kek_id: None,
+            }],
+            dek: None,
+            kek_id: None,
+        }
+    }
 }
 
 /// Returns the process-wide benchmark fixture, initialising it on first call.
@@ -75,26 +99,37 @@ pub fn fixture() -> &'static BenchFixture {
 
         let rt = tokio::runtime::Runtime::new().expect("create tokio runtime");
 
-        let (channel, index_name, bearer_token, server_handle, db_name) =
-            rt.block_on(start_server_and_connect());
+        let (
+            channel,
+            index_name,
+            bearer_token,
+            seed_entry_key,
+            seed_context_hash,
+            server_handle,
+            db_name,
+        ) = rt.block_on(start_server_and_connect());
 
         BenchFixture {
             rt,
             channel,
             index_name,
             bearer_token,
+            seed_entry_key,
+            seed_context_hash,
             _server_handle: server_handle,
             _db_name: db_name,
         }
     })
 }
 
-/// Starts the gRPC server against a fresh PostgreSQL database and returns a
-/// connected TLS channel along with the metadata needed for benchmarks.
+/// Starts the gRPC server against a fresh PostgreSQL database, connects a TLS
+/// channel, and creates a seed entry for read benchmarks.
 async fn start_server_and_connect() -> (
     Channel,
     String, // index_name
     String, // bearer_token ("Bearer <jwt>")
+    String, // seed_entry_key
+    String, // seed_context_hash
     tokio::task::JoinHandle<()>,
     String, // db_name for cleanup
 ) {
@@ -186,5 +221,29 @@ async fn start_server_and_connect() -> (
     let jwt_token = encode(&header, &claims, &signing_key).expect("encode bench JWT");
     let bearer_token = format!("Bearer {}", jwt_token);
 
-    (channel, index_name, bearer_token, server_handle, db_name)
+    // Create a seed entry that read benchmarks can look up without per-iteration setup.
+    let mut client = EntryServiceClient::new(channel.clone());
+    let mut seed_req = tonic::Request::new(CreateEntryRequest {
+        index_name: index_name.clone(),
+        context: Some(BenchFixture::bench_context()),
+    });
+    seed_req.metadata_mut().insert(
+        "authorization",
+        bearer_token.parse().expect("pre-validated bearer token"),
+    );
+    let seed_resp = client
+        .create_entry(seed_req)
+        .await
+        .expect("create seed entry during bench setup")
+        .into_inner();
+
+    (
+        channel,
+        index_name,
+        bearer_token,
+        seed_resp.key,
+        seed_resp.context_hash,
+        server_handle,
+        db_name,
+    )
 }
