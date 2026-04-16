@@ -10,9 +10,12 @@
 
 mod common;
 
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
+use std::time::Duration;
 use udex_api::entry::{
-    CreateEntryRequest, DeleteEntryRequest, LookupContextByKeyRequest, LookupKeysByContextRequest,
+    bulk_read_entry_operation::Operation as ReadOp, BulkReadEntryOperation,
+    BulkReadEntryOperationRequest, CreateEntryRequest, DeleteEntryRequest,
+    LookupContextByKeyRequest, LookupKeysByContextRequest,
 };
 
 /// `entry/create` — insert one entry through the full gRPC stack.
@@ -124,11 +127,78 @@ fn bench_delete_entry(c: &mut Criterion) {
     });
 }
 
+/// `bulk_write/<N>` — create N entries in a single bulk write call.
+///
+/// Throughput is reported as entries/sec. Measurement time is extended for
+/// larger N to ensure Criterion collects enough samples.
+fn bench_bulk_write(c: &mut Criterion) {
+    let fix = common::fixture();
+
+    let mut group = c.benchmark_group("bulk_write");
+    group.measurement_time(Duration::from_secs(30));
+
+    for n in [10usize, 100, 1000] {
+        group.throughput(Throughput::Elements(n as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
+            b.to_async(fix.rt()).iter(|| async move {
+                let mut client = fix.entry_client();
+                client
+                    .bulk_write_entry_operation(fix.authed(fix.bulk_create_request(n)))
+                    .await
+                    .expect("bulk_write_entry_operation failed");
+            });
+        });
+    }
+
+    group.finish();
+}
+
+/// `bulk_read/<N>` — read N entries by key in a single bulk read call.
+///
+/// Uses pre-seeded keys from the fixture so no writes occur during measurement.
+/// Throughput is reported as entries/sec. Measurement time is extended for
+/// larger N to ensure Criterion collects enough samples.
+fn bench_bulk_read(c: &mut Criterion) {
+    let fix = common::fixture();
+
+    let mut group = c.benchmark_group("bulk_read");
+    group.measurement_time(Duration::from_secs(30));
+
+    for n in [10usize, 100, 1000] {
+        group.throughput(Throughput::Elements(n as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
+            b.to_async(fix.rt()).iter(|| async move {
+                let mut client = fix.entry_client();
+                let operations: Vec<BulkReadEntryOperation> = fix.bulk_seed_keys[..n]
+                    .iter()
+                    .map(|key| BulkReadEntryOperation {
+                        operation: Some(ReadOp::LookupContext(LookupContextByKeyRequest {
+                            index_name: fix.index_name.clone(),
+                            key: key.clone(),
+                        })),
+                    })
+                    .collect();
+                client
+                    .bulk_read_entry_operation(fix.authed(BulkReadEntryOperationRequest {
+                        index_name: fix.index_name.clone(),
+                        operations,
+                    }))
+                    .await
+                    .expect("bulk_read_entry_operation failed");
+            });
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_create_entry,
     bench_get_by_key,
     bench_get_by_context,
     bench_delete_entry,
+    bench_bulk_write,
+    bench_bulk_read,
 );
 criterion_main!(benches);

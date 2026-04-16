@@ -14,8 +14,12 @@ use time::OffsetDateTime;
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use udex_api::authz::claims::Claims;
+use udex_api::entry::bulk_write_entry_operation::Operation as WriteOp;
 use udex_api::entry::entry_service_client::EntryServiceClient;
-use udex_api::entry::{ContextInput, CreateEntryRequest, KeyValuePair, Value};
+use udex_api::entry::{
+    BulkWriteEntryOperation, BulkWriteEntryOperationRequest, ContextInput, CreateEntryRequest,
+    KeyValuePair, Value,
+};
 use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
 use udex_server::{config::ServerConfig, server};
@@ -23,6 +27,9 @@ use udex_server::{config::ServerConfig, server};
 /// Bind address for the benchmark server — distinct from the integration test address (50052).
 const BENCH_BIND_ADDR: &str = "127.0.0.1:50060";
 const ID_PREFIX: &str = "bench-entry-service";
+
+/// Number of entries pre-seeded for bulk read benchmarks.
+pub const BULK_SEED_COUNT: usize = 1000;
 
 /// All resources needed to run entry service benchmarks.
 ///
@@ -33,11 +40,13 @@ pub struct BenchFixture {
     channel: Channel,
     pub index_name: String,
     bearer_token: String,
-    /// Key of a pre-created seed entry — used by read benchmarks so they
-    /// don't need per-iteration setup.
+    /// Key of a pre-created seed entry — used by single-entry read benchmarks.
     pub seed_entry_key: String,
     /// Context hash of the seed entry — used by `get_by_context` benchmarks.
     pub seed_context_hash: String,
+    /// Keys of `BULK_SEED_COUNT` pre-created entries — used by bulk read benchmarks.
+    /// The first N keys cover bulk reads at N = 10, 100, and 1000.
+    pub bulk_seed_keys: Vec<String>,
     // Held to prevent the server task and database from being dropped.
     _server_handle: tokio::task::JoinHandle<()>,
     _db_name: String,
@@ -84,6 +93,22 @@ impl BenchFixture {
             kek_id: None,
         }
     }
+
+    /// Builds a bulk write request creating `n` new entries.
+    pub fn bulk_create_request(&self, n: usize) -> BulkWriteEntryOperationRequest {
+        let operations = (0..n)
+            .map(|_| BulkWriteEntryOperation {
+                operation: Some(WriteOp::CreateEntry(CreateEntryRequest {
+                    index_name: self.index_name.clone(),
+                    context: Some(Self::bench_context()),
+                })),
+            })
+            .collect();
+        BulkWriteEntryOperationRequest {
+            index_name: self.index_name.clone(),
+            operations,
+        }
+    }
 }
 
 /// Returns the process-wide benchmark fixture, initialising it on first call.
@@ -105,6 +130,7 @@ pub fn fixture() -> &'static BenchFixture {
             bearer_token,
             seed_entry_key,
             seed_context_hash,
+            bulk_seed_keys,
             server_handle,
             db_name,
         ) = rt.block_on(start_server_and_connect());
@@ -116,6 +142,7 @@ pub fn fixture() -> &'static BenchFixture {
             bearer_token,
             seed_entry_key,
             seed_context_hash,
+            bulk_seed_keys,
             _server_handle: server_handle,
             _db_name: db_name,
         }
@@ -123,13 +150,14 @@ pub fn fixture() -> &'static BenchFixture {
 }
 
 /// Starts the gRPC server against a fresh PostgreSQL database, connects a TLS
-/// channel, and creates a seed entry for read benchmarks.
+/// channel, and pre-seeds entries for read benchmarks.
 async fn start_server_and_connect() -> (
     Channel,
-    String, // index_name
-    String, // bearer_token ("Bearer <jwt>")
-    String, // seed_entry_key
-    String, // seed_context_hash
+    String,      // index_name
+    String,      // bearer_token ("Bearer <jwt>")
+    String,      // seed_entry_key  (single-entry reads)
+    String,      // seed_context_hash
+    Vec<String>, // bulk_seed_keys  (bulk reads, len = BULK_SEED_COUNT)
     tokio::task::JoinHandle<()>,
     String, // db_name for cleanup
 ) {
@@ -221,8 +249,9 @@ async fn start_server_and_connect() -> (
     let jwt_token = encode(&header, &claims, &signing_key).expect("encode bench JWT");
     let bearer_token = format!("Bearer {}", jwt_token);
 
-    // Create a seed entry that read benchmarks can look up without per-iteration setup.
     let mut client = EntryServiceClient::new(channel.clone());
+
+    // Seed one entry for single-entry read benchmarks.
     let mut seed_req = tonic::Request::new(CreateEntryRequest {
         index_name: index_name.clone(),
         context: Some(BenchFixture::bench_context()),
@@ -237,12 +266,53 @@ async fn start_server_and_connect() -> (
         .expect("create seed entry during bench setup")
         .into_inner();
 
+    // Seed BULK_SEED_COUNT entries for bulk read benchmarks via a single bulk write.
+    // All entries share the same context (reused by hash) — unique keys are server-generated.
+    let bulk_ops: Vec<BulkWriteEntryOperation> = (0..BULK_SEED_COUNT)
+        .map(|_| BulkWriteEntryOperation {
+            operation: Some(WriteOp::CreateEntry(CreateEntryRequest {
+                index_name: index_name.clone(),
+                context: Some(BenchFixture::bench_context()),
+            })),
+        })
+        .collect();
+    let mut bulk_req = tonic::Request::new(BulkWriteEntryOperationRequest {
+        index_name: index_name.clone(),
+        operations: bulk_ops,
+    });
+    bulk_req.metadata_mut().insert(
+        "authorization",
+        bearer_token.parse().expect("pre-validated bearer token"),
+    );
+    let bulk_seed_keys: Vec<String> = client
+        .bulk_write_entry_operation(bulk_req)
+        .await
+        .expect("bulk seed during bench setup")
+        .into_inner()
+        .results
+        .into_iter()
+        .filter_map(|r| {
+            use udex_api::entry::bulk_write_entry_operation_result::Result as WriteResult;
+            match r.result? {
+                WriteResult::CreateEntry(resp) => Some(resp.key),
+                WriteResult::DeleteEntry(_) => None,
+            }
+        })
+        .collect();
+
+    assert_eq!(
+        bulk_seed_keys.len(),
+        BULK_SEED_COUNT,
+        "bulk seed produced unexpected number of keys"
+    );
+
     (
         channel,
         index_name,
         bearer_token,
         seed_resp.key,
         seed_resp.context_hash,
+        bulk_seed_keys,
         server_handle,
         db_name,
     )
