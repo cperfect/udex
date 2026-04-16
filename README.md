@@ -59,6 +59,7 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres cargo test
 See [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) for the full pre-commit checklist and local check commands.
 
 ### Security scanning
+> Dependabot has been disabled and replaced by regular scanning with trivy. The results are uploaded to the GitHub security panel for this repository.
 
 [Trivy](https://trivy.dev) is pre-installed in the dev container. To run the same scan that CI runs:
 
