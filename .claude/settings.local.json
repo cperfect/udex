@@ -18,7 +18,8 @@
       "Bash(cargo test:*)",
       "Bash(intent st:*)",
       "Bash(cargo fmt:*)",
-      "Bash(cargo clippy:*)"
+      "Bash(cargo clippy:*)",
+      "Read(//home/vscode/.claude/skills/**)"
     ]
   }
 }
