@@ -30,6 +30,10 @@ maybe-once = { workspace = true }
 ctor = "0.2"  # For reliable test database cleanup on exit
 
 
+[[bench]]
+name = "postgres_datastore"
+harness = false
+
 [dev-dependencies]
 udex-datastore = { path = "../datastore", features = ["integration_test"] }
 tokio = { workspace = true }
@@ -37,3 +41,4 @@ tracing-subscriber = { workspace = true }
 rstest = { workspace = true }
 sqlx-cli = { workspace = true }
 tokio-shared-rt = { workspace = true }
+criterion = { workspace = true }
