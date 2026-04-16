@@ -31,16 +31,21 @@ validator = { version = "0.20", features = ["derive"] }
 tokio-rustls = "0.26.2"
 time = { workspace = true }
 
+[[bench]]
+name = "entry_service"
+harness = false
+
 [dev-dependencies]
 udex-datastore = { path = "../datastore", features = ["integration_test"]}
 tokio = { workspace = true }
 tracing-test = { workspace = true }
 tokio-shared-rt = { workspace = true }
 tonic = { workspace = true }
-maybe-once = { workspace = true } 
+maybe-once = { workspace = true }
 rstest = { workspace = true }
 sqlx = { workspace = true }
 mockall = { workspace = true }
 rustls = { workspace = true }
+criterion = { workspace = true }
 
  

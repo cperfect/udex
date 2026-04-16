@@ -54,6 +54,9 @@ tempfile = "3"
 # Build dependencies
 tonic-build = "0.13"
 
+# Benchmarking
+criterion = { version = "0.5", features = ["async_tokio"] }
+
 # Dev dependencies
 tokio-shared-rt = "0.1.0"
 assert_cmd = "2"
