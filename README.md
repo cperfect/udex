@@ -9,14 +9,13 @@ Udex
 
 ## Overview
 
-Udex is a universal lookup index that maps arbitrary unique keys against contexts. It is lightweight, fast, and efficient for high transaction volumes across organisational and regulatory boundaries.  entity identifiers across boundaries.
+Udex is a universal index that maps arbitrary unique keys against contexts. It is lightweight, fast, and efficient for high transaction volumes across organisational and regulatory boundaries.  entity identifiers across boundaries.
 
 While this could just be used as directory where the contexts are the entire entity records it is primarily intended for use in integration and data management scenarios:
 
 1. Providing stable and per-party keys for resolution across integration boundaries so that no parties share the same keys for the same entities (preventing compromise of one party leading to compromise of another) and that no external party needs to know the internal keys of the entity so that the internals are decoupled from the interfaces.
 2. Replacing a sensitive primary key with an non-sensitive one - e.g. use a UUID rather than a Credit Card number (PAN, which is PCI-DSS restricted) as keys to interact with Credit Card accounts.
 3. Attaching arbitrary metadata to an entity when the native store doesn't support it - for example data classification and leasing information.
-
 
 For full detail on the data model, operations, components, security model, and design principles, see [docs/intent/ARCHITECTURE.md](docs/intent/ARCHITECTURE.md).
 
@@ -27,6 +26,7 @@ For full detail on the data model, operations, components, security model, and d
 ### Prerequisites
 
 - **Rust** (stable) — install via [rustup](https://rustup.rs/)
+- **PostgreSQL 16+** — the datastore; run locally via Docker or use the dev container (which starts it automatically)
 - **Docker** — used to run a local PostgreSQL instance for integration tests
 - **protoc** (Protocol Buffers compiler) — required to build the API crate from `.proto` definitions
 
@@ -91,11 +91,19 @@ This project is developed using [Claude Code](https://claude.ai/code) (Anthropic
 
 ## Tech Stack
 
-* **API spec**: Protobuf v3 — server, client, data models, and SDKs are generated from proto definitions.
-* **Language**: Rust — server and CLI built on [tokio](https://docs.rs/tokio) with [tonic](https://docs.rs/tonic) for gRPC. _(Deferred)_ Optional REST interface via Hyper.
-* **CLI**: `udex` binary — manages server lifecycle, indices, and entries; offline JWT inspection and context hashing. See [projects/rust/cli/README.md](projects/rust/cli/README.md).
-* **Versioning**: Udex is semantically versioned.
-* _(Deferred)_ **Observability**: OpenTelemetry tracing and metrics.
+| Concern | Technology |
+|---|---|
+| API spec | [Protobuf v3](https://protobuf.dev) — server, client, data models, and SDKs generated from `.proto` definitions via [prost](https://docs.rs/prost) / [tonic-build](https://docs.rs/tonic-build) |
+| Transport | [tonic](https://docs.rs/tonic) — gRPC over HTTP/2 with TLS |
+| Async runtime | [tokio](https://docs.rs/tokio) |
+| TLS | [rustls](https://docs.rs/rustls) with [aws-lc-rs](https://docs.rs/aws-lc-rs) crypto backend |
+| Datastore | [PostgreSQL 16+](https://www.postgresql.org) accessed via [sqlx](https://docs.rs/sqlx) (compile-time verified queries, async, connection pooling) |
+| Authentication | JWT (ES256) via [jsonwebtoken](https://docs.rs/jsonwebtoken) |
+| Logging | [tracing](https://docs.rs/tracing) + [tracing-subscriber](https://docs.rs/tracing-subscriber) (structured JSON in production, human-readable in development) |
+| CLI | [clap](https://docs.rs/clap) — `udex` binary for server lifecycle, index/entry management, JWT inspection, and context hashing |
+| Error handling | [thiserror](https://docs.rs/thiserror) (library errors) + [anyhow](https://docs.rs/anyhow) (application errors) |
+
+_(Deferred)_ Optional REST interface and OpenTelemetry tracing/metrics.
 
 ## License
 
