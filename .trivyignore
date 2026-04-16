@@ -42,3 +42,32 @@ GHSA-vw5v-4f2q-w9xf  # Not exploitable: distinct from GHSA-hfpc-8r3f-gw53 but sa
                      # is consumed exclusively via aws-lc-rs → rustls which has no
                      # PKCS#7 code path.
                      # Advisory: https://github.com/advisories/GHSA-vw5v-4f2q-w9xf
+
+# projects/rust/Cargo.lock — rand 0.8.5
+#
+# FIXME: Cannot be patched without upstream action. The fix is in rand 0.9.3+,
+# but all three consumers pin rand = "0.8":
+#   - sqlx-postgres (sqlx v0.8.x)
+#   - sqlx-mysql    (sqlx v0.8.x)
+#   - backoff       (v0.4.x)
+# To resolve: wait for sqlx 0.9+ and backoff 0.5+ (or whatever version bumps
+# rand to 0.9), then run `cargo update` and remove this suppression.
+# Track upstream: https://github.com/launchbadge/sqlx/issues (sqlx rand bump)
+#                 https://github.com/ihrwein/backoff/issues (backoff rand bump)
+GHSA-cq8v-f236-94qc  # Not exploitable: aliased mutable references in ThreadRng
+                     # reseeding (rand::thread_rng + log feature interaction).
+                     # Requires ALL FIVE conditions simultaneously:
+                     #   1. rand compiled with both `log` AND `thread_rng` features
+                     #   2. A custom log-crate Logger installed in the process
+                     #   3. That logger calls rand::rng() from inside a log callback
+                     #   4. ThreadRng reseeding triggers (every 64 KB of output)
+                     #   5. Trace-level logging active, or warn-level with getrandom
+                     #      unable to provide entropy
+                     # None of these conditions hold: our logging stack is tracing +
+                     # tracing-subscriber with no log-crate bridge that calls into
+                     # rand. No consumer (sqlx, backoff) injects rand calls into
+                     # log callbacks.
+                     # Cannot be patched without upstream: fix is in rand 0.9.3;
+                     # all consumers declare rand = "0.8" — see FIXME above.
+                     # Advisory: https://github.com/advisories/GHSA-cq8v-f236-94qc
+                     # RUSTSEC: https://rustsec.org/advisories/RUSTSEC-2026-0097.html
