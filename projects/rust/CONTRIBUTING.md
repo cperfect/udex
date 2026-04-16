@@ -46,6 +46,51 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
+### Benchmarks
+
+The project has a Criterion benchmark suite covering two layers of the Entry API hot path:
+
+| Benchmark file | Layer | What it measures |
+|---|---|---|
+| `server/benches/entry_service.rs` | gRPC end-to-end | Full stack: client → auth → server → DB |
+| `datastore/benches/postgres_datastore.rs` | Datastore direct | DB queries + connection pool only |
+
+Running both and comparing the numbers quantifies the overhead added by gRPC, auth, and middleware.
+
+#### Running benchmarks locally
+
+```bash
+# Requires DATABASE_URL pointing at a running PostgreSQL instance.
+
+# Run all benchmarks (both crates)
+cargo bench
+
+# Run only the gRPC layer benchmarks
+cargo bench --bench entry_service
+
+# Run only the datastore layer benchmarks
+cargo bench --bench postgres_datastore
+
+# Compile-check benchmarks without running them (no DB required — same as CI)
+cargo bench --no-run
+```
+
+Criterion writes HTML reports to `target/criterion/` after each run. Open `target/criterion/report/index.html` in a browser to view them.
+
+#### Saving and comparing baselines
+
+Criterion detects regressions automatically when a previous run exists in `target/criterion/`. To capture a named baseline for explicit comparison:
+
+```bash
+# Save the current results as a named baseline
+cargo bench -- --save-baseline main
+
+# Run benchmarks and compare against the saved baseline
+cargo bench -- --baseline main
+```
+
+To update the baseline after an intentional performance change, re-run `--save-baseline` with the same name.
+
 ### Claude Skills
 
 Two Claude Code skills are available to assist with code quality:
