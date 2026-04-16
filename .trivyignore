@@ -21,11 +21,11 @@ GHSA-65p9-r9h6-22vj  # Not exploitable: timing side-channel in AES-CCM decryptio
 GHSA-9f94-5g5w-gf6r  # Not exploitable: logic error in CRL Distribution Point matching
                      # requires X509_V_FLAG_CRL_CHECK to be enabled. This is an
                      # OpenSSL-compatible C API flag that is structurally inaccessible
-                     # through rustls's Rust API surface — no consumer of rustls can
-                     # set it, even intentionally. CRL validation is performed entirely
-                     # by rustls-webpki, not the AWS-LC X.509 stack.
-                     # aws-lc-sys is consumed exclusively via aws-lc-rs → rustls (confirmed
-                     # via `cargo tree --invert aws-lc-sys`; no other consumer exists).
+                     # through both consumers of aws-lc-rs:
+                     #   1. rustls — CRL validation is performed by rustls-webpki, not the
+                     #      AWS-LC X.509 stack; no rustls API surface can set this flag.
+                     #   2. jsonwebtoken (aws_lc_rs feature) — performs ECDSA signature
+                     #      verification only; has no X.509 CRL validation code path.
                      # Advisory: https://github.com/advisories/GHSA-9f94-5g5w-gf6r
 GHSA-hfpc-8r3f-gw53  # Not exploitable: signature validation bypass in PKCS7_verify().
                      # PKCS7_verify() is an OpenSSL-compatible C API used for S/MIME
