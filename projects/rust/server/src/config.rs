@@ -49,7 +49,9 @@ pub struct AuthNzConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            bind_address: "127.0.0.1:50051".parse().unwrap(),
+            bind_address: "127.0.0.1:50051"
+                .parse()
+                .expect("hardcoded default bind address is always valid"),
             request_timeout: Duration::from_secs(30),
             max_connections: 1000,
             max_message_size: 4 * 1024 * 1024, // 4MB

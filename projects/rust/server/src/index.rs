@@ -129,7 +129,7 @@ where
                     .hash_algorithm
                     .expect("Index update must contain hash_algorithm"),
                 created_at: Some(udex_api::now_timestamp()),
-                created_by: "init".to_string(), // TODO: useful updated by from auth
+                created_by: "init".to_string(), // TODO: set from JWT sub claim once Claims exposes sub()
                 updated_at: None,
                 updated_by: None,
             };
@@ -148,7 +148,7 @@ where
                 {
                     // update the existing index
                     self.update_index_internal(&index_request.name, update.clone(), "init")
-                        .await?; //TODO useful updated by from auth
+                        .await?; // TODO: set from JWT sub claim once Claims exposes sub()
                 }
                 // else: index already exists and is the same, skip
             } else {
@@ -248,7 +248,7 @@ where
             max_kv_pairs_per_context: req.max_kv_pairs_per_context,
             hash_algorithm: req.hash_algorithm,
             created_at: Some(udex_api::now_timestamp()),
-            created_by: "api".to_string(), // TODO: populate from auth claims once Claims exposes a sub() accessor
+            created_by: "api".to_string(), // TODO: set from JWT sub claim once Claims exposes sub()
             updated_at: None,
             updated_by: None,
         };
