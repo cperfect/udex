@@ -7,6 +7,8 @@ Udex
 
 > **Status**: Early development — not yet production ready. APIs and data models are subject to change.
 
+> **Disclaimer**: Udex is provided as-is, without warranty of any kind. The author makes no guarantees regarding fitness for purpose, security, correctness, or availability. Use at your own risk.
+
 ## Overview
 
 Udex is a universal index that maps arbitrary unique keys against contexts. It is lightweight, fast, and efficient for high transaction volumes across organisational and regulatory boundaries.  entity identifiers across boundaries.
