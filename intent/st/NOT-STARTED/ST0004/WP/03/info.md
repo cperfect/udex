@@ -1,0 +1,31 @@
+---
+verblock: "16 Apr 2026:v0.1: vscode - Initial version"
+wp_id: WP-03
+title: "Bulk operation benchmarks"
+scope: Small
+status: Not Started
+---
+
+# WP-03: Bulk operation benchmarks (gRPC layer)
+
+## Objective
+
+Benchmark `BulkWriteEntry` and `BulkReadEntry` at multiple dataset sizes via the full gRPC stack to understand how throughput and latency scale with batch size. Compare against WP-05 (datastore layer) to quantify gRPC and server overhead at scale.
+
+## Deliverables
+
+- `projects/rust/server/benches/entry_service.rs` — parameterised benchmarks for:
+  - `bulk_write` at N = 10, 100, 1000 entries
+  - `bulk_read` at N = 10, 100, 1000 entries
+
+## Acceptance Criteria
+
+- [ ] Both bulk operations benchmarked at all three N values
+- [ ] Criterion `BenchmarkGroup` used to group by operation with N as parameter
+- [ ] Throughput reported (entries/sec) in addition to latency, using `criterion.throughput()`
+- [ ] 1000-entry benchmark completes within Criterion's default measurement time (or time is explicitly extended)
+
+## Dependencies
+
+- WP-01 (harness)
+- WP-02 (single-entry benchmarks — establishes patterns to follow)

@@ -1,0 +1,35 @@
+---
+verblock: "16 Apr 2026:v0.1: vscode - Initial version"
+wp_id: WP-04
+title: "Baseline capture and CI integration"
+scope: Small
+status: Not Started
+---
+
+# WP-04: Baseline capture and CI integration
+
+## Objective
+
+Capture the initial performance baseline and integrate benchmark compilation into CI so regressions in the benchmark code itself are caught on every PR.
+
+## Deliverables
+
+- `projects/rust/server/benches/` — committed Criterion baseline (`.criterion/` directory) for the initial run, giving future runs a regression reference
+- `.github/workflows/01-Validation.yml` — `cargo bench --no-run` step added (compile-check only; no DB required in CI)
+- `README.md` or `projects/rust/CONTRIBUTING.md` — section documenting how to run benchmarks locally and how to update the baseline
+
+## Acceptance Criteria
+
+- [ ] `cargo bench --no-run` passes in CI (no DB, just confirms benchmarks compile)
+- [ ] Initial baseline committed to repo under `projects/rust/server/.criterion/`
+- [ ] Developer documentation covers: how to run (`cargo bench`), how to compare to baseline, how to update baseline (`cargo bench -- --save-baseline <name>`)
+- [ ] `.gitignore` updated if needed to include/exclude Criterion artefacts appropriately
+
+## Notes
+
+Full benchmark runs are not included in CI — they require a PostgreSQL instance and take minutes. The CI step is compile-only (`--no-run`). Full runs are a local/manual workflow.
+
+## Dependencies
+
+- WP-02
+- WP-03

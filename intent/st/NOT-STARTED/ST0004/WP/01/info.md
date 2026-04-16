@@ -1,0 +1,31 @@
+---
+verblock: "16 Apr 2026:v0.1: vscode - Initial version"
+wp_id: WP-01
+title: "Criterion harness setup"
+scope: Small
+status: Not Started
+---
+
+# WP-01: Criterion harness setup
+
+## Objective
+
+Add Criterion to the workspace and establish a working benchmark harness that can connect to a real PostgreSQL instance, initialise test data, and run a single smoke benchmark end-to-end via the full gRPC stack.
+
+## Deliverables
+
+- `projects/rust/Cargo.toml` — `criterion` workspace dependency with tokio runtime feature
+- `projects/rust/server/Cargo.toml` — `[[bench]]` entry, `criterion` dev-dependency
+- `projects/rust/server/benches/entry_service.rs` — harness: PostgreSQL setup/teardown (reusing `integration_test` helpers), gRPC server startup, client connection, one smoke benchmark (`create_entry` round-trip)
+- `projects/rust/server/benches/common/mod.rs` — shared setup helpers (start server, create authenticated client, seed index)
+
+## Acceptance Criteria
+
+- [ ] `cargo bench --bench entry_service` runs without error against a local PostgreSQL instance
+- [ ] Criterion output appears (iterations, mean, std dev)
+- [ ] `cargo bench --no-run` passes (compile-only, no DB required — for CI)
+- [ ] Benchmark setup/teardown cleans up its PostgreSQL database (same pattern as integration tests)
+
+## Dependencies
+
+- None
