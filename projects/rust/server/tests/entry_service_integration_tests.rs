@@ -526,15 +526,12 @@ async fn test_bulk_read_entry_operation() {
     }
 }
 
-/// Demonstrates that creating two entries with identical pairs but a different dek is rejected.
+/// Verifies that creating two entries with identical pairs but a different dek is rejected.
 ///
 /// Contexts are immutable: the server is responsible for hashing, so the same pairs must always
 /// map to the same stored context. Accepting a second create with different encryption metadata
 /// (dek/kek_id) for the same pair set would silently discard the caller's dek — a silent data
 /// loss for message-level encryption. The second call must return an error.
-///
-/// This test currently FAILS because `create_entry_tx` uses `ON CONFLICT (hash) DO NOTHING`,
-/// which silently accepts the conflicting dek without returning an error.
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_create_entry_rejects_conflicting_dek_for_same_pairs() {
@@ -567,7 +564,7 @@ async fn test_create_entry_rejects_conflicting_dek_for_same_pairs() {
         }))
         .await
         .expect("first create_entry should succeed");
-    let first_hash = first.into_inner().context_hash;
+    first.into_inner(); // consume the response; hash not needed for this assertion
 
     // Second create: same pairs but different dek — must be rejected because the stored
     // context already has dek_v1 and silently substituting dek_v2 would lose data.
@@ -591,7 +588,6 @@ async fn test_create_entry_rejects_conflicting_dek_for_same_pairs() {
             .map(|r| r.get_ref().context_hash.clone())
             .unwrap_or_default()
     );
-    let _ = first_hash; // suppress unused warning until the fix lands
 }
 
 /// Tests error handling for invalid operations
