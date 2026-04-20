@@ -69,6 +69,9 @@ pub struct DatastoreConfig {
     pub connection_timeout_secs: u64,
     /// Query timeout in seconds
     pub query_timeout_secs: u64,
+    /// Disable TLS enforcement on the connection URL. MUST NOT be set in production.
+    #[serde(default)]
+    pub dangerous_allow_non_tls: bool,
 }
 
 impl Default for UdexConfig {
@@ -92,12 +95,13 @@ impl Default for UdexConfig {
             },
             datastore: DatastoreConfig {
                 connection_url:
-                    "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+                    "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=require"
                         .to_string(),
                 max_connections: 10,
                 min_connections: 1,
                 connection_timeout_secs: 10,
                 query_timeout_secs: 30,
+                dangerous_allow_non_tls: false,
             },
         }
     }
@@ -238,6 +242,7 @@ impl UdexConfig {
                 self.datastore.connection_timeout_secs,
             ),
             query_timeout: std::time::Duration::from_secs(self.datastore.query_timeout_secs),
+            dangerous_allow_non_tls: self.datastore.dangerous_allow_non_tls,
         }
     }
 }
