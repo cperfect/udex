@@ -39,10 +39,9 @@ xxHash (xxh3) is the recommended replacement:
 
 ## Scope
 
-- Replace `sha1_context_hash` with an `xxh3_context_hash` implementation in `udex-api`
-- Add `HashAlgorithm::Xxh3` to the protobuf enum and regenerate
-- Update index creation to default to xxh3 for new indices
-- Existing SHA-1 indices continue to work (read-only migration path is out of scope)
+- Replace `SHA1` with `XXH3` in the `HashAlgorithm` protobuf enum and regenerate
+- Replace `sha1_context_hash` with `xxh3_context_hash` in `udex-api`; remove the SHA-1 implementation
+- Update the server, CLI, and all call-sites to use xxh3
 - Update all tests, benchmarks, and documentation
 
 ## Related Steel Threads
