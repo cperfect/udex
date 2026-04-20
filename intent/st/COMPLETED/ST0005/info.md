@@ -4,7 +4,7 @@ intent_version: 2.4.0
 status: Completed
 slug: better-hash-algorithm
 created: 20260420
-completed:
+completed: 20260420
 ---
 
 # ST0005: Better hash algorithm
