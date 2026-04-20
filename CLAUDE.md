@@ -12,7 +12,6 @@ Full guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md) and [projects/rust/CON
 - State is hard: minimise it; prefer stateless design.
 - If it isn't tested it doesn't work.
 - Interfaces MUST be developed schema first.
-- AI-generated files MUST have a comment on line 1 stating the tool and model.
 - Commits MUST follow Conventional Commits; Git workflow is Trunk Based.
 - Minimise shell scripting.
 
