@@ -3,7 +3,7 @@ verblock: "16 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Single-entry operation benchmarks"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-02: Single-entry operation benchmarks (gRPC layer)

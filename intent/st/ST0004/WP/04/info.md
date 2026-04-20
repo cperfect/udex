@@ -3,7 +3,7 @@ verblock: "16 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-04
 title: "Baseline capture and CI integration"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-04: Baseline capture and CI integration

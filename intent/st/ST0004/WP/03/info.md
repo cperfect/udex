@@ -3,7 +3,7 @@ verblock: "16 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-03
 title: "Bulk operation benchmarks"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: Bulk operation benchmarks (gRPC layer)
