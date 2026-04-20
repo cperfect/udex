@@ -49,19 +49,26 @@ fn cleanup_on_exit() {
                 // CONTEXT thread-local as Destroyed when it returns. A fresh thread
                 // has a clean CONTEXT, so Runtime::new() succeeds there.
                 let handle = std::thread::spawn(move || {
-                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    let rt = tokio::runtime::Runtime::new()
+                        .expect("test cleanup: failed to create Tokio runtime");
                     rt.block_on(async {
-                        if let Err(e) = cleanup_test_database_internal(&db_name).await {
-                            eprintln!(
-                                "Warning: Failed to cleanup test database '{}': {}",
-                                db_name, e
-                            );
-                        } else {
-                            println!("Test database '{}' cleaned up successfully", db_name);
-                        }
+                        cleanup_test_database_internal(&db_name)
+                            .await
+                            .unwrap_or_else(|e| {
+                                panic!("test cleanup: failed to drop database '{}': {}", db_name, e)
+                            });
+                        println!("Test database '{}' cleaned up successfully", db_name);
                     });
                 });
-                let _ = handle.join();
+                handle.join().unwrap_or_else(|e| {
+                    panic!(
+                        "test cleanup thread panicked: {}",
+                        e.downcast_ref::<&str>()
+                            .copied()
+                            .or_else(|| e.downcast_ref::<String>().map(String::as_str))
+                            .unwrap_or("unknown panic payload")
+                    )
+                });
             }
         }
     }
