@@ -1,7 +1,7 @@
 ---
 verblock: "20 Apr 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: Not Started
+status: WIP
 slug: better-hash-algorithm
 created: 20260420
 completed:
