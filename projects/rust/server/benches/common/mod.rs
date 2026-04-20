@@ -45,8 +45,6 @@ pub struct BenchFixture {
     bearer_token: String,
     /// Key of a pre-created seed entry — used by single-entry read benchmarks.
     pub seed_entry_key: String,
-    /// Context hash of the seed entry — used by `get_by_context` benchmarks.
-    pub seed_context_hash: String,
     /// Keys of `BULK_SEED_COUNT` pre-created entries — used by bulk read benchmarks.
     /// The first N keys cover bulk reads at N = 10, 100, and 1000.
     pub bulk_seed_keys: Vec<String>,
@@ -97,6 +95,26 @@ impl BenchFixture {
         }
     }
 
+    /// Returns a context input used exclusively by `bench_get_by_context`.
+    ///
+    /// Distinct from `bench_context()` so the lookup always measures a
+    /// single-result fan-out, unaffected by entries written by other benchmarks.
+    pub fn get_by_context_seed_context() -> ContextInput {
+        ContextInput {
+            pairs: vec![KeyValuePair {
+                key: "bench_user_id".to_string(),
+                value: Some(Value {
+                    value: Some(udex_api::entry::value::Value::StringValue(
+                        "bench_get_by_context_only".to_string(),
+                    )),
+                }),
+                kek_id: None,
+            }],
+            dek: None,
+            kek_id: None,
+        }
+    }
+
     /// Builds a bulk write request creating `n` new entries.
     pub fn bulk_create_request(&self, n: usize) -> BulkWriteEntryOperationRequest {
         let operations = (0..n)
@@ -133,7 +151,6 @@ pub fn fixture() -> &'static BenchFixture {
             index_name,
             bearer_token,
             seed_entry_key,
-            seed_context_hash,
             bulk_seed_keys,
             server_handle,
             db_name,
@@ -145,7 +162,6 @@ pub fn fixture() -> &'static BenchFixture {
             index_name,
             bearer_token,
             seed_entry_key,
-            seed_context_hash,
             bulk_seed_keys,
             _server_handle: server_handle,
             _db_name: db_name,
@@ -160,7 +176,6 @@ async fn start_server_and_connect() -> (
     String,      // index_name
     String,      // bearer_token ("Bearer <jwt>")
     String,      // seed_entry_key  (single-entry reads)
-    String,      // seed_context_hash
     Vec<String>, // bulk_seed_keys  (bulk reads, len = BULK_SEED_COUNT)
     tokio::task::JoinHandle<()>,
     String, // db_name for cleanup
@@ -315,7 +330,6 @@ async fn start_server_and_connect() -> (
         index_name,
         bearer_token,
         seed_resp.key,
-        seed_resp.context_hash,
         bulk_seed_keys,
         server_handle,
         db_name,

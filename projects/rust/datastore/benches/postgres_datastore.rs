@@ -24,6 +24,9 @@ const ID_PREFIX: &str = "bench-datastore";
 const BULK_SEED_COUNT: usize = 1000;
 /// Context hash used by all bench entries — shared by hash in the DB.
 const BENCH_CONTEXT_HASH: &str = "bench-context-hash-001";
+/// Context hash used exclusively by `bench_get_entries_by_context` so the
+/// lookup always measures a single-result fan-out.
+const GET_BY_CONTEXT_BENCH_HASH: &str = "bench-context-hash-get-by-context-only";
 
 /// All resources needed to run datastore benchmarks.
 struct BenchFixture {
@@ -50,6 +53,25 @@ impl BenchFixture {
                 value: Some(Value {
                     value: Some(udex_api::entry::value::Value::StringValue(
                         "bench_user_001".to_string(),
+                    )),
+                }),
+                kek_id: None,
+            }],
+            dek: None,
+            kek_id: None,
+        }
+    }
+
+    /// Context used exclusively by `bench_get_entries_by_context` so the lookup
+    /// always measures a single-result fan-out, unaffected by other benchmarks.
+    fn get_by_context_bench_context() -> Context {
+        Context {
+            hash: GET_BY_CONTEXT_BENCH_HASH.to_string(),
+            pairs: vec![KeyValuePair {
+                key: "bench_user_id".to_string(),
+                value: Some(Value {
+                    value: Some(udex_api::entry::value::Value::StringValue(
+                        "bench_get_by_context_only".to_string(),
                     )),
                 }),
                 kek_id: None,
@@ -190,10 +212,23 @@ fn bench_get_entry_by_key(c: &mut Criterion) {
 fn bench_get_entries_by_context(c: &mut Criterion) {
     let fix = fixture();
 
+    // Seed exactly one entry with a context used by no other benchmark so the
+    // lookup always measures a single-result fan-out.
+    fix.rt.block_on(async {
+        fix.datastore
+            .create_entry(Entry {
+                key: Uuid::new_v4(),
+                context: BenchFixture::get_by_context_bench_context(),
+                index_name: fix.index_name.clone(),
+            })
+            .await
+            .expect("create seed entry for get_by_context bench");
+    });
+
     c.bench_function("entry/get_by_context", |b| {
         b.to_async(fix.rt).iter(|| async {
             fix.datastore
-                .get_entries_by_context(BENCH_CONTEXT_HASH)
+                .get_entries_by_context(GET_BY_CONTEXT_BENCH_HASH)
                 .await
                 .expect("get_entries_by_context failed");
         });

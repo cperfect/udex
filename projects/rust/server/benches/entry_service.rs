@@ -63,10 +63,25 @@ fn bench_get_by_key(c: &mut Criterion) {
 
 /// `entry/get_by_context` — lookup entry keys by context hash (single result).
 ///
-/// Uses the seed entry's context hash. Multiple entries may share the same
-/// context, so this benchmarks the context→keys resolution path.
+/// Seeds exactly one entry with a dedicated context (distinct from `bench_context()`)
+/// so the lookup always measures a single-result fan-out, regardless of how many
+/// entries other benchmarks have written to the shared context.
 fn bench_get_by_context(c: &mut Criterion) {
     let fix = common::fixture();
+
+    // Seed one entry with a context used by no other benchmark.
+    let dedicated_context_hash = fix.rt().block_on(async {
+        let mut client = fix.entry_client();
+        client
+            .create_entry(fix.authed(CreateEntryRequest {
+                index_name: fix.index_name.clone(),
+                context: Some(common::BenchFixture::get_by_context_seed_context()),
+            }))
+            .await
+            .expect("create seed entry for get_by_context bench")
+            .into_inner()
+            .context_hash
+    });
 
     c.bench_function("entry/get_by_context", |b| {
         b.to_async(fix.rt()).iter(|| async {
@@ -74,7 +89,7 @@ fn bench_get_by_context(c: &mut Criterion) {
             client
                 .lookup_keys_by_context(fix.authed(LookupKeysByContextRequest {
                     index_name: fix.index_name.clone(),
-                    context_hash: fix.seed_context_hash.clone(),
+                    context_hash: dedicated_context_hash.clone(),
                 }))
                 .await
                 .expect("lookup_keys_by_context failed");
