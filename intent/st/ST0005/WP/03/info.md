@@ -3,7 +3,7 @@ verblock: "20 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-03
 title: "Wire xxh3 into server and CLI as default"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: Wire xxh3 into server and CLI as default

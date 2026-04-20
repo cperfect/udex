@@ -4,11 +4,11 @@
 
 use anyhow::{Context, Result};
 use udex_api::entry::{value, ContextInput, KeyValuePair, Value};
-use udex_api::hash::sha1_context_hash;
+use udex_api::hash::xxh3_context_hash;
 
 use crate::cli::ContextHashArgs;
 
-/// Compute the SHA-1 hash of a context (offline — no server needed).
+/// Compute the xxh3 hash of a context (offline — no server needed).
 ///
 /// Parses KEY=VALUE pairs into a context and prints the hash that the server
 /// would assign. Useful for pre-computing context hashes before calling
@@ -37,7 +37,7 @@ pub fn hash(args: ContextHashArgs) -> Result<()> {
         kek_id: None,
     };
 
-    let h = sha1_context_hash(&context).context("failed to compute context hash")?;
+    let h = xxh3_context_hash(&context).context("failed to compute context hash")?;
     println!("{h}");
     Ok(())
 }

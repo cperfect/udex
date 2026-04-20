@@ -12,7 +12,7 @@ use udex_api::{
         CreateEntryResponse, DeleteEntryRequest, DeleteEntryResponse, LookupContextByKeyRequest,
         LookupContextByKeyResponse, LookupKeysByContextRequest, LookupKeysByContextResponse,
     },
-    hash::{sha1_context_hash, ContextHasher},
+    hash::{xxh3_context_hash, ContextHasher},
     index::{index_service_server::IndexService, ListIndicesRequest},
 };
 use udex_datastore::{
@@ -71,9 +71,9 @@ where
 
         for index in &indexes {
             match index.hash_algorithm {
-                h if h == udex_api::index::HashAlgorithm::Sha1 as i32 => {
+                h if h == udex_api::index::HashAlgorithm::Xxh3 as i32 => {
                     self.index_hasher_fns
-                        .insert(index.name.clone(), sha1_context_hash);
+                        .insert(index.name.clone(), xxh3_context_hash);
                 }
                 // Add more hash algorithms as needed
                 _ => {
