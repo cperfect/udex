@@ -21,11 +21,11 @@ Replace the SHA-1 hashing implementation in `udex-api` with xxh3, removing the `
 
 ## Acceptance Criteria
 
-- [ ] `xxh3_context_hash` exists and is exported from `udex-api::hash`
-- [ ] `sha1_context_hash` is deleted
-- [ ] `sha1` crate is removed from the dependency tree
-- [ ] All hash unit tests (determinism, ordering, collision) pass against the new implementation
-- [ ] `cargo test -p udex-api` passes
+- [x] `xxh3_context_hash` exists and is exported from `udex-api::hash`
+- [x] `sha1_context_hash` is deleted
+- [x] `sha1` crate is removed from the dependency tree
+- [x] All hash unit tests (determinism, ordering, collision) pass against the new implementation
+- [x] `cargo test -p udex-api` passes
 
 ## Dependencies
 

@@ -21,10 +21,10 @@ Update all integration tests, benchmark fixtures, and documentation to reflect t
 
 ## Acceptance Criteria
 
-- [ ] `cargo test --all` passes with no failures
-- [ ] `cargo bench --no-run` passes (benchmark compile-check)
-- [ ] No remaining references to `SHA1`, `Sha1`, or `sha1` anywhere in the workspace (outside of migration comments if any)
-- [ ] CONTRIBUTING.md reflects the new algorithm
+- [x] `cargo test --all` passes with no failures
+- [x] `cargo bench --no-run` passes (benchmark compile-check)
+- [x] No remaining references to `SHA1`, `Sha1`, or `sha1` anywhere in the workspace (outside of migration comments if any)
+- [x] CONTRIBUTING.md reflects the new algorithm
 
 ## Dependencies
 

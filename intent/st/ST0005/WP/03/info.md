@@ -22,10 +22,10 @@ Update every call-site in the server, datastore, and CLI to use `xxh3_context_ha
 
 ## Acceptance Criteria
 
-- [ ] No remaining references to `sha1_context_hash` or `HashAlgorithm::Sha1` in the codebase
-- [ ] Server correctly registers the xxh3 hasher for xxh3 indices
-- [ ] `cargo clippy --all-targets` passes with no warnings
-- [ ] Integration tests pass (`cargo test`)
+- [x] No remaining references to `sha1_context_hash` or `HashAlgorithm::Sha1` in the codebase
+- [x] Server correctly registers the xxh3 hasher for xxh3 indices
+- [x] `cargo clippy --all-targets` passes with no warnings
+- [x] Integration tests pass (`cargo test`)
 
 ## Dependencies
 
