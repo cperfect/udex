@@ -35,7 +35,7 @@ xxHash (xxh3) is the recommended replacement:
 - Industry-standard non-cryptographic hash designed for fast, stable data identity
 - Excellent collision resistance for arbitrary-length inputs
 - Widely used for content-addressable storage and deduplication
-- Available via the `xxhash` crate
+- Available via the `xxhash-rust` crate (v0.8.15, `xxh3` feature)
 
 ## Scope
 
