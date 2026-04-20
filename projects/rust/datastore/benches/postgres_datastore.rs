@@ -186,7 +186,7 @@ async fn setup_datastore() -> (
 fn bench_create_entry(c: &mut Criterion) {
     let fix = fixture();
 
-    c.bench_function("entry/create", |b| {
+    c.bench_function("datastore/pg/entry/create", |b| {
         b.to_async(fix.rt).iter(|| async {
             fix.datastore
                 .create_entry(BenchFixture::new_entry(&fix.index_name))
@@ -199,7 +199,7 @@ fn bench_create_entry(c: &mut Criterion) {
 fn bench_get_entry_by_key(c: &mut Criterion) {
     let fix = fixture();
 
-    c.bench_function("entry/get_by_key", |b| {
+    c.bench_function("datastore/pg/entry/get_by_key", |b| {
         b.to_async(fix.rt).iter(|| async {
             fix.datastore
                 .get_entry_by_key(fix.seed_key)
@@ -225,7 +225,7 @@ fn bench_get_entries_by_context(c: &mut Criterion) {
             .expect("create seed entry for get_by_context bench");
     });
 
-    c.bench_function("entry/get_by_context", |b| {
+    c.bench_function("datastore/pg/entry/get_by_context", |b| {
         b.to_async(fix.rt).iter(|| async {
             fix.datastore
                 .get_entries_by_context(GET_BY_CONTEXT_BENCH_HASH)
@@ -238,7 +238,7 @@ fn bench_get_entries_by_context(c: &mut Criterion) {
 fn bench_delete_entry(c: &mut Criterion) {
     let fix = fixture();
 
-    c.bench_function("entry/delete", |b| {
+    c.bench_function("datastore/pg/entry/delete", |b| {
         b.iter_batched(
             // Setup: create a disposable entry outside the timing window.
             || {
@@ -274,7 +274,7 @@ fn bench_delete_entry(c: &mut Criterion) {
 fn bench_bulk_write(c: &mut Criterion) {
     let fix = fixture();
 
-    let mut group = c.benchmark_group("bulk_write");
+    let mut group = c.benchmark_group("datastore/pg/bulk_write");
     group.measurement_time(Duration::from_secs(30));
 
     for n in [10usize, 100, 1000] {
@@ -298,7 +298,7 @@ fn bench_bulk_write(c: &mut Criterion) {
 fn bench_bulk_read(c: &mut Criterion) {
     let fix = fixture();
 
-    let mut group = c.benchmark_group("bulk_read");
+    let mut group = c.benchmark_group("datastore/pg/bulk_read");
     group.measurement_time(Duration::from_secs(30));
 
     for n in [10usize, 100, 1000] {

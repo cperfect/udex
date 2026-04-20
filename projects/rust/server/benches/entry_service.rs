@@ -5,7 +5,7 @@
 //! Run with: `cargo bench --bench entry_service`
 //! Compile-check only (no DB): `cargo bench --bench entry_service --no-run`
 //!
-//! Benchmark naming convention: `entry/<operation>` (e.g. `entry/create`).
+//! Benchmark naming convention: `grpc/entry/<operation>` (e.g. `grpc/entry/create`).
 //! See `benches/common/mod.rs` for harness setup details.
 
 mod common;
@@ -18,7 +18,7 @@ use udex_api::entry::{
     LookupContextByKeyRequest, LookupKeysByContextRequest,
 };
 
-/// `entry/create` — insert one entry through the full gRPC stack.
+/// `grpc/entry/create` — insert one entry through the full gRPC stack.
 ///
 /// Each iteration produces a new server-generated UUID entry row against a
 /// shared context (the context is reused by hash — see schema). This
@@ -26,7 +26,7 @@ use udex_api::entry::{
 fn bench_create_entry(c: &mut Criterion) {
     let fix = common::fixture();
 
-    c.bench_function("entry/create", |b| {
+    c.bench_function("grpc/entry/create", |b| {
         b.to_async(fix.rt()).iter(|| async {
             let mut client = fix.entry_client();
             client
@@ -40,14 +40,14 @@ fn bench_create_entry(c: &mut Criterion) {
     });
 }
 
-/// `entry/get_by_key` — lookup context by entry key (entry exists).
+/// `grpc/entry/get_by_key` — lookup context by entry key (entry exists).
 ///
 /// Uses the seed entry created during fixture setup — no per-iteration
 /// database writes, isolating read performance.
 fn bench_get_by_key(c: &mut Criterion) {
     let fix = common::fixture();
 
-    c.bench_function("entry/get_by_key", |b| {
+    c.bench_function("grpc/entry/get_by_key", |b| {
         b.to_async(fix.rt()).iter(|| async {
             let mut client = fix.entry_client();
             client
@@ -61,7 +61,7 @@ fn bench_get_by_key(c: &mut Criterion) {
     });
 }
 
-/// `entry/get_by_context` — lookup entry keys by context hash (single result).
+/// `grpc/entry/get_by_context` — lookup entry keys by context hash (single result).
 ///
 /// Seeds exactly one entry with a dedicated context (distinct from `bench_context()`)
 /// so the lookup always measures a single-result fan-out, regardless of how many
@@ -83,7 +83,7 @@ fn bench_get_by_context(c: &mut Criterion) {
             .context_hash
     });
 
-    c.bench_function("entry/get_by_context", |b| {
+    c.bench_function("grpc/entry/get_by_context", |b| {
         b.to_async(fix.rt()).iter(|| async {
             let mut client = fix.entry_client();
             client
@@ -97,7 +97,7 @@ fn bench_get_by_context(c: &mut Criterion) {
     });
 }
 
-/// `entry/delete` — delete one entry.
+/// `grpc/entry/delete` — delete one entry.
 ///
 /// Uses `iter_batched` so each measured iteration gets a freshly-created
 /// entry to delete. Setup runs outside Criterion's timing window via
@@ -107,7 +107,7 @@ fn bench_get_by_context(c: &mut Criterion) {
 fn bench_delete_entry(c: &mut Criterion) {
     let fix = common::fixture();
 
-    c.bench_function("entry/delete", |b| {
+    c.bench_function("grpc/entry/delete", |b| {
         b.iter_batched(
             // Setup: create a disposable entry outside the timing window.
             || {
@@ -142,14 +142,14 @@ fn bench_delete_entry(c: &mut Criterion) {
     });
 }
 
-/// `bulk_write/<N>` — create N entries in a single bulk write call.
+/// `grpc/bulk_write/<N>` — create N entries in a single bulk write call.
 ///
 /// Throughput is reported as entries/sec. Measurement time is extended for
 /// larger N to ensure Criterion collects enough samples.
 fn bench_bulk_write(c: &mut Criterion) {
     let fix = common::fixture();
 
-    let mut group = c.benchmark_group("bulk_write");
+    let mut group = c.benchmark_group("grpc/bulk_write");
     group.measurement_time(Duration::from_secs(30));
 
     for n in [10usize, 100, 1000] {
@@ -168,7 +168,7 @@ fn bench_bulk_write(c: &mut Criterion) {
     group.finish();
 }
 
-/// `bulk_read/<N>` — read N entries by key in a single bulk read call.
+/// `grpc/bulk_read/<N>` — read N entries by key in a single bulk read call.
 ///
 /// Uses pre-seeded keys from the fixture so no writes occur during measurement.
 /// Throughput is reported as entries/sec. Measurement time is extended for
@@ -176,7 +176,7 @@ fn bench_bulk_write(c: &mut Criterion) {
 fn bench_bulk_read(c: &mut Criterion) {
     let fix = common::fixture();
 
-    let mut group = c.benchmark_group("bulk_read");
+    let mut group = c.benchmark_group("grpc/bulk_read");
     group.measurement_time(Duration::from_secs(30));
 
     for n in [10usize, 100, 1000] {
