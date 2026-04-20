@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::OnceLock;
 use time::OffsetDateTime;
-use tokio::time::{sleep, Duration};
+use tokio::time::{sleep, Duration, Instant};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use udex_api::authz::claims::Claims;
 use udex_api::entry::bulk_write_entry_operation::Operation as WriteOp;
@@ -221,23 +221,31 @@ async fn start_server_and_connect() -> (
             .expect("bench server failed to start");
     });
 
-    // Give the server a moment to bind and initialise.
-    sleep(Duration::from_millis(200)).await;
-
-    // Build a TLS channel — reused across all benchmarks.
+    // Read the CA cert once, then probe until the server is ready or a hard
+    // timeout elapses. This avoids an arbitrary fixed sleep that can race the
+    // server bind under load.
     let ca_cert = tokio::fs::read_to_string("tests/certs/ca.crt")
         .await
         .expect("read CA cert for bench client");
-    let tls_config = ClientTlsConfig::new()
-        .ca_certificate(Certificate::from_pem(ca_cert))
-        .domain_name("localhost");
-    let channel = Channel::from_shared(format!("https://{}", BENCH_BIND_ADDR))
-        .expect("valid bench endpoint URI")
-        .tls_config(tls_config)
-        .expect("bench client TLS config")
-        .connect()
-        .await
-        .expect("connect to bench server");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let channel = loop {
+        let tls_config = ClientTlsConfig::new()
+            .ca_certificate(Certificate::from_pem(ca_cert.clone()))
+            .domain_name("localhost");
+        match Channel::from_shared(format!("https://{}", BENCH_BIND_ADDR))
+            .expect("valid bench endpoint URI")
+            .tls_config(tls_config)
+            .expect("bench client TLS config")
+            .connect()
+            .await
+        {
+            Ok(ch) => break ch,
+            Err(_) if Instant::now() < deadline => {
+                sleep(Duration::from_millis(50)).await;
+            }
+            Err(e) => panic!("bench server did not become ready within 10s: {}", e),
+        }
+    };
 
     // Generate a long-lived JWT (1 hour) with wildcard entry permissions.
     // Using a single token for all benchmarks avoids per-iteration JWT overhead.
