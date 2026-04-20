@@ -64,8 +64,12 @@ impl PostgresDatastore {
             )));
         }
 
-        // First insert the context (using ON CONFLICT DO NOTHING to handle duplicates)
-        sqlx::query(
+        // Insert the context, skipping if a row with the same hash already exists.
+        // If the insert was skipped (rows_affected == 0), verify that the existing row's
+        // encryption metadata matches the incoming request: silently substituting a
+        // different dek/kek_id would be silent data loss for the caller's message-level
+        // encryption.
+        let insert_result = sqlx::query(
             r#"
             INSERT INTO context (
                 hash,
@@ -81,7 +85,7 @@ impl PostgresDatastore {
                 $4,
                 $5
             )
-            ON CONFLICT (hash) DO NOTHING -- This allows us to skip inserting if it already exists.
+            ON CONFLICT (hash) DO NOTHING
             "#,
         )
         .bind(&entry.context.hash)
@@ -92,6 +96,23 @@ impl PostgresDatastore {
         .execute(&mut **tx)
         .await
         .map_err(Error::Database)?;
+
+        if insert_result.rows_affected() == 0 {
+            // Context already existed — verify encryption metadata matches.
+            let existing = sqlx::query("SELECT dek, kek_id FROM context WHERE hash = $1")
+                .bind(&entry.context.hash)
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(Error::Database)?;
+
+            let existing_dek: Option<String> = existing.try_get("dek").map_err(Error::Database)?;
+            let existing_kek_id: Option<String> =
+                existing.try_get("kek_id").map_err(Error::Database)?;
+
+            if existing_dek != entry.context.dek || existing_kek_id != entry.context.kek_id {
+                return Err(Error::ContextEncryptionConflict(entry.context.hash.clone()));
+            }
+        }
 
         // Then insert the entry
         sqlx::query(

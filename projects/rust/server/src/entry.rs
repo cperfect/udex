@@ -172,6 +172,10 @@ where
                 tracing::error!(error = %msg, "Migration error");
                 Status::internal("Internal server error")
             }
+            DatastoreError::ContextEncryptionConflict(hash) => Status::already_exists(format!(
+                "Context {} already exists with different encryption metadata",
+                hash
+            )),
         }
     }
 }
