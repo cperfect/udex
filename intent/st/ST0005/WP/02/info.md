@@ -3,7 +3,7 @@ verblock: "20 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Implement xxh3_context_hash in udex-api"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-02: Implement xxh3_context_hash in udex-api
