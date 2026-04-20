@@ -3,7 +3,7 @@ verblock: "20 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-01
 title: "Add Xxh3 to HashAlgorithm proto enum"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-01: Add Xxh3 to HashAlgorithm proto enum

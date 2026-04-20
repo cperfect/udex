@@ -143,13 +143,13 @@ pub struct ListIndicesResponse {
     pub indices: ::prost::alloc::vec::Vec<Index>,
 }
 /// allowed hash algorithms for indexes to use
-/// note that the context hash is not intended to be cryptographically secure - it is there to create an indentity for the context
+/// note that the context hash is not intended to be cryptographically secure - it is there to create an identity for the context
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum HashAlgorithm {
-    /// SHA-1 hash algorithm
-    Sha1 = 0,
+    /// xxHash (xxh3) — fast non-cryptographic hash for stable data identity
+    Xxh3 = 0,
 }
 impl HashAlgorithm {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -158,13 +158,13 @@ impl HashAlgorithm {
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            Self::Sha1 => "Sha1",
+            Self::Xxh3 => "Xxh3",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "Sha1" => Some(Self::Sha1),
+            "Xxh3" => Some(Self::Xxh3),
             _ => None,
         }
     }

@@ -8,9 +8,9 @@ package udex.index.v1;
 import "google/protobuf/timestamp.proto";
 
 // allowed hash algorithms for indexes to use
-// note that the context hash is not intended to be cryptographically secure - it is there to create an indentity for the context
+// note that the context hash is not intended to be cryptographically secure - it is there to create an identity for the context
 enum HashAlgorithm {
-  Sha1 = 0; // SHA-1 hash algorithm
+  Xxh3 = 0; // xxHash (xxh3) — fast non-cryptographic hash for stable data identity
 }
 
 // IndexService provides operations for managing indices
