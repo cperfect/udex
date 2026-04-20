@@ -44,17 +44,24 @@ fn cleanup_on_exit() {
                 println!("Cleaning up test database on exit: {}", db_name);
 
                 let db_name = db_name.clone();
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(async {
-                    if let Err(e) = cleanup_test_database_internal(&db_name).await {
-                        eprintln!(
-                            "Warning: Failed to cleanup test database '{}': {}",
-                            db_name, e
-                        );
-                    } else {
-                        println!("Test database '{}' cleaned up successfully", db_name);
-                    }
+                // Spawn a fresh thread to create the Tokio runtime.
+                // Benchmarks call block_on() on the main thread, which marks Tokio's
+                // CONTEXT thread-local as Destroyed when it returns. A fresh thread
+                // has a clean CONTEXT, so Runtime::new() succeeds there.
+                let handle = std::thread::spawn(move || {
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
+                        if let Err(e) = cleanup_test_database_internal(&db_name).await {
+                            eprintln!(
+                                "Warning: Failed to cleanup test database '{}': {}",
+                                db_name, e
+                            );
+                        } else {
+                            println!("Test database '{}' cleaned up successfully", db_name);
+                        }
+                    });
                 });
+                let _ = handle.join();
             }
         }
     }

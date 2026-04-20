@@ -36,7 +36,10 @@ pub const BULK_SEED_COUNT: usize = 1000;
 /// Kept alive in a `OnceLock` for the lifetime of the benchmark process so
 /// the server and database are shared across all benchmark functions.
 pub struct BenchFixture {
-    rt: tokio::runtime::Runtime,
+    /// Leaked so the runtime is never dropped at process exit. This keeps
+    /// Tokio's thread-locals alive, allowing the `ctor::dtor` cleanup in
+    /// `udex_datastore::integration_test` to create a new runtime for DB teardown.
+    rt: &'static tokio::runtime::Runtime,
     channel: Channel,
     pub index_name: String,
     bearer_token: String,
@@ -72,8 +75,8 @@ impl BenchFixture {
     }
 
     /// Returns a reference to the shared Tokio runtime.
-    pub fn rt(&self) -> &tokio::runtime::Runtime {
-        &self.rt
+    pub fn rt(&self) -> &'static tokio::runtime::Runtime {
+        self.rt
     }
 
     /// Returns a standard single-pair context input used for seeding and
@@ -122,8 +125,9 @@ pub fn fixture() -> &'static BenchFixture {
         // Install the rustls crypto provider once — matches integration test pattern.
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-        let rt = tokio::runtime::Runtime::new().expect("create tokio runtime");
-
+        let rt: &'static tokio::runtime::Runtime = Box::leak(Box::new(
+            tokio::runtime::Runtime::new().expect("create tokio runtime"),
+        ));
         let (
             channel,
             index_name,

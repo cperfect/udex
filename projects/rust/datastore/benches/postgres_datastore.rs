@@ -27,7 +27,10 @@ const BENCH_CONTEXT_HASH: &str = "bench-context-hash-001";
 
 /// All resources needed to run datastore benchmarks.
 struct BenchFixture {
-    rt: tokio::runtime::Runtime,
+    /// Leaked so the runtime is never dropped at process exit. This keeps
+    /// Tokio's thread-locals alive, allowing the `ctor::dtor` cleanup in
+    /// `udex_datastore::integration_test` to create a new runtime for DB teardown.
+    rt: &'static tokio::runtime::Runtime,
     datastore: Arc<PostgresDatastore>,
     index_name: String,
     /// Key of a pre-created seed entry for single-entry read benchmarks.
@@ -69,7 +72,9 @@ impl BenchFixture {
 fn fixture() -> &'static BenchFixture {
     static FIXTURE: OnceLock<BenchFixture> = OnceLock::new();
     FIXTURE.get_or_init(|| {
-        let rt = tokio::runtime::Runtime::new().expect("create tokio runtime");
+        let rt: &'static tokio::runtime::Runtime = Box::leak(Box::new(
+            tokio::runtime::Runtime::new().expect("create tokio runtime"),
+        ));
         let (datastore, index_name, seed_key, bulk_seed_keys, db_name) =
             rt.block_on(setup_datastore());
         BenchFixture {
@@ -160,7 +165,7 @@ fn bench_create_entry(c: &mut Criterion) {
     let fix = fixture();
 
     c.bench_function("entry/create", |b| {
-        b.to_async(&fix.rt).iter(|| async {
+        b.to_async(fix.rt).iter(|| async {
             fix.datastore
                 .create_entry(BenchFixture::new_entry(&fix.index_name))
                 .await
@@ -173,7 +178,7 @@ fn bench_get_entry_by_key(c: &mut Criterion) {
     let fix = fixture();
 
     c.bench_function("entry/get_by_key", |b| {
-        b.to_async(&fix.rt).iter(|| async {
+        b.to_async(fix.rt).iter(|| async {
             fix.datastore
                 .get_entry_by_key(fix.seed_key)
                 .await
@@ -186,7 +191,7 @@ fn bench_get_entries_by_context(c: &mut Criterion) {
     let fix = fixture();
 
     c.bench_function("entry/get_by_context", |b| {
-        b.to_async(&fix.rt).iter(|| async {
+        b.to_async(fix.rt).iter(|| async {
             fix.datastore
                 .get_entries_by_context(BENCH_CONTEXT_HASH)
                 .await
@@ -240,7 +245,7 @@ fn bench_bulk_write(c: &mut Criterion) {
     for n in [10usize, 100, 1000] {
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
-            b.to_async(&fix.rt).iter(|| async move {
+            b.to_async(fix.rt).iter(|| async move {
                 let ops: Vec<EntryWriteOperation> = (0..n)
                     .map(|_| EntryWriteOperation::Create(BenchFixture::new_entry(&fix.index_name)))
                     .collect();
@@ -264,7 +269,7 @@ fn bench_bulk_read(c: &mut Criterion) {
     for n in [10usize, 100, 1000] {
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
-            b.to_async(&fix.rt).iter(|| async move {
+            b.to_async(fix.rt).iter(|| async move {
                 let ops: Vec<EntryReadOperation> = fix.bulk_seed_keys[..n]
                     .iter()
                     .map(|&key| EntryReadOperation::GetByKey(key))
