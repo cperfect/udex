@@ -26,7 +26,7 @@ use udex_api::entry::{
 fn bench_create_entry(c: &mut Criterion) {
     let fix = common::fixture();
 
-    c.bench_function("entry/create", |b| {
+    c.bench_function("grpc/entry/create", |b| {
         b.to_async(fix.rt()).iter(|| async {
             let mut client = fix.entry_client();
             client
@@ -47,7 +47,7 @@ fn bench_create_entry(c: &mut Criterion) {
 fn bench_get_by_key(c: &mut Criterion) {
     let fix = common::fixture();
 
-    c.bench_function("entry/get_by_key", |b| {
+    c.bench_function("grpc/entry/get_by_key", |b| {
         b.to_async(fix.rt()).iter(|| async {
             let mut client = fix.entry_client();
             client
@@ -83,7 +83,7 @@ fn bench_get_by_context(c: &mut Criterion) {
             .context_hash
     });
 
-    c.bench_function("entry/get_by_context", |b| {
+    c.bench_function("grpc/entry/get_by_context", |b| {
         b.to_async(fix.rt()).iter(|| async {
             let mut client = fix.entry_client();
             client
@@ -107,7 +107,7 @@ fn bench_get_by_context(c: &mut Criterion) {
 fn bench_delete_entry(c: &mut Criterion) {
     let fix = common::fixture();
 
-    c.bench_function("entry/delete", |b| {
+    c.bench_function("grpc/entry/delete", |b| {
         b.iter_batched(
             // Setup: create a disposable entry outside the timing window.
             || {
@@ -149,7 +149,7 @@ fn bench_delete_entry(c: &mut Criterion) {
 fn bench_bulk_write(c: &mut Criterion) {
     let fix = common::fixture();
 
-    let mut group = c.benchmark_group("bulk_write");
+    let mut group = c.benchmark_group("grpc/bulk_write");
     group.measurement_time(Duration::from_secs(30));
 
     for n in [10usize, 100, 1000] {
@@ -176,7 +176,7 @@ fn bench_bulk_write(c: &mut Criterion) {
 fn bench_bulk_read(c: &mut Criterion) {
     let fix = common::fixture();
 
-    let mut group = c.benchmark_group("bulk_read");
+    let mut group = c.benchmark_group("grpc/bulk_read");
     group.measurement_time(Duration::from_secs(30));
 
     for n in [10usize, 100, 1000] {
