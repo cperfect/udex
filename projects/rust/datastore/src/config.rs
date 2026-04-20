@@ -17,6 +17,26 @@ pub struct DatastoreConfig {
     pub connection_timeout: Duration,
     /// Query timeout duration
     pub query_timeout: Duration,
+    /// Disable the TLS enforcement check on the connection URL.
+    ///
+    /// **DANGER**: Setting this to `true` allows plaintext database connections.
+    /// Only use this in local development or test environments. Production
+    /// deployments MUST leave this `false` and include `sslmode=require` (or
+    /// stronger) in the connection URL.
+    #[serde(default)]
+    pub dangerous_allow_non_tls: bool,
+}
+
+/// Returns `true` if the URL contains a TLS-enforcing `sslmode` value
+/// (`require`, `verify-ca`, or `verify-full`).
+fn url_enforces_tls(url: &str) -> bool {
+    let query = url.split_once('?').map(|(_, q)| q).unwrap_or("");
+    for param in query.split('&') {
+        if let Some(value) = param.strip_prefix("sslmode=") {
+            return matches!(value, "require" | "verify-ca" | "verify-full");
+        }
+    }
+    false
 }
 
 /// Substitutes `${VAR}` placeholders in `url` using the provided lookup function.
@@ -70,6 +90,10 @@ impl DatastoreConfig {
             ));
         }
 
+        if !self.dangerous_allow_non_tls && !url_enforces_tls(&self.connection_url) {
+            return Err(DatastoreConfigError::NonTlsConnection);
+        }
+
         Ok(())
     }
 
@@ -87,6 +111,12 @@ pub enum DatastoreConfigError {
     /// Validation error
     #[error("Datastore config validation failed: {0}")]
     Validation(String),
+    /// Non-TLS connection URL without the override flag set
+    #[error(
+        "connection_url does not enforce TLS (sslmode=require/verify-ca/verify-full required); \
+         set dangerous_allow_non_tls=true to override in non-production environments"
+    )]
+    NonTlsConnection,
 }
 
 #[cfg(test)]
@@ -96,11 +126,12 @@ mod tests {
     #[test]
     fn test_datastore_config_validation() {
         let mut config = DatastoreConfig {
-            connection_url: "postgres://localhost:5432/udex".to_string(),
+            connection_url: "postgres://localhost:5432/udex?sslmode=require".to_string(),
             max_connections: 10,
             min_connections: 1,
             connection_timeout: Duration::from_secs(10),
             query_timeout: Duration::from_secs(30),
+            dangerous_allow_non_tls: false,
         };
 
         // Test empty connection URL
@@ -108,7 +139,7 @@ mod tests {
         assert!(config.validate().is_err());
 
         // Test invalid max_connections
-        config.connection_url = "postgres://localhost:5432/udex".to_string();
+        config.connection_url = "postgres://localhost:5432/udex?sslmode=require".to_string();
         config.max_connections = 0;
         assert!(config.validate().is_err());
 
@@ -117,9 +148,51 @@ mod tests {
         config.min_connections = 10;
         assert!(config.validate().is_err());
 
-        // Test valid config
+        // Test valid config (TLS enforced via sslmode=require)
         config.min_connections = 2;
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_tls_enforcement() {
+        let base = DatastoreConfig {
+            max_connections: 10,
+            min_connections: 1,
+            connection_timeout: Duration::from_secs(10),
+            query_timeout: Duration::from_secs(30),
+            dangerous_allow_non_tls: false,
+            connection_url: String::new(),
+        };
+
+        // No sslmode at all — rejected
+        let mut cfg = base.clone();
+        cfg.connection_url = "postgres://host:5432/db".to_string();
+        assert!(cfg.validate().is_err());
+
+        // sslmode=disable — rejected
+        cfg.connection_url = "postgres://host:5432/db?sslmode=disable".to_string();
+        assert!(cfg.validate().is_err());
+
+        // sslmode=prefer — rejected (can fall back to plaintext)
+        cfg.connection_url = "postgres://host:5432/db?sslmode=prefer".to_string();
+        assert!(cfg.validate().is_err());
+
+        // sslmode=require — accepted
+        cfg.connection_url = "postgres://host:5432/db?sslmode=require".to_string();
+        assert!(cfg.validate().is_ok());
+
+        // sslmode=verify-ca — accepted
+        cfg.connection_url = "postgres://host:5432/db?sslmode=verify-ca".to_string();
+        assert!(cfg.validate().is_ok());
+
+        // sslmode=verify-full — accepted
+        cfg.connection_url = "postgres://host:5432/db?sslmode=verify-full".to_string();
+        assert!(cfg.validate().is_ok());
+
+        // No sslmode, but dangerous_allow_non_tls=true — accepted
+        cfg.connection_url = "postgres://host:5432/db".to_string();
+        cfg.dangerous_allow_non_tls = true;
+        assert!(cfg.validate().is_ok());
     }
 
     #[test]

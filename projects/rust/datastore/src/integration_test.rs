@@ -124,6 +124,7 @@ pub async fn init_postgres() -> MaybeOnceType {
         min_connections: 1,
         connection_timeout: std::time::Duration::from_secs(30), // Long timeout for concurrent tests
         query_timeout: std::time::Duration::from_secs(30),
+        dangerous_allow_non_tls: true, // local test DB has no TLS
     };
 
     let datastore = PostgresDatastore::init(cfg)
