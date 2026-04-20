@@ -30,6 +30,11 @@ services:
       POSTGRES_PASSWORD: admin
     ports:
       - "5432:5432"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'  
+          memory: '1gb'
     # volumes:
     #   - pg_data:.data/var/lib/postgresql/data
 
