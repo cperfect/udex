@@ -55,6 +55,13 @@ pub enum Error {
     // Type of error related to migrations
     #[error("Migration error: {0}")]
     Migration(String),
+    /// A context with the same hash already exists but has different encryption metadata
+    /// (dek / kek_id). Callers are responsible for message-level encryption; silently
+    /// substituting their dek would be data loss.
+    #[error(
+        "Context conflict: hash {0} already exists with different encryption metadata (dek/kek_id)"
+    )]
+    ContextEncryptionConflict(String),
 }
 
 /// Type of error that occurs when a bulk operation fails
@@ -148,7 +155,13 @@ pub trait Datastore: Send + Sync {
     async fn list_indices(&self) -> Result<Vec<Index>, Error>;
 
     /// Create a new entry.
-    /// If the context already exists but the key is different then a new entry is created. If key already exists for any context then a DuplicateKey error is returned.
+    ///
+    /// If the context already exists (same hash) and the key is new, a new entry is created
+    /// against the existing context. Returns `DuplicateKey` if the key already exists.
+    ///
+    /// Returns `ContextEncryptionConflict` if a context with the same hash already exists
+    /// but has different `dek` or `kek_id`: callers own message-level encryption and silently
+    /// substituting their DEK would be undetectable data loss.
     async fn create_entry(&self, entry: Entry) -> Result<(), Error>;
 
     /// Get an entry by key

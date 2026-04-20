@@ -526,6 +526,70 @@ async fn test_bulk_read_entry_operation() {
     }
 }
 
+/// Verifies that creating two entries with identical pairs but a different dek is rejected.
+///
+/// Contexts are immutable: the server is responsible for hashing, so the same pairs must always
+/// map to the same stored context. Accepting a second create with different encryption metadata
+/// (dek/kek_id) for the same pair set would silently discard the caller's dek — a silent data
+/// loss for message-level encryption. The second call must return an error.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_create_entry_rejects_conflicting_dek_for_same_pairs() {
+    use tonic::Request;
+    use udex_api::entry::{ContextInput, CreateEntryRequest, KeyValuePair, Value};
+
+    let data = data(false).await;
+    let entry_server = &data.0;
+    let index_name = &data.1;
+
+    let pairs = vec![KeyValuePair {
+        key: "user_id".to_string(),
+        value: Some(Value {
+            value: Some(udex_api::entry::value::Value::StringValue(
+                "dek_conflict_test_user".to_string(),
+            )),
+        }),
+        kek_id: None,
+    }];
+
+    // First create: pairs + dek_v1.
+    let first = entry_server
+        .create_entry(Request::new(CreateEntryRequest {
+            index_name: index_name.clone(),
+            context: Some(ContextInput {
+                pairs: pairs.clone(),
+                dek: Some("dek_v1".to_string()),
+                kek_id: Some("kek_001".to_string()),
+            }),
+        }))
+        .await
+        .expect("first create_entry should succeed");
+    first.into_inner(); // consume the response; hash not needed for this assertion
+
+    // Second create: same pairs but different dek — must be rejected because the stored
+    // context already has dek_v1 and silently substituting dek_v2 would lose data.
+    let second_result = entry_server
+        .create_entry(Request::new(CreateEntryRequest {
+            index_name: index_name.clone(),
+            context: Some(ContextInput {
+                pairs: pairs.clone(),
+                dek: Some("dek_v2".to_string()),
+                kek_id: Some("kek_001".to_string()),
+            }),
+        }))
+        .await;
+
+    assert!(
+        second_result.is_err(),
+        "create_entry with same pairs but different dek must be rejected; \
+         got context_hash {} instead of an error",
+        second_result
+            .as_ref()
+            .map(|r| r.get_ref().context_hash.clone())
+            .unwrap_or_default()
+    );
+}
+
 /// Tests error handling for invalid operations
 #[rstest]
 #[tokio_shared_rt::test]
