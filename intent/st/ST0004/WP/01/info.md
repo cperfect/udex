@@ -22,10 +22,10 @@ Add Criterion to the workspace and establish a working benchmark harness that ca
 
 ## Acceptance Criteria
 
-- [ ] `cargo bench --bench entry_service` runs without error against a local PostgreSQL instance
-- [ ] Criterion output appears (iterations, mean, std dev)
-- [ ] `cargo bench --no-run` passes (compile-only, no DB required — for CI)
-- [ ] Benchmark setup/teardown cleans up its PostgreSQL database (same pattern as integration tests)
+- [x] `cargo bench --bench entry_service` runs without error against a local PostgreSQL instance
+- [x] Criterion output appears (iterations, mean, std dev)
+- [x] `cargo bench --no-run` passes (compile-only, no DB required — for CI)
+- [x] Benchmark setup/teardown cleans up its PostgreSQL database (same pattern as integration tests)
 
 ## Dependencies
 

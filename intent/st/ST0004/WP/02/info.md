@@ -23,10 +23,10 @@ Benchmark each individual Entry API operation at single-entry scale via the full
 
 ## Acceptance Criteria
 
-- [ ] All four operations benchmarked
-- [ ] Each benchmark uses a fresh entry per iteration (no cross-contamination)
-- [ ] Results are stable enough for Criterion to report a mean and std dev (not `high noise` warnings)
-- [ ] Benchmark names follow convention: `entry/<operation>` (e.g. `entry/create`, `entry/get_by_key`)
+- [x] All four operations benchmarked
+- [x] Each benchmark uses a fresh entry per iteration (no cross-contamination)
+- [x] Results are stable enough for Criterion to report a mean and std dev (not `high noise` warnings)
+- [x] Benchmark names follow convention: `entry/<operation>` (e.g. `entry/create`, `entry/get_by_key`)
 
 ## Dependencies
 

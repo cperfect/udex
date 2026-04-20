@@ -27,11 +27,11 @@ Benchmark `PostgresDatastore` directly — bypassing the gRPC and server layers 
 
 ## Acceptance Criteria
 
-- [ ] All entry operations benchmarked at the datastore level
-- [ ] Bulk benchmarks report throughput (entries/sec) via `criterion.throughput()`
-- [ ] Results directly comparable to WP-02/WP-03 gRPC benchmarks (same operation set, same N values)
-- [ ] DB cleanup on teardown (same pattern as integration tests)
-- [ ] `cargo bench --no-run` passes in CI
+- [x] All entry operations benchmarked at the datastore level
+- [x] Bulk benchmarks report throughput (entries/sec) via `criterion.throughput()`
+- [x] Results directly comparable to WP-02/WP-03 gRPC benchmarks (same operation set, same N values)
+- [x] DB cleanup on teardown (same pattern as integration tests)
+- [x] `cargo bench --no-run` passes in CI
 
 ## Notes
 

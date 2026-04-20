@@ -21,10 +21,10 @@ Capture the initial performance baseline and integrate benchmark compilation int
 
 ## Acceptance Criteria
 
-- [ ] `cargo bench --no-run` passes in CI (no DB, just confirms benchmarks compile)
-- [ ] Initial baseline committed to repo under `target/criterion/`
-- [ ] Developer documentation covers: how to run (`cargo bench`), how to compare to baseline, how to update baseline (`cargo bench -- --save-baseline <name>`)
-- [ ] `.gitignore` updated if needed to include/exclude Criterion artefacts appropriately
+- [x] `cargo bench --no-run` passes in CI (no DB, just confirms benchmarks compile)
+- [x] Initial baseline committed to repo under `target/criterion/`
+- [x] Developer documentation covers: how to run (`cargo bench`), how to compare to baseline, how to update baseline (`cargo bench -- --save-baseline <name>`)
+- [x] `.gitignore` updated if needed to include/exclude Criterion artefacts appropriately
 
 ## Notes
 

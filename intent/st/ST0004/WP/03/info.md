@@ -21,10 +21,10 @@ Benchmark `BulkWriteEntry` and `BulkReadEntry` at multiple dataset sizes via the
 
 ## Acceptance Criteria
 
-- [ ] Both bulk operations benchmarked at all three N values
-- [ ] Criterion `BenchmarkGroup` used to group by operation with N as parameter
-- [ ] Throughput reported (entries/sec) in addition to latency, using `criterion.throughput()`
-- [ ] 1000-entry benchmark completes within Criterion's default measurement time (or time is explicitly extended)
+- [x] Both bulk operations benchmarked at all three N values
+- [x] Criterion `BenchmarkGroup` used to group by operation with N as parameter
+- [x] Throughput reported (entries/sec) in addition to latency, using `criterion.throughput()`
+- [x] 1000-entry benchmark completes within Criterion's default measurement time (or time is explicitly extended)
 
 ## Dependencies
 
