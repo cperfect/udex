@@ -79,7 +79,7 @@ Criterion writes HTML reports to `target/criterion/` after each run. Open `targe
 
 #### Saving and comparing baselines
 
-Criterion detects regressions automatically when a previous run exists in `target/criterion/`. To capture a named baseline for explicit comparison:
+Baselines are local-only — `target/criterion/` is gitignored and no baseline is committed to the repo. To capture a named baseline for explicit comparison on your machine:
 
 ```bash
 # Save the current results as a named baseline

@@ -11,20 +11,18 @@ status: Done
 
 ## Objective
 
-Capture the initial performance baseline and integrate benchmark compilation into CI so regressions in the benchmark code itself are caught on every PR.
+Integrate benchmark compilation into CI so regressions in the benchmark code itself are caught on every PR. Baselines are local-only (Criterion writes to `target/criterion/`, which is gitignored).
 
 ## Deliverables
 
-- `projects/rust/server/benches/` — committed Criterion baseline (`target/criterion/` directory) for the initial run, giving future runs a regression reference
 - `.github/workflows/01-Validation.yml` — `cargo bench --no-run` step added (compile-check only; no DB required in CI)
-- `README.md` or `projects/rust/CONTRIBUTING.md` — section documenting how to run benchmarks locally and how to update the baseline
+- `README.md` or `projects/rust/CONTRIBUTING.md` — section documenting how to run benchmarks locally and how to manage local baselines
 
 ## Acceptance Criteria
 
 - [x] `cargo bench --no-run` passes in CI (no DB, just confirms benchmarks compile)
-- [x] Initial baseline committed to repo under `target/criterion/`
 - [x] Developer documentation covers: how to run (`cargo bench`), how to compare to baseline, how to update baseline (`cargo bench -- --save-baseline <name>`)
-- [x] `.gitignore` updated if needed to include/exclude Criterion artefacts appropriately
+- [x] `.gitignore` covers `target/criterion/` (already covered by `/target/` rule — no change needed)
 
 ## Notes
 
