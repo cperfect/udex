@@ -34,7 +34,7 @@ fn create_sample_index(name: &str) -> Index {
         max_key_length: 256,
         max_value_length: 1024,
         max_kv_pairs_per_context: 50,
-        hash_algorithm: udex_api::index::HashAlgorithm::Sha1 as i32, // Use the enum value directly
+        hash_algorithm: udex_api::index::HashAlgorithm::Xxh3 as i32, // Use the enum value directly
         created_at: Some(udex_api::protobuf::Timestamp {
             seconds: now.as_secs() as i64,
             nanos: now.subsec_nanos() as i32,
@@ -632,7 +632,7 @@ async fn test_update_index(#[context] ctx: Context) {
         max_key_length: Some(512),
         max_value_length: Some(2048),
         max_kv_pairs_per_context: Some(100),
-        hash_algorithm: Some(udex_api::index::HashAlgorithm::Sha1 as i32),
+        hash_algorithm: Some(udex_api::index::HashAlgorithm::Xxh3 as i32),
     };
     let updated_full_index = datastore
         .update_index(&idx_name, full_update, "test_full_update_index")
@@ -646,7 +646,7 @@ async fn test_update_index(#[context] ctx: Context) {
     assert_eq!(updated_full_index.max_kv_pairs_per_context, 100);
     assert_eq!(
         updated_full_index.hash_algorithm,
-        udex_api::index::HashAlgorithm::Sha1 as i32
+        udex_api::index::HashAlgorithm::Xxh3 as i32
     );
 
     // Test updating no fields throws an error

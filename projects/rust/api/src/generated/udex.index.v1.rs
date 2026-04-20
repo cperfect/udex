@@ -26,7 +26,7 @@ pub struct Index {
     pub max_value_length: i32,
     #[prost(int32, tag = "6")]
     pub max_kv_pairs_per_context: i32,
-    /// e.g., "sha1"
+    /// e.g., "xxh3"
     #[prost(enumeration = "HashAlgorithm", tag = "7")]
     pub hash_algorithm: i32,
     #[prost(message, optional, tag = "8")]
@@ -57,7 +57,7 @@ pub struct IndexUpdate {
     pub max_value_length: ::core::option::Option<i32>,
     #[prost(int32, optional, tag = "5")]
     pub max_kv_pairs_per_context: ::core::option::Option<i32>,
-    /// e.g., "sha1", "blake3"
+    /// e.g., "xxh3"
     #[prost(enumeration = "HashAlgorithm", optional, tag = "6")]
     pub hash_algorithm: ::core::option::Option<i32>,
 }

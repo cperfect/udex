@@ -89,7 +89,7 @@ where
     }
 
     /// Converts a ContextInput to a Context by generating a hash.
-    /// Uses the default hash algorithm (SHA-1) for context identification.
+    /// Uses the configured hash algorithm (xxh3) for context identification.
     #[allow(clippy::result_large_err)]
     fn context_input_to_context(
         &self,

@@ -118,7 +118,7 @@ fn test_context_hash_prints_hex_string() {
         .args(["context", "hash", "--context", "key=value"])
         .assert()
         .success()
-        .stdout(predicate::str::is_match("^[0-9a-f]{40}\n$").unwrap());
+        .stdout(predicate::str::is_match("^[0-9a-f]{16}\n$").unwrap());
 }
 
 #[test]
