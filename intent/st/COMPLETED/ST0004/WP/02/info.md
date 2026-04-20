@@ -24,7 +24,7 @@ Benchmark each individual Entry API operation at single-entry scale via the full
 ## Acceptance Criteria
 
 - [x] All four operations benchmarked
-- [x] Each benchmark uses a fresh entry per iteration (no cross-contamination)
+- [x] Mutable benchmarks (`entry/create`, `entry/delete`) use fresh per-iteration entries to avoid cross-contamination; read benchmarks (`entry/get_by_key`, `entry/get_by_context`) intentionally reuse fixture-seeded data
 - [x] Results are stable enough for Criterion to report a mean and std dev (not `high noise` warnings)
 - [x] Benchmark names follow convention: `entry/<operation>` (e.g. `entry/create`, `entry/get_by_key`)
 
