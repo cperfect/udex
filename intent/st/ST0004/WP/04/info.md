@@ -15,14 +15,14 @@ Capture the initial performance baseline and integrate benchmark compilation int
 
 ## Deliverables
 
-- `projects/rust/server/benches/` — committed Criterion baseline (`.criterion/` directory) for the initial run, giving future runs a regression reference
+- `projects/rust/server/benches/` — committed Criterion baseline (`target/criterion/` directory) for the initial run, giving future runs a regression reference
 - `.github/workflows/01-Validation.yml` — `cargo bench --no-run` step added (compile-check only; no DB required in CI)
 - `README.md` or `projects/rust/CONTRIBUTING.md` — section documenting how to run benchmarks locally and how to update the baseline
 
 ## Acceptance Criteria
 
 - [ ] `cargo bench --no-run` passes in CI (no DB, just confirms benchmarks compile)
-- [ ] Initial baseline committed to repo under `projects/rust/server/.criterion/`
+- [ ] Initial baseline committed to repo under `target/criterion/`
 - [ ] Developer documentation covers: how to run (`cargo bench`), how to compare to baseline, how to update baseline (`cargo bench -- --save-baseline <name>`)
 - [ ] `.gitignore` updated if needed to include/exclude Criterion artefacts appropriately
 
