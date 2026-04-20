@@ -3,18 +3,21 @@ use crate::Error;
 
 pub type ContextHasher = fn(&ContextInput) -> Result<String, Error>;
 
-pub fn sha1_context_hash(context: &ContextInput) -> Result<String, Error> {
-    use sha1::{Digest, Sha1};
+/// Hashes a context using xxHash (xxh3-64).
+///
+/// Pairs are sorted by key before serialisation so that submission order does
+/// not affect the hash — two `ContextInput` values with the same pairs in any
+/// order will always produce the same hash.
+pub fn xxh3_context_hash(context: &ContextInput) -> Result<String, Error> {
+    use xxhash_rust::xxh3::xxh3_64;
 
-    // Sort key-value pairs by key for consistent hashing
     let mut sorted_pairs = context.pairs.clone();
     sorted_pairs.sort_by(|a, b| a.key.cmp(&b.key));
 
-    let mut hasher = Sha1::new();
-    let context_json = serde_json::to_string(&sorted_pairs).expect("Failed to serialize key pairs");
-    hasher.update(context_json.as_bytes());
+    let context_json =
+        serde_json::to_string(&sorted_pairs).map_err(|e| Error::DataConversion(e.to_string()))?;
 
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(format!("{:016x}", xxh3_64(context_json.as_bytes())))
 }
 
 #[cfg(test)]
@@ -82,8 +85,8 @@ mod tests {
             kek_id: None,
         };
 
-        let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
+        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
+        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
 
         assert_eq!(
             hash1, hash2,
@@ -137,8 +140,8 @@ mod tests {
             kek_id: None,
         };
 
-        let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
+        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
+        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
 
         assert_eq!(
             hash1, hash2,
@@ -182,8 +185,8 @@ mod tests {
             kek_id: None,
         };
 
-        let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
+        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
+        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
 
         assert_ne!(
             hash1, hash2,
@@ -213,8 +216,8 @@ mod tests {
             kek_id: None,
         };
 
-        let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
+        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
+        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
 
         assert_ne!(
             hash1, hash2,
@@ -244,8 +247,8 @@ mod tests {
             kek_id: None,
         };
 
-        let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
+        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
+        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
 
         assert_ne!(
             hash1, hash2,
@@ -275,8 +278,8 @@ mod tests {
             kek_id: None,
         };
 
-        let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
+        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
+        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
 
         assert_ne!(
             hash1, hash2,
@@ -298,8 +301,8 @@ mod tests {
             kek_id: None,
         };
 
-        let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
+        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
+        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
 
         assert_eq!(hash1, hash2, "Empty contexts should produce the same hash");
     }
@@ -370,8 +373,8 @@ mod tests {
             kek_id: None,
         };
 
-        let hash1 = sha1_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = sha1_context_hash(&context2).expect("Hash should succeed");
+        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
+        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
 
         assert_eq!(
             hash1, hash2,
@@ -402,9 +405,9 @@ mod tests {
         };
 
         // Generate the hash three times from the same input
-        let hash1 = sha1_context_hash(&context).expect("Hash should succeed");
-        let hash2 = sha1_context_hash(&context).expect("Hash should succeed");
-        let hash3 = sha1_context_hash(&context).expect("Hash should succeed");
+        let hash1 = xxh3_context_hash(&context).expect("Hash should succeed");
+        let hash2 = xxh3_context_hash(&context).expect("Hash should succeed");
+        let hash3 = xxh3_context_hash(&context).expect("Hash should succeed");
 
         // All three hashes must be identical - this proves determinism
         assert_eq!(
@@ -433,10 +436,10 @@ mod tests {
             kek_id: None,
         };
 
-        let hash = sha1_context_hash(&context).expect("Hash should succeed");
+        let hash = xxh3_context_hash(&context).expect("Hash should succeed");
 
-        // SHA-1 hash should be 40 characters (160 bits in hex)
-        assert_eq!(hash.len(), 40, "SHA-1 hash should be 40 characters");
+        // xxh3-64 produces a 64-bit value — 16 hex characters
+        assert_eq!(hash.len(), 16, "xxh3-64 hash should be 16 hex characters");
 
         // Should only contain hex characters
         assert!(

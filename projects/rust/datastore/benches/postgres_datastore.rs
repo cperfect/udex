@@ -137,7 +137,7 @@ async fn setup_datastore() -> (
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 10,
-            hash_algorithm: HashAlgorithm::Sha1 as i32,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
             created_at: Some(udex_api::protobuf::Timestamp {
                 seconds: now.as_secs() as i64,
                 nanos: now.subsec_nanos() as i32,

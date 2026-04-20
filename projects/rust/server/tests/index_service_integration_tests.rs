@@ -37,7 +37,7 @@ async fn init_index_service() -> MaybeOnceType {
             max_key_length: Some(256),
             max_value_length: Some(1024),
             max_kv_pairs_per_context: Some(10),
-            hash_algorithm: Some(HashAlgorithm::Sha1 as i32),
+            hash_algorithm: Some(HashAlgorithm::Xxh3 as i32),
         }),
     };
 
@@ -138,7 +138,7 @@ async fn test_create_index_valid_input() {
         max_key_length: 128,
         max_value_length: 512,
         max_kv_pairs_per_context: 20,
-        hash_algorithm: HashAlgorithm::Sha1 as i32,
+        hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
     let result = index_server.create_index(request).await;
 
@@ -159,7 +159,7 @@ async fn test_create_index_valid_input() {
     assert_eq!(index.max_key_length, 128);
     assert_eq!(index.max_value_length, 512);
     assert_eq!(index.max_kv_pairs_per_context, 20);
-    assert_eq!(index.hash_algorithm, HashAlgorithm::Sha1 as i32);
+    assert_eq!(index.hash_algorithm, HashAlgorithm::Xxh3 as i32);
     assert!(index.created_at.is_some());
 }
 
@@ -205,7 +205,7 @@ async fn test_create_index_duplicate_name() {
         max_key_length: 64,
         max_value_length: 256,
         max_kv_pairs_per_context: 5,
-        hash_algorithm: HashAlgorithm::Sha1 as i32,
+        hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
     let result = index_server.create_index(request).await;
     assert!(
@@ -222,7 +222,7 @@ async fn test_create_index_duplicate_name() {
         max_key_length: 64,
         max_value_length: 256,
         max_kv_pairs_per_context: 5,
-        hash_algorithm: HashAlgorithm::Sha1 as i32,
+        hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
     let result = index_server.create_index(request).await;
     assert!(result.is_err(), "Duplicate create should fail");
@@ -245,7 +245,7 @@ async fn test_create_index_empty_name() {
         max_key_length: 256,
         max_value_length: 1024,
         max_kv_pairs_per_context: 50,
-        hash_algorithm: HashAlgorithm::Sha1 as i32,
+        hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
     let result = index_server.create_index(request).await;
 
@@ -274,7 +274,7 @@ async fn test_create_index_invalid_max_bulk_operations() {
         max_key_length: 256,
         max_value_length: 1024,
         max_kv_pairs_per_context: 50,
-        hash_algorithm: HashAlgorithm::Sha1 as i32,
+        hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
     let result = index_server.create_index(request).await;
 
@@ -305,7 +305,7 @@ async fn test_create_index_invalid_max_key_length() {
         max_key_length: 0, // Invalid: should be >= 1
         max_value_length: 1024,
         max_kv_pairs_per_context: 50,
-        hash_algorithm: HashAlgorithm::Sha1 as i32,
+        hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
     let result = index_server.create_index(request).await;
 
@@ -334,7 +334,7 @@ async fn test_create_index_invalid_max_value_length() {
         max_key_length: 256,
         max_value_length: 0, // Invalid: should be >= 1
         max_kv_pairs_per_context: 50,
-        hash_algorithm: HashAlgorithm::Sha1 as i32,
+        hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
     let result = index_server.create_index(request).await;
 
@@ -363,7 +363,7 @@ async fn test_create_index_invalid_max_kv_pairs_per_context() {
         max_key_length: 256,
         max_value_length: 1024,
         max_kv_pairs_per_context: 0, // Invalid: should be >= 1
-        hash_algorithm: HashAlgorithm::Sha1 as i32,
+        hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
     let result = index_server.create_index(request).await;
 
@@ -504,7 +504,7 @@ async fn test_list_indices() {
 
     let test_index = test_index.unwrap();
     assert_eq!(test_index.description, "Test index description");
-    assert_eq!(test_index.hash_algorithm, HashAlgorithm::Sha1 as i32);
+    assert_eq!(test_index.hash_algorithm, HashAlgorithm::Xxh3 as i32);
 }
 
 /// Tests update index with missing update fields
@@ -580,7 +580,7 @@ async fn test_validation_error_consistency() {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: HashAlgorithm::Sha1 as i32,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
         },
         CreateIndexRequest {
             name: "valid_name".to_string(),
@@ -589,7 +589,7 @@ async fn test_validation_error_consistency() {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: HashAlgorithm::Sha1 as i32,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
         },
         CreateIndexRequest {
             name: "valid_name".to_string(),

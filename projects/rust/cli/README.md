@@ -63,7 +63,7 @@ udex entry delete my-index --key 550e8400-e29b-41d4-a716-446655440000
 # Decode a JWT header and claims without verifying the signature
 udex token inspect eyJhbGci...
 
-# Compute the SHA-1 context hash that the server would assign (no connection needed)
+# Compute the xxh3 context hash that the server would assign (no connection needed)
 udex context hash --context name=alice --context role=admin
 ```
 

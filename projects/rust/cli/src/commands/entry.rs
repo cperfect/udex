@@ -9,7 +9,7 @@ use udex_api::entry::{
     value, ContextInput, CreateEntryRequest, DeleteEntryRequest, KeyValuePair,
     LookupContextByKeyRequest, LookupKeysByContextRequest, Value,
 };
-use udex_api::hash::sha1_context_hash;
+use udex_api::hash::xxh3_context_hash;
 
 use crate::cli::{EntryCreateArgs, EntryDeleteArgs, EntryGetArgs, EntryLookupArgs, OutputFormat};
 use crate::client::ClientConfig;
@@ -165,7 +165,7 @@ pub async fn lookup(
     output: &OutputFormat,
 ) -> Result<()> {
     let context = build_context_input(&args.context)?;
-    let context_hash = sha1_context_hash(&context).context("failed to compute context hash")?;
+    let context_hash = xxh3_context_hash(&context).context("failed to compute context hash")?;
 
     let channel = client.channel().await?;
     let mut grpc = EntryServiceClient::with_interceptor(channel, client.interceptor());

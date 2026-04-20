@@ -12,7 +12,7 @@ Generated gRPC types and service stubs for Udex. Contains no I/O — all network
 | `index` (`udex.index.v1`) | `IndexServiceClient`, `IndexServiceServer`, request/response types |
 | `healthz` (`udex.healthz.v1`) | `HealthzServiceClient`, `HealthzServiceServer` |
 | `authz` | Claims, permissions, and authorization wrappers for both services |
-| `hash` | `sha1_context_hash()` — deterministic context hashing (offline) |
+| `hash` | `xxh3_context_hash()` — deterministic context hashing (offline) |
 
 All generated types derive `serde::Serialize` / `serde::Deserialize` for JSON/YAML output.
 

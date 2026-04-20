@@ -12,7 +12,7 @@ use udex_api::{
         CreateEntryResponse, DeleteEntryRequest, DeleteEntryResponse, LookupContextByKeyRequest,
         LookupContextByKeyResponse, LookupKeysByContextRequest, LookupKeysByContextResponse,
     },
-    hash::{sha1_context_hash, ContextHasher},
+    hash::{xxh3_context_hash, ContextHasher},
     index::{index_service_server::IndexService, ListIndicesRequest},
 };
 use udex_datastore::{
@@ -71,9 +71,9 @@ where
 
         for index in &indexes {
             match index.hash_algorithm {
-                h if h == udex_api::index::HashAlgorithm::Sha1 as i32 => {
+                h if h == udex_api::index::HashAlgorithm::Xxh3 as i32 => {
                     self.index_hasher_fns
-                        .insert(index.name.clone(), sha1_context_hash);
+                        .insert(index.name.clone(), xxh3_context_hash);
                 }
                 // Add more hash algorithms as needed
                 _ => {
@@ -89,7 +89,7 @@ where
     }
 
     /// Converts a ContextInput to a Context by generating a hash.
-    /// Uses the default hash algorithm (SHA-1) for context identification.
+    /// Uses the configured hash algorithm (xxh3) for context identification.
     #[allow(clippy::result_large_err)]
     fn context_input_to_context(
         &self,

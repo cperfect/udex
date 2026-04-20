@@ -40,7 +40,7 @@ async fn init_entry_service() -> MaybeOnceType {
             max_key_length: Some(256),
             max_value_length: Some(1024),
             max_kv_pairs_per_context: Some(10),
-            hash_algorithm: Some(HashAlgorithm::Sha1 as i32),
+            hash_algorithm: Some(HashAlgorithm::Xxh3 as i32),
         }),
     };
 

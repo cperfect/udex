@@ -18,6 +18,17 @@ use udex_api::index::{HashAlgorithm, Index, IndexUpdate};
 use udex_api::{google_timestamp_to_offset_datetime, offset_datetime_to_google_timestamp};
 use uuid::Uuid;
 
+/// Parse a `hash_algorithm` string from the database, accepting legacy values
+/// written by older code (e.g. `"sha1"`) and mapping them to the current
+/// canonical variant. Migration 04 rewrites these rows, but this fallback
+/// prevents deserialization failures during the migration window.
+fn parse_hash_algorithm(s: &str) -> Option<HashAlgorithm> {
+    match s {
+        "sha1" | "Sha1" | "SHA1" => Some(HashAlgorithm::Xxh3),
+        other => HashAlgorithm::from_str_name(other),
+    }
+}
+
 pub struct PostgresDatastore {
     pool: Arc<PgPool>,
 }
@@ -474,7 +485,7 @@ impl Datastore for PostgresDatastore {
                 .try_get("max_kv_pairs_per_context")
                 .map_err(Error::Database)?,
             hash_algorithm: match row.try_get::<&str, _>("hash_algorithm") {
-                Ok(h) => match HashAlgorithm::from_str_name(h) {
+                Ok(h) => match parse_hash_algorithm(h) {
                     Some(alg) => alg as i32,
                     None => {
                         return Err(Error::InvalidIndex(format!(
@@ -616,7 +627,7 @@ impl Datastore for PostgresDatastore {
                         .try_get("max_kv_pairs_per_context")
                         .map_err(Error::Database)?,
                     hash_algorithm: match row.try_get::<&str, _>("hash_algorithm") {
-                        Ok(h) => match HashAlgorithm::from_str_name(h) {
+                        Ok(h) => match parse_hash_algorithm(h) {
                             Some(alg) => alg as i32,
                             None => {
                                 return Err(Error::InvalidIndex(format!(

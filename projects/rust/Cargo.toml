@@ -54,6 +54,9 @@ tempfile = "3"
 # Build dependencies
 tonic-build = "0.13"
 
+# Hashing
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+
 # Benchmarking
 criterion = { version = "0.5", features = ["async_tokio"] }
 

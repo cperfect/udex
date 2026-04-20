@@ -282,7 +282,7 @@ mod tests {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: HashAlgorithm::Sha1 as i32,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
         });
         request.extensions_mut().insert(claims);
 
@@ -307,7 +307,7 @@ mod tests {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: HashAlgorithm::Sha1 as i32,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
         });
         request.extensions_mut().insert(claims);
 
@@ -381,7 +381,7 @@ mod tests {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: HashAlgorithm::Sha1 as i32,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
         });
         request.extensions_mut().insert(claims);
 
@@ -406,7 +406,7 @@ mod tests {
             max_key_length: 256,
             max_value_length: 1024,
             max_kv_pairs_per_context: 50,
-            hash_algorithm: HashAlgorithm::Sha1 as i32,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
         });
         request.extensions_mut().insert(claims);
 

@@ -59,7 +59,7 @@ async fn init_server() -> MaybeOnceType {
                 max_key_length: Some(256),
                 max_value_length: Some(1024),
                 max_kv_pairs_per_context: Some(50),
-                hash_algorithm: Some(HashAlgorithm::Sha1 as i32), // Use SHA1 for test consistency
+                hash_algorithm: Some(HashAlgorithm::Xxh3 as i32), // Use Xxh3 for test consistency
             }),
         }],
         authnz: udex_server::config::AuthNzConfig {
@@ -364,7 +364,7 @@ async fn test_init_indexes() {
     );
     assert_eq!(
         index.hash_algorithm,
-        HashAlgorithm::Sha1 as i32,
+        HashAlgorithm::Xxh3 as i32,
         "Hash algorithm should match"
     );
     assert!(

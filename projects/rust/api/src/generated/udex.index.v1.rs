@@ -26,7 +26,7 @@ pub struct Index {
     pub max_value_length: i32,
     #[prost(int32, tag = "6")]
     pub max_kv_pairs_per_context: i32,
-    /// e.g., "sha1"
+    /// e.g., "xxh3"
     #[prost(enumeration = "HashAlgorithm", tag = "7")]
     pub hash_algorithm: i32,
     #[prost(message, optional, tag = "8")]
@@ -57,7 +57,7 @@ pub struct IndexUpdate {
     pub max_value_length: ::core::option::Option<i32>,
     #[prost(int32, optional, tag = "5")]
     pub max_kv_pairs_per_context: ::core::option::Option<i32>,
-    /// e.g., "sha1", "blake3"
+    /// e.g., "xxh3"
     #[prost(enumeration = "HashAlgorithm", optional, tag = "6")]
     pub hash_algorithm: ::core::option::Option<i32>,
 }
@@ -143,13 +143,13 @@ pub struct ListIndicesResponse {
     pub indices: ::prost::alloc::vec::Vec<Index>,
 }
 /// allowed hash algorithms for indexes to use
-/// note that the context hash is not intended to be cryptographically secure - it is there to create an indentity for the context
+/// note that the context hash is not intended to be cryptographically secure - it is there to create an identity for the context
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum HashAlgorithm {
-    /// SHA-1 hash algorithm
-    Sha1 = 0,
+    /// xxHash (xxh3) — fast non-cryptographic hash for stable data identity
+    Xxh3 = 0,
 }
 impl HashAlgorithm {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -158,13 +158,13 @@ impl HashAlgorithm {
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            Self::Sha1 => "Sha1",
+            Self::Xxh3 => "Xxh3",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "Sha1" => Some(Self::Sha1),
+            "Xxh3" => Some(Self::Xxh3),
             _ => None,
         }
     }

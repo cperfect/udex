@@ -120,7 +120,7 @@ pub async fn create(
             max_key_length,
             max_value_length,
             max_kv_pairs_per_context,
-            hash_algorithm: udex_api::index::HashAlgorithm::Sha1 as i32,
+            hash_algorithm: udex_api::index::HashAlgorithm::Xxh3 as i32,
         })
         .await
         .context("create_index RPC failed")?;

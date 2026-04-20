@@ -8,9 +8,9 @@ package udex.index.v1;
 import "google/protobuf/timestamp.proto";
 
 // allowed hash algorithms for indexes to use
-// note that the context hash is not intended to be cryptographically secure - it is there to create an indentity for the context
+// note that the context hash is not intended to be cryptographically secure - it is there to create an identity for the context
 enum HashAlgorithm {
-  Sha1 = 0; // SHA-1 hash algorithm
+  Xxh3 = 0; // xxHash (xxh3) — fast non-cryptographic hash for stable data identity
 }
 
 // IndexService provides operations for managing indices
@@ -43,7 +43,7 @@ message Index {
   int32 max_key_length = 4;
   int32 max_value_length = 5;
   int32 max_kv_pairs_per_context = 6;
-  HashAlgorithm hash_algorithm = 7; // e.g., "sha1"
+  HashAlgorithm hash_algorithm = 7; // e.g., "xxh3"
   google.protobuf.Timestamp created_at = 8;
   string created_by = 9;
   optional google.protobuf.Timestamp updated_at = 10;
@@ -56,7 +56,7 @@ message IndexUpdate {
   optional int32 max_key_length = 3;
   optional int32 max_value_length = 4;
   optional int32 max_kv_pairs_per_context = 5;
-  optional HashAlgorithm hash_algorithm = 6; // e.g., "sha1", "blake3"
+  optional HashAlgorithm hash_algorithm = 6; // e.g., "xxh3"
 }
 
 
