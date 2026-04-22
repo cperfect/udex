@@ -46,9 +46,7 @@ where
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
 
         // Check permissions
-        if !is_permitted(request.get_ref(), claims)
-            .map_err(|e| tonic::Status::internal(format!("Permission check failed: {}", e)))?
-        {
+        if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
         }
 
@@ -67,9 +65,7 @@ where
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
 
         // Check permissions
-        if !is_permitted(request.get_ref(), claims)
-            .map_err(|e| tonic::Status::internal(format!("Permission check failed: {}", e)))?
-        {
+        if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
         }
 
@@ -88,9 +84,7 @@ where
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
 
         // Check permissions
-        if !is_permitted(request.get_ref(), claims)
-            .map_err(|e| tonic::Status::internal(format!("Permission check failed: {}", e)))?
-        {
+        if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
         }
 
@@ -109,9 +103,7 @@ where
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
 
         // Check permissions
-        if !is_permitted(request.get_ref(), claims)
-            .map_err(|e| tonic::Status::internal(format!("Permission check failed: {}", e)))?
-        {
+        if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
         }
 
