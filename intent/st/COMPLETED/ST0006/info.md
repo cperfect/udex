@@ -4,7 +4,7 @@ intent_version: 2.4.0
 status: Completed
 slug: rfc-8693-scope-claim-for-permissions
 created: 20260422
-completed:
+completed: 20260422
 ---
 
 # ST0006: RFC 8693 scope claim for permissions
@@ -49,14 +49,14 @@ values. Using it means:
 
 ## Acceptance Criteria
 
-- [ ] `Claims` struct carries a `scope` field (space-delimited string, optional
+- [x] `Claims` struct carries a `scope` field (space-delimited string, optional
       or empty-default).
-- [ ] Permission extraction splits `scope` on whitespace and retains only values
+- [x] Permission extraction splits `scope` on whitespace and retains only values
       prefixed with `udex:`.
-- [ ] Non-`udex:` scope values are silently discarded (no error, no warning).
-- [ ] Existing integration tests pass with tokens carrying `scope`.
-- [ ] A token with `scope = "openid profile email udex:entry:read"` grants only
+- [x] Non-`udex:` scope values are silently discarded (no error, no warning).
+- [x] Existing integration tests pass with tokens carrying `scope`.
+- [x] A token with `scope = "openid profile email udex:entry:read"` grants only
       `udex:entry:read`.
-- [ ] The old `permissions` extra-claim path is removed.
-- [ ] `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and all tests
+- [x] The old `permissions` extra-claim path is removed.
+- [x] `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and all tests
       pass.
