@@ -33,15 +33,15 @@ carry the old `permissions` claim.
 
 ## Acceptance Criteria
 
-- [ ] `Claims` has `pub scope: String` with `#[serde(default)]`.
-- [ ] Deserialising a JWT payload without a `scope` key yields `scope = ""` (no error).
-- [ ] Serialising a `Claims` with a non-empty `scope` produces `"scope": "..."` in the payload.
-- [ ] Deserialising a JWT payload with unknown fields (e.g. `email`, `name`) succeeds and those fields are ignored.
-- [ ] `Claims::new()` signature is unchanged.
-- [ ] `with_scope()` builder method added for constructing scoped claims in tests.
-- [ ] `extra` field, `add_extras()`, and `get_extras()` are fully removed.
-- [ ] All `claims.rs` unit tests updated — no references to `permissions` extra claim remain.
-- [ ] `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and `cargo test -p udex-api` pass.
+- [x] `Claims` has `pub scope: String` with `#[serde(default)]`.
+- [x] Deserialising a JWT payload without a `scope` key yields `scope = ""` (no error).
+- [x] Serialising a `Claims` with a non-empty `scope` produces `"scope": "..."` in the payload.
+- [x] Deserialising a JWT payload with unknown fields (e.g. `email`, `name`) succeeds and those fields are ignored.
+- [x] `Claims::new()` signature is unchanged.
+- [x] `with_scope()` builder method added for constructing scoped claims in tests.
+- [x] `extra` field, `add_extras()`, and `get_extras()` are fully removed.
+- [x] All `claims.rs` unit tests updated — no references to `permissions` extra claim remain.
+- [x] `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and `cargo test -p udex-api` pass.
 
 ## Dependencies
 

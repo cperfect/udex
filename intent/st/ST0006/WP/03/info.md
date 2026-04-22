@@ -26,11 +26,11 @@ non-`udex:` scopes in a mixed token are silently ignored.
 
 ## Acceptance Criteria
 
-- [ ] `OverrideClaims` has a `scope: Option<String>` field replacing permission-carrying extras.
-- [ ] All existing authNZ integration tests pass unchanged in behaviour.
-- [ ] New mixed-scope test passes: non-`udex:` scopes are ignored, `udex:` scope grants access.
-- [ ] No references to the old `permissions` extra-claim remain in test code.
-- [ ] `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and the full integration test suite pass.
+- [x] `OverrideClaims` has a `scope: Option<String>` field replacing permission-carrying extras.
+- [x] All existing authNZ integration tests pass unchanged in behaviour.
+- [x] New mixed-scope test passes: non-`udex:` scopes are ignored, `udex:` scope grants access.
+- [x] No references to the old `permissions` extra-claim remain in test code.
+- [x] `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and the full integration test suite pass.
 
 ## Dependencies
 

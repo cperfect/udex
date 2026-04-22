@@ -27,13 +27,13 @@ discard everything else.
 
 ## Acceptance Criteria
 
-- [ ] `extract_permissions()` reads `claims.scope`, splits on ASCII whitespace.
-- [ ] Only values prefixed with `udex:` are retained; all others are silently discarded (no log, no error).
-- [ ] The old `permissions` extra-claim path is fully removed.
-- [ ] `scope = "openid profile email udex:entry:v1:my-index:read"` yields exactly `["udex:entry:v1:my-index:read"]`.
-- [ ] `scope = ""` (or absent) yields an empty permission set — not an error.
-- [ ] Existing per-permission validation (regex, format) is preserved.
-- [ ] `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and `cargo test -p udex-api` pass.
+- [x] `extract_permissions()` reads `claims.scope`, splits on ASCII whitespace.
+- [x] Only values prefixed with `udex:` are retained; all others are silently discarded (no log, no error).
+- [x] The old `permissions` extra-claim path is fully removed.
+- [x] `scope = "openid profile email udex:entry:v1:my-index:read"` yields exactly `["udex:entry:v1:my-index:read"]`.
+- [x] `scope = ""` (or absent) yields an empty permission set — not an error.
+- [x] Existing per-permission validation (regex, format) is preserved.
+- [x] `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and `cargo test -p udex-api` pass.
 
 ## Dependencies
 
