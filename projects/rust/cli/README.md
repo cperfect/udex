@@ -59,6 +59,8 @@ udex entry delete my-index --key 550e8400-e29b-41d4-a716-446655440000
 
 ### Offline utilities
 
+See [JWT Claims](../api/README.md#jwt-claims) for the required token structure and permission format.
+
 ```bash
 # Decode a JWT header and claims without verifying the signature
 udex token inspect eyJhbGci...

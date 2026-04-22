@@ -48,9 +48,7 @@ where
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
 
         // Check permissions
-        if !is_permitted(request.get_ref(), claims)
-            .map_err(|e| tonic::Status::internal(format!("Permission check failed: {}", e)))?
-        {
+        if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
         }
 
@@ -71,9 +69,7 @@ where
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
 
         // Check permissions
-        if !is_permitted(request.get_ref(), claims)
-            .map_err(|e| tonic::Status::internal(format!("Permission check failed: {}", e)))?
-        {
+        if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
         }
 
@@ -92,9 +88,7 @@ where
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
 
         // Check permissions
-        if !is_permitted(request.get_ref(), claims)
-            .map_err(|e| tonic::Status::internal(format!("Permission check failed: {}", e)))?
-        {
+        if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
         }
 
@@ -113,9 +107,7 @@ where
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
 
         // Check permissions
-        if !is_permitted(request.get_ref(), claims)
-            .map_err(|e| tonic::Status::internal(format!("Permission check failed: {}", e)))?
-        {
+        if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
         }
 
@@ -135,9 +127,7 @@ where
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
 
         // Check permissions
-        if !is_permitted(request.get_ref(), claims)
-            .map_err(|e| tonic::Status::internal(format!("Permission check failed: {}", e)))?
-        {
+        if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
         }
 
@@ -156,9 +146,7 @@ where
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
 
         // Check permissions
-        if !is_permitted(request.get_ref(), claims)
-            .map_err(|e| tonic::Status::internal(format!("Permission check failed: {}", e)))?
-        {
+        if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
         }
 
@@ -207,7 +195,6 @@ impl Permissable<BulkReadEntryOperationRequest> for BulkReadEntryOperationReques
 mod tests {
     use super::*;
     use mockall::mock;
-    use serde_json::json;
     use tonic::{Request, Response, Status};
 
     // Mock the EntryService trait
@@ -249,20 +236,14 @@ mod tests {
     }
 
     fn create_test_claims_with_permissions(permissions: Vec<&str>) -> Claims {
-        let mut claims = Claims::new(
+        Claims::new(
             "test-user".to_string(),
             "test-issuer".to_string(),
             "test-audience".to_string(),
-            1234567890 + 3600, // exp: 1 hour from now
-            1234567890,        // iat: now
-        );
-
-        let permissions_json = json!(permissions);
-        let mut extras = std::collections::HashMap::new();
-        extras.insert("permissions".to_string(), permissions_json);
-        claims.add_extras(extras);
-
-        claims
+            1234567890 + 3600,
+            1234567890,
+        )
+        .with_scope(permissions.join(" "))
     }
 
     fn create_test_claims_without_permissions() -> Claims {

@@ -37,7 +37,7 @@ udex_server::serve(server_config, datastore).await?;
 
 - `bind_address` — socket address (e.g. `127.0.0.1:50051`)
 - `tls.cert_path` / `tls.key_path` — TLS certificate and private key paths
-- `authnz.jwt_secret` / `authnz.jwt_issuer` / `authnz.jwt_audience` — JWT validation parameters
+- `authnz.jwt_public_key_path` / `authnz.jwt_issuer` / `authnz.jwt_audience` — JWT validation parameters (ES256; see [JWT Claims](../api/README.md#jwt-claims) for the required token structure and permission format)
 - `init_indexes` — list of indexes to ensure exist on startup
 
 ## Testing

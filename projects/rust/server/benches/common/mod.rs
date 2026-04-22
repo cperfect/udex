@@ -6,8 +6,6 @@
 //! and provides a connected, authenticated channel for use in benchmarks.
 
 use jsonwebtoken::{encode, EncodingKey, Header};
-use serde_json::json;
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::OnceLock;
 use time::OffsetDateTime;
@@ -255,20 +253,15 @@ async fn start_server_and_connect() -> (
         EncodingKey::from_ec_pem(jwt_private_key.as_bytes()).expect("EncodingKey from PEM");
 
     let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
-    let mut claims = Claims::new(
+    // Wildcard grants all entry operations (create, read, delete, write) on the bench index.
+    let claims = Claims::new(
         "bench-runner".to_string(),
         format!("{}-issuer", ID_PREFIX),
         format!("{}-audience", ID_PREFIX),
         now + 3600, // exp: 1 hour
         now,        // iat: now
-    );
-    let mut extras = HashMap::new();
-    // Wildcard grants all entry operations (create, read, delete, write) on the bench index.
-    extras.insert(
-        "permissions".to_string(),
-        json!([format!("udex:entry:v1:{}:**", index_name)]),
-    );
-    claims.add_extras(extras);
+    )
+    .with_scope(format!("udex:entry:v1:{}:**", index_name));
 
     let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
     header.typ = Some("JWT".to_string());

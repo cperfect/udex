@@ -8,8 +8,10 @@ pub struct Claims {
     aud: String, // Audience - registered claim
     exp: usize,  // Expiration - registered claim
     iat: usize,  // Issued at - registered claim
-    #[serde(flatten)]
-    extra: std::collections::HashMap<String, serde_json::Value>,
+    /// RFC 8693 §4.2 scope claim — space-delimited list of scope values.
+    /// Unknown (non-`udex:`) scopes are silently ignored during permission extraction.
+    #[serde(default)]
+    pub scope: String,
 }
 
 impl Claims {
@@ -20,22 +22,19 @@ impl Claims {
             aud,
             exp,
             iat,
-            extra: std::collections::HashMap::new(),
+            scope: String::new(),
         }
     }
 
-    pub fn add_extras(&mut self, extras: std::collections::HashMap<String, serde_json::Value>) {
-        for (key, value) in extras {
-            self.extra.insert(key, value);
-        }
+    pub fn with_scope(mut self, scope: impl Into<String>) -> Self {
+        self.scope = scope.into();
+        self
     }
 
-    pub fn get_extras(&self) -> &std::collections::HashMap<String, serde_json::Value> {
-        &self.extra
-    }
-
-    /// applies custom validation logic to the [registered claims](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1) of the JWT. It is expected that the JWT library has already validated the signature and the registered claims according to the JWT specification.
-    /// we could just check everything again here but validation is going to happen *a lot* and the complete validation gets tested in the server integration tests
+    /// Applies custom validation logic to the [registered claims](https://datatracker.ietf.org/doc/html/rfc7519#section-4.1).
+    /// The JWT library is expected to have already validated the signature and
+    /// registered claims; this method only checks invariants that library
+    /// validation does not cover.
     pub fn custom_validate_public(&self) -> Result<(), Error> {
         if self.sub.is_empty() {
             return Err(Error::InvalidClaimsError(
@@ -63,8 +62,8 @@ mod tests {
             "test-user".to_string(),
             "test-issuer".to_string(),
             "test-audience".to_string(),
-            now + 3600, // expires in 1 hour
-            now,        // issued now
+            now + 3600,
+            now,
         )
     }
 
@@ -79,63 +78,64 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_full_claims() {
+    fn test_claims_new_has_empty_scope() {
+        let claims = create_valid_claims();
+        assert_eq!(claims.sub, "test-user");
+        assert_eq!(claims.iss, "test-issuer");
+        assert_eq!(claims.aud, "test-audience");
+        assert_eq!(claims.scope, "");
+    }
+
+    #[test]
+    fn test_with_scope_builder() {
+        let claims = create_valid_claims().with_scope("udex:index:v1:my-index:read openid");
+        assert_eq!(claims.scope, "udex:index:v1:my-index:read openid");
+    }
+
+    #[test]
+    fn test_serialize_includes_scope() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
-        let mut claims = create_claims_with_times(now, now + 3600);
-        claims.add_extras(
-            vec![
-                ("role".to_string(), json!("admin")),
-                ("permissions".to_string(), json!(["read", "write"])),
-            ]
-            .into_iter()
-            .collect(),
-        );
-        let claims_json = serde_json::to_string(&claims).expect("Failed to serialize claims");
-        // Expected JSON structure, with times
-        let expected_claims_json = json!({
+        let claims =
+            create_claims_with_times(now, now + 3600).with_scope("udex:entry:v1:my-index:read");
+        let claims_json = serde_json::to_string(&claims).expect("serialize");
+        let expected = json!({
             "sub": "test-user",
             "iss": "test-issuer",
             "aud": "test-audience",
             "exp": now + 3600,
             "iat": now,
-            "role": "admin",
-            "permissions": ["read", "write"]
-        })
-        .to_string();
-        //parse them so we can check they are equal json objects
-        // e.g. order of keys doesn't matter
-        assert_eq!(
-            claims_json.parse::<serde_json::Value>().unwrap(),
-            expected_claims_json.parse::<serde_json::Value>().unwrap()
-        );
+            "scope": "udex:entry:v1:my-index:read"
+        });
+        assert_eq!(claims_json.parse::<serde_json::Value>().unwrap(), expected);
     }
 
     #[test]
-    fn test_claims_new() {
-        let claims = create_valid_claims();
-        assert_eq!(claims.sub, "test-user");
-        assert_eq!(claims.iss, "test-issuer");
-        assert_eq!(claims.aud, "test-audience");
-        assert!(claims.extra.is_empty());
+    fn test_deserialize_without_scope_defaults_to_empty() {
+        let json = json!({
+            "sub": "test-user",
+            "iss": "test-issuer",
+            "aud": "test-audience",
+            "exp": 9999999999usize,
+            "iat": 1000000000usize
+        });
+        let claims: Claims = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(claims.scope, "");
     }
 
     #[test]
-    fn test_add_extras() {
-        let mut claims = create_valid_claims();
-        claims.add_extras(
-            vec![
-                ("role".to_string(), json!("admin")),
-                ("permissions".to_string(), json!(["read", "write"])),
-            ]
-            .into_iter()
-            .collect::<std::collections::HashMap<_, _>>(),
-        );
-
-        assert_eq!(claims.extra.get("role"), Some(&json!("admin")));
-        assert_eq!(
-            claims.extra.get("permissions"),
-            Some(&json!(["read", "write"]))
-        );
+    fn test_deserialize_ignores_unknown_fields() {
+        let json = json!({
+            "sub": "test-user",
+            "iss": "test-issuer",
+            "aud": "test-audience",
+            "exp": 9999999999usize,
+            "iat": 1000000000usize,
+            "email": "user@example.com",
+            "name": "Test User",
+            "scope": "openid profile udex:entry:v1:my-index:read"
+        });
+        let claims: Claims = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(claims.scope, "openid profile udex:entry:v1:my-index:read");
     }
 
     #[test]
@@ -310,30 +310,18 @@ mod tests {
     }
 
     #[test]
-    fn test_serialization_deserialization() {
-        let mut claims = create_valid_claims();
-        claims.add_extras(
-            vec![
-                ("role".to_string(), json!("admin")),
-                ("level".to_string(), json!(5)),
-            ]
-            .into_iter()
-            .collect::<std::collections::HashMap<_, _>>(),
-        );
+    fn test_serialization_deserialization_round_trips_scope() {
+        let claims = create_valid_claims().with_scope("udex:index:v1:my-index:read openid");
 
-        // Serialize to JSON
-        let json_str = serde_json::to_string(&claims).expect("Failed to serialize claims");
-
-        // Deserialize back
-        let deserialized: Claims =
-            serde_json::from_str(&json_str).expect("Failed to deserialize claims");
+        let json_str = serde_json::to_string(&claims).expect("serialize");
+        let deserialized: Claims = serde_json::from_str(&json_str).expect("deserialize");
 
         assert_eq!(claims.sub, deserialized.sub);
         assert_eq!(claims.iss, deserialized.iss);
         assert_eq!(claims.aud, deserialized.aud);
         assert_eq!(claims.exp, deserialized.exp);
         assert_eq!(claims.iat, deserialized.iat);
-        assert_eq!(claims.extra, deserialized.extra);
+        assert_eq!(claims.scope, deserialized.scope);
     }
 
     #[test]

@@ -32,6 +32,55 @@ let mut client = IndexServiceClient::new(channel);
 let resp = client.list_indices(ListIndicesRequest {}).await?;
 ```
 
+## JWT Claims
+
+Udex uses ES256 JWT Bearer tokens. The server validates the standard registered
+claims and extracts permissions from the RFC 8693 `scope` claim.
+
+### Required claims
+
+| Claim | Type | Description |
+|-------|------|-------------|
+| `sub` | string | Subject — non-empty identifier for the caller |
+| `iss` | string | Issuer — must match `authnz.jwt_issuer` in server config |
+| `aud` | string | Audience — must match `authnz.jwt_audience` in server config |
+| `exp` | number | Expiration time (Unix seconds) |
+| `iat` | number | Issued-at time (Unix seconds, must be non-zero) |
+| `scope` | string | Space-delimited list of scope values (RFC 8693 §4.2) |
+
+### The `scope` claim
+
+Permissions are carried as a space-delimited string in the `scope` claim.
+Only values prefixed with `udex:` are processed; all other scope values
+(e.g. `openid`, `profile`, `email`) are silently discarded, so tokens issued
+by a standard OIDC provider work without modification.
+
+```text
+scope = "openid profile udex:index:v1:my-index:read udex:entry:v1:my-index:create"
+```
+
+### Permission format
+
+Each `udex:` scope value must match the pattern:
+
+```text
+udex:<service>:<version>:<resource>:<action>
+```
+
+Segments are lowercase alphanumeric with hyphens. Single (`*`) and double
+(`**`) wildcards are supported:
+
+| Scope value | Grants |
+|-------------|--------|
+| `udex:index:v1:my-index:read` | Describe `my-index` |
+| `udex:index:v1:my-index:*` | All operations on `my-index` |
+| `udex:entry:v1:my-index:**` | All entry operations on `my-index` |
+| `udex:index:v1:*:read` | Describe any index |
+| `udex:**` | All Udex operations |
+
+A token with no `udex:` scope values is valid but has no permissions and will
+receive `PERMISSION_DENIED` on any protected endpoint.
+
 ## Code generation
 
 Types are generated from `.proto` files via `build.rs` using `tonic-build`. The generated files live in `src/generated/` and are committed — run `cargo build` to regenerate after proto changes.

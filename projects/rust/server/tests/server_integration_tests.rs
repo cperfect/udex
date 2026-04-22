@@ -118,7 +118,7 @@ struct OverrideClaims {
     audience: Option<String>,
     exp: Option<usize>,
     iat: Option<usize>,
-    extra: Option<std::collections::HashMap<String, serde_json::Value>>,
+    scope: Option<String>,
 }
 
 /// Generates claims for testing JWT authentication
@@ -158,13 +158,9 @@ fn generate_test_claims(
         override_claims.as_ref().and_then(|c| c.iat).unwrap_or(now), // issued now
     );
     if let Some(override_claims) = override_claims {
-        let mut extras = std::collections::HashMap::new();
-        if let Some(extra_claims) = override_claims.extra {
-            for (key, value) in extra_claims {
-                extras.insert(key, value);
-            }
+        if let Some(scope) = override_claims.scope {
+            claims = claims.with_scope(scope);
         }
-        claims.add_extras(extras);
     }
     claims
 }
@@ -307,17 +303,7 @@ async fn test_init_indexes() {
         "test-user",
         &server_config.authnz,
         Some(OverrideClaims {
-            extra: {
-                let mut map = std::collections::HashMap::new();
-                map.insert(
-                    "permissions".to_string(),
-                    serde_json::Value::Array(vec![serde_json::Value::String(format!(
-                        "udex:index:v1:{}:read",
-                        index_name
-                    ))]),
-                ); //permissions must be an array in json
-                Some(map)
-            },
+            scope: Some(format!("udex:index:v1:{}:read", index_name)),
             sub: None,
             issuer: None,
             audience: None,
@@ -502,17 +488,7 @@ async fn test_authnz() {
             "test-user",
             &server_config.authnz,
             Some(OverrideClaims {
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![serde_json::Value::String(format!(
-                            "udex:index:v1:{}:read",
-                            index_name
-                        ))]),
-                    );
-                    Some(map)
-                },
+                scope: Some(format!("udex:index:v1:{}:read", index_name)),
                 sub: None,
                 issuer: None,
                 audience: None,
@@ -564,17 +540,7 @@ async fn test_authnz() {
             "test-user",
             &server_config.authnz,
             Some(OverrideClaims {
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![serde_json::Value::String(format!(
-                            "udex:entry:v1:{}:create",
-                            index_name
-                        ))]),
-                    );
-                    Some(map)
-                },
+                scope: Some(format!("udex:entry:v1:{}:create", index_name)),
                 sub: None,
                 issuer: None,
                 audience: None,
@@ -713,17 +679,7 @@ async fn test_authnz() {
                 ), // Valid
                 exp: Some(now + 3600),     // Valid: expires in 1 hour
                 iat: Some(now),            // Valid: issued now
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![serde_json::Value::String(format!(
-                            "udex:index:v1:{}:read",
-                            index_name
-                        ))]),
-                    );
-                    Some(map)
-                },
+                scope: Some(format!("udex:index:v1:{}:read", index_name)),
             }),
         );
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
@@ -789,17 +745,7 @@ async fn test_authnz() {
                 ), // Valid
                 exp: Some(now + 3600),              // Valid: expires in 1 hour
                 iat: Some(now),                     // Valid: issued now
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![serde_json::Value::String(format!(
-                            "udex:entry:v1:{}:create",
-                            index_name
-                        ))]),
-                    );
-                    Some(map)
-                },
+                scope: Some(format!("udex:entry:v1:{}:create", index_name)),
             }),
         );
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
@@ -852,17 +798,7 @@ async fn test_authnz() {
                 audience: Some("".to_string()),     // Invalid: empty audience
                 exp: Some(now + 3600),              // Valid: expires in 1 hour
                 iat: Some(now),                     // Valid: issued now
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![serde_json::Value::String(format!(
-                            "udex:index:v1:{}:read",
-                            index_name
-                        ))]),
-                    );
-                    Some(map)
-                },
+                scope: Some(format!("udex:index:v1:{}:read", index_name)),
             }),
         );
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
@@ -934,17 +870,7 @@ async fn test_authnz() {
                 ), // Valid
                 exp: Some(0),                       // Invalid: zero expiration
                 iat: Some(now),                     // Valid: issued now
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![serde_json::Value::String(format!(
-                            "udex:entry:v1:{}:create",
-                            index_name
-                        ))]),
-                    );
-                    Some(map)
-                },
+                scope: Some(format!("udex:entry:v1:{}:create", index_name)),
             }),
         );
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
@@ -1003,17 +929,7 @@ async fn test_authnz() {
                 ), // Valid
                 exp: Some(now + 3600),              // Valid: expires in 1 hour
                 iat: Some(0),                       // Invalid: zero issued at
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![serde_json::Value::String(format!(
-                            "udex:index:v1:{}:read",
-                            index_name
-                        ))]),
-                    );
-                    Some(map)
-                },
+                scope: Some(format!("udex:index:v1:{}:read", index_name)),
             }),
         );
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
@@ -1072,17 +988,7 @@ async fn test_authnz() {
                 ), // Valid
                 exp: Some(now - 3600),              // Invalid: expired 1 hour ago
                 iat: Some(now - 7200),              // Valid: issued 2 hours ago (before expiration)
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![serde_json::Value::String(format!(
-                            "udex:index:v1:{}:read",
-                            index_name
-                        ))]),
-                    );
-                    Some(map)
-                },
+                scope: Some(format!("udex:index:v1:{}:read", index_name)),
             }),
         );
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
@@ -1142,17 +1048,7 @@ async fn test_authnz() {
                 audience: None,
                 exp: Some(now + 7200), // expires 2 hours from now
                 iat: Some(now + 3600), // issued 1 hour in the future
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![serde_json::Value::String(format!(
-                            "udex:entry:v1:{}:create",
-                            index_name
-                        ))]),
-                    );
-                    Some(map)
-                },
+                scope: Some(format!("udex:entry:v1:{}:create", index_name)),
             }),
         );
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
@@ -1203,17 +1099,7 @@ async fn test_authnz() {
                 ), // Valid
                 exp: Some(now - 1800),              // Invalid: expires 30 minutes ago (in past)
                 iat: Some(now - 900), // Invalid: issued 15 minutes ago (after expiration) - creates impossible timeline
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![serde_json::Value::String(format!(
-                            "udex:index:v1:{}:read",
-                            index_name
-                        ))]),
-                    );
-                    Some(map)
-                },
+                scope: Some(format!("udex:index:v1:{}:read", index_name)),
             }),
         );
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
@@ -1255,16 +1141,7 @@ async fn test_authnz() {
             "test-user",
             &server_config.authnz,
             Some(OverrideClaims {
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![serde_json::Value::String(
-                            "udex:entry:v1:read".to_string(),
-                        )]),
-                    );
-                    Some(map)
-                },
+                scope: Some("udex:entry:v1:read".to_string()),
                 sub: None,
                 issuer: None,
                 audience: None,
@@ -1323,16 +1200,7 @@ async fn test_authnz() {
             "test-user",
             &server_config.authnz,
             Some(OverrideClaims {
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![serde_json::Value::String(
-                            "udex:index:v1:read".to_string(),
-                        )]),
-                    );
-                    Some(map)
-                },
+                scope: Some("udex:index:v1:read".to_string()),
                 sub: None,
                 issuer: None,
                 audience: None,
@@ -1421,19 +1289,12 @@ async fn test_authnz() {
             }),
         });
 
-        // Generate JWT token with permissions as string instead of array
+        // Non-udex: scope values are silently discarded → no permissions granted → denied
         let claims = generate_test_claims(
             "test-user",
             &server_config.authnz,
             Some(OverrideClaims {
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::String(format!("udex:entry:v1:{}:create", index_name)),
-                    ); // String instead of array
-                    Some(map)
-                },
+                scope: Some("openid profile email".to_string()),
                 sub: None,
                 issuer: None,
                 audience: None,
@@ -1451,7 +1312,7 @@ async fn test_authnz() {
         let create_response = entry_client.create_entry(create_request).await;
         assert!(
             create_response.is_err(),
-            "Entry service should fail with permissions as string"
+            "Entry service should fail when scope contains only non-udex values"
         );
 
         let error = create_response.unwrap_err();
@@ -1460,61 +1321,10 @@ async fn test_authnz() {
             tonic::Code::PermissionDenied,
             "Should return permission denied error"
         );
-        println!("✓ Entry service correctly fails with permissions as string instead of array");
+        println!("✓ Entry service correctly fails when scope contains only non-udex values");
     }
 
-    // Test 20: Services should FAIL with permissions as object instead of array
-    {
-        let mut index_client =
-            udex_api::index::index_service_client::IndexServiceClient::connect(endpoint.clone())
-                .await
-                .expect("Failed to connect to index service");
-
-        let mut describe_request = tonic::Request::new(udex_api::index::DescribeRequest {
-            name: index_name.clone(),
-        });
-
-        // Generate JWT token with permissions as object instead of array
-        let claims = generate_test_claims(
-            "test-user",
-            &server_config.authnz,
-            Some(OverrideClaims {
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    let permissions_obj = serde_json::json!({"udex:index:v1:read": true}); // Object instead of array
-                    map.insert("permissions".to_string(), permissions_obj);
-                    Some(map)
-                },
-                sub: None,
-                issuer: None,
-                audience: None,
-                exp: None,
-                iat: None,
-            }),
-        );
-        let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
-        let bearer_token = format!("Bearer {}", jwt_token);
-        describe_request.metadata_mut().insert(
-            "authorization",
-            bearer_token.parse().expect("Failed to parse bearer token"),
-        );
-
-        let describe_response = index_client.describe(describe_request).await;
-        assert!(
-            describe_response.is_err(),
-            "Index service should fail with permissions as object"
-        );
-
-        let error = describe_response.unwrap_err();
-        assert_eq!(
-            error.code(),
-            tonic::Code::PermissionDenied,
-            "Should return permission denied error"
-        );
-        println!("✓ Index service correctly fails with permissions as object instead of array");
-    }
-
-    // Test 21: Services should FAIL with empty permissions array
+    // Test 19b: Services should SUCCEED when scope mixes non-udex and valid udex values
     {
         let mut entry_client =
             udex_api::entry::entry_service_client::EntryServiceClient::connect(endpoint.clone())
@@ -1538,16 +1348,15 @@ async fn test_authnz() {
             }),
         });
 
-        // Generate JWT token with empty permissions array
+        // Mixed scope: non-udex values are silently discarded; the udex: value grants access
         let claims = generate_test_claims(
             "test-user",
             &server_config.authnz,
             Some(OverrideClaims {
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert("permissions".to_string(), serde_json::Value::Array(vec![])); // Empty array
-                    Some(map)
-                },
+                scope: Some(format!(
+                    "openid profile email udex:entry:v1:{}:create",
+                    index_name
+                )),
                 sub: None,
                 issuer: None,
                 audience: None,
@@ -1564,8 +1373,97 @@ async fn test_authnz() {
 
         let create_response = entry_client.create_entry(create_request).await;
         assert!(
+            create_response.is_ok(),
+            "Entry service should succeed when scope mixes non-udex and valid udex values"
+        );
+        println!(
+            "✓ Entry service succeeds when scope mixes non-udex and valid udex values (non-udex silently discarded)"
+        );
+    }
+
+    // Test 20: Services should FAIL with empty scope
+    {
+        let mut index_client =
+            udex_api::index::index_service_client::IndexServiceClient::connect(endpoint.clone())
+                .await
+                .expect("Failed to connect to index service");
+
+        let mut describe_request = tonic::Request::new(udex_api::index::DescribeRequest {
+            name: index_name.clone(),
+        });
+
+        // Empty scope claim → no permissions granted → denied
+        let claims = generate_test_claims(
+            "test-user",
+            &server_config.authnz,
+            Some(OverrideClaims {
+                scope: Some("".to_string()),
+                sub: None,
+                issuer: None,
+                audience: None,
+                exp: None,
+                iat: None,
+            }),
+        );
+        let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
+        let bearer_token = format!("Bearer {}", jwt_token);
+        describe_request.metadata_mut().insert(
+            "authorization",
+            bearer_token.parse().expect("Failed to parse bearer token"),
+        );
+
+        let describe_response = index_client.describe(describe_request).await;
+        assert!(
+            describe_response.is_err(),
+            "Index service should fail with empty scope"
+        );
+
+        let error = describe_response.unwrap_err();
+        assert_eq!(
+            error.code(),
+            tonic::Code::PermissionDenied,
+            "Should return permission denied error"
+        );
+        println!("✓ Index service correctly fails with empty scope");
+    }
+
+    // Test 21: Services should FAIL with no scope claim
+    {
+        let mut entry_client =
+            udex_api::entry::entry_service_client::EntryServiceClient::connect(endpoint.clone())
+                .await
+                .expect("Failed to connect to entry service");
+
+        let mut create_request = tonic::Request::new(udex_api::entry::CreateEntryRequest {
+            index_name: index_name.clone(),
+            context: Some(udex_api::entry::ContextInput {
+                pairs: vec![udex_api::entry::KeyValuePair {
+                    key: "test_key".to_string(),
+                    value: Some(udex_api::entry::Value {
+                        value: Some(udex_api::entry::value::Value::StringValue(
+                            "test_value".to_string(),
+                        )),
+                    }),
+                    kek_id: None,
+                }],
+                dek: None,
+                kek_id: None,
+            }),
+        });
+
+        // No scope claim → no permissions → denied
+        let claims = generate_test_claims("test-user", &server_config.authnz, None);
+        let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
+        let bearer_token = format!("Bearer {}", jwt_token);
+        create_request.metadata_mut().insert(
+            "authorization",
+            bearer_token.parse().expect("Failed to parse bearer token"),
+        );
+
+        let create_response = entry_client.create_entry(create_request).await;
+        assert!(
             create_response.is_err(),
-            "Entry service should fail with empty permissions array"
+            "Entry service should fail with no scope claim"
         );
 
         let error = create_response.unwrap_err();
@@ -1574,7 +1472,7 @@ async fn test_authnz() {
             tonic::Code::PermissionDenied,
             "Should return permission denied error"
         );
-        println!("✓ Entry service correctly fails with empty permissions array");
+        println!("✓ Entry service correctly fails with no scope claim");
     }
 
     // Test 22: Index service should work when user has multiple permissions including the required one
@@ -1593,24 +1491,10 @@ async fn test_authnz() {
             "test-user",
             &server_config.authnz,
             Some(OverrideClaims {
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![
-                            serde_json::Value::String(format!("udex:index:v1:{}:read", index_name)), // Required permission
-                            serde_json::Value::String(format!(
-                                "udex:index:v1:{}:write",
-                                index_name
-                            )), // Extra permission
-                            serde_json::Value::String(format!(
-                                "udex:entry:v1:{}:create",
-                                index_name
-                            )), // Extra permission
-                        ]),
-                    );
-                    Some(map)
-                },
+                scope: Some(format!(
+                    "udex:index:v1:{0}:read udex:index:v1:{0}:write udex:entry:v1:{0}:create",
+                    index_name
+                )),
                 sub: None,
                 issuer: None,
                 audience: None,
@@ -1651,18 +1535,8 @@ async fn test_authnz() {
             "test-user",
             &server_config.authnz,
             Some(OverrideClaims {
-                extra: {
-                    let mut map = std::collections::HashMap::new();
-                    map.insert(
-                        "permissions".to_string(),
-                        serde_json::Value::Array(vec![
-                            serde_json::Value::String("udex:index:v1:write".to_string()), // Wrong permission
-                            serde_json::Value::String("udex:entry:v1:read".to_string()), // Wrong permission
-                                                                                         // Missing udex:index:v1:read which is required
-                        ]),
-                    );
-                    Some(map)
-                },
+                // Missing the required udex:index:v1:{name}:read permission
+                scope: Some("udex:index:v1:write udex:entry:v1:read".to_string()),
                 sub: None,
                 issuer: None,
                 audience: None,
