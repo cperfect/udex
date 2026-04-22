@@ -81,20 +81,24 @@ impl TlsConfig {
                 "tls.key_path must not be empty".to_string(),
             ));
         }
-        if !std::path::Path::new(&self.cert_path).exists() {
-            return Err(crate::Error::ConfigValidation(format!(
-                "tls.cert_path {:?} does not exist",
-                self.cert_path
-            )));
-        }
-        if !std::path::Path::new(&self.key_path).exists() {
-            return Err(crate::Error::ConfigValidation(format!(
-                "tls.key_path {:?} does not exist",
-                self.key_path
-            )));
-        }
+        validate_tls_file("tls.cert_path", &self.cert_path)?;
+        validate_tls_file("tls.key_path", &self.key_path)?;
         Ok(())
     }
+}
+
+fn validate_tls_file(label: &str, path: &str) -> Result<(), crate::Error> {
+    let meta = std::fs::metadata(path)
+        .map_err(|e| crate::Error::ConfigValidation(format!("{label} {path:?}: {e}")))?;
+    if !meta.is_file() {
+        return Err(crate::Error::ConfigValidation(format!(
+            "{label} {path:?} is not a regular file"
+        )));
+    }
+    std::fs::File::open(path).map_err(|e| {
+        crate::Error::ConfigValidation(format!("{label} {path:?} is not readable: {e}"))
+    })?;
+    Ok(())
 }
 
 impl Default for TlsConfig {
@@ -258,6 +262,36 @@ mod tests {
         assert!(
             err.contains("key_path"),
             "expected key_path in error: {err}"
+        );
+    }
+
+    #[test]
+    fn tls_validate_cert_path_is_directory() {
+        let dir = std::env::temp_dir();
+        let key = write_temp_file(&dir, "test_server4.key");
+        let cfg = TlsConfig {
+            cert_path: dir.to_string_lossy().into_owned(),
+            key_path: key,
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("cert_path") && err.contains("not a regular file"),
+            "expected 'not a regular file' for cert_path, got: {err}"
+        );
+    }
+
+    #[test]
+    fn tls_validate_key_path_is_directory() {
+        let dir = std::env::temp_dir();
+        let cert = write_temp_file(&dir, "test_server4.crt");
+        let cfg = TlsConfig {
+            cert_path: cert,
+            key_path: dir.to_string_lossy().into_owned(),
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("key_path") && err.contains("not a regular file"),
+            "expected 'not a regular file' for key_path, got: {err}"
         );
     }
 
