@@ -3,7 +3,7 @@ verblock: "22 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-01
 title: "Add scope field to Claims struct, remove extra map"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-01: Add scope field to Claims struct, remove extra map
