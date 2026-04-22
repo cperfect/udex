@@ -36,13 +36,17 @@ fn validate_permission(permission: &str) -> Result<(), Error> {
 
 /// Extract `udex:` permissions from the RFC 8693 `scope` claim.
 ///
-/// Splits `claims.scope` on whitespace and retains only values prefixed with
-/// `udex:`. Non-`udex:` values (e.g. `openid`, `profile`) are silently
+/// Splits `claims.scope` on ASCII whitespace and retains only values prefixed
+/// with `udex:`. Non-`udex:` values (e.g. `openid`, `profile`) are silently
 /// discarded. Each retained value is validated against the permission format;
 /// an invalid format returns an error.
+///
+/// RFC 6749 §3.3 (referenced by RFC 8693 §4.2) defines the scope delimiter as
+/// ASCII space (0x20), so we use `split_ascii_whitespace` rather than the
+/// Unicode-aware `split_whitespace`.
 fn extract_udex_permissions(claims: &Claims) -> Result<Vec<&str>, Error> {
     let mut permissions = Vec::new();
-    for scope_value in claims.scope.split_whitespace() {
+    for scope_value in claims.scope.split_ascii_whitespace() {
         if scope_value.starts_with("udex:") {
             validate_permission(scope_value)?;
             permissions.push(scope_value);
