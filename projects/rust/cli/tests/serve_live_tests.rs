@@ -86,7 +86,7 @@ async fn wait_for_ready(ca_pem: &str) -> bool {
     for _ in 0..30 {
         sleep(Duration::from_millis(300)).await;
         let tls = ClientTlsConfig::new()
-            .ca_certificate(Certificate::from_pem(ca_pem.to_string()))
+            .ca_certificate(Certificate::from_pem(ca_pem))
             .domain_name("localhost");
         let Ok(ch) = Channel::from_shared(format!("https://{BIND_ADDR}"))
             .unwrap()
