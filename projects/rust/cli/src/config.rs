@@ -41,8 +41,6 @@ pub struct TlsConfig {
     pub cert_path: String,
     /// Path to the server TLS private key (PEM)
     pub key_path: String,
-    /// Path to the CA certificate for client verification (PEM)
-    pub ca_cert_path: String,
 }
 
 /// Authentication and authorisation configuration.
@@ -85,7 +83,6 @@ impl Default for UdexConfig {
                 tls: TlsConfig {
                     cert_path: "certs/server.crt".to_string(),
                     key_path: "certs/server.key".to_string(),
-                    ca_cert_path: "certs/ca.crt".to_string(),
                 },
                 authnz: AuthNzConfig {
                     jwt_public_key_path: Some("certs/jwt_public_key.pem".to_string()),
@@ -221,7 +218,6 @@ impl UdexConfig {
             tls: udex_server::config::TlsConfig {
                 cert_path: self.server.tls.cert_path.clone(),
                 key_path: self.server.tls.key_path.clone(),
-                ca_cert_path: self.server.tls.ca_cert_path.clone(),
             },
             authnz: udex_server::config::AuthNzConfig {
                 jwt_public_key_path: self.server.authnz.jwt_public_key_path.clone(),

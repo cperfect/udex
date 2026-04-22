@@ -192,7 +192,6 @@ async fn start_server_and_connect() -> (
         tls: udex_server::config::TlsConfig {
             cert_path: "tests/certs/server.crt".to_string(),
             key_path: "tests/certs/server.key".to_string(),
-            ca_cert_path: "tests/certs/ca.crt".to_string(),
         },
         init_indexes: vec![UpdateIndexRequest {
             name: index_name.clone(),

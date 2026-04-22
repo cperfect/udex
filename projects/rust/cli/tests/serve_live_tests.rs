@@ -56,7 +56,6 @@ async fn init_server() -> FixtureType {
         tls: TlsConfig {
             cert_path: SERVER_CERT.to_string(),
             key_path: SERVER_KEY.to_string(),
-            ca_cert_path: CA_CERT.to_string(),
         },
         authnz: AuthNzConfig {
             jwt_public_key_path: Some(JWT_PUBLIC_KEY.to_string()),

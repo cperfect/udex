@@ -31,8 +31,6 @@ pub struct TlsConfig {
     pub cert_path: String,
     /// Path to the server private key
     pub key_path: String,
-    /// Path to the CA certificate
-    pub ca_cert_path: String,
 }
 
 // Authentication and Authorization configuration.
@@ -104,7 +102,6 @@ impl Default for TlsConfig {
         Self {
             cert_path: "certs/server.crt".to_string(),
             key_path: "certs/server.key".to_string(),
-            ca_cert_path: "certs/ca.crt".to_string(),
         }
     }
 }
@@ -200,7 +197,6 @@ mod tests {
         let cfg = TlsConfig {
             cert_path: cert,
             key_path: key,
-            ca_cert_path: String::new(),
         };
         assert!(cfg.validate().is_ok());
     }
@@ -212,7 +208,6 @@ mod tests {
         let cfg = TlsConfig {
             cert_path: String::new(),
             key_path: key,
-            ca_cert_path: String::new(),
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -228,7 +223,6 @@ mod tests {
         let cfg = TlsConfig {
             cert_path: cert,
             key_path: String::new(),
-            ca_cert_path: String::new(),
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -244,7 +238,6 @@ mod tests {
         let cfg = TlsConfig {
             cert_path: "/nonexistent/path/server.crt".to_string(),
             key_path: key,
-            ca_cert_path: String::new(),
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -260,7 +253,6 @@ mod tests {
         let cfg = TlsConfig {
             cert_path: cert,
             key_path: "/nonexistent/path/server.key".to_string(),
-            ca_cert_path: String::new(),
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -275,8 +267,7 @@ mod tests {
             tls: TlsConfig {
                 cert_path: "/nonexistent/server.crt".to_string(),
                 key_path: "/nonexistent/server.key".to_string(),
-                ca_cert_path: String::new(),
-            },
+                },
             authnz: valid_authnz(),
             ..ServerConfig::default()
         };
