@@ -32,10 +32,11 @@ values. Using it means:
 
 ## Scope
 
-- Update `udex_api::authz::claims::Claims` to parse `scope` (space-delimited
-  `String`) instead of the `permissions` extra claim.
-- Update permission extraction logic to filter only `udex:`-prefixed values from
-  the parsed scope list.
+- Update `udex_api::authz::claims::Claims` to store `scope` as a raw `String`
+  (defaulting to empty) instead of the `permissions` extra claim.
+- Update permission extraction logic in `udex_api::authz::permissions` to split
+  the raw `scope` string on whitespace and filter for only `udex:`-prefixed values;
+  non-`udex:` entries are silently discarded there, not in `Claims`.
 - Update `AuthnInterceptor` / permission evaluation to use the new claim.
 - Update integration tests and JWT fixture generation to issue tokens with
   `scope` instead of `permissions`.
