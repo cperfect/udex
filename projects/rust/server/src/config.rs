@@ -177,6 +177,7 @@ impl AuthNzConfig {
 mod tests {
     use super::*;
     use std::io::Write;
+    use tempfile::TempDir;
 
     fn valid_authnz() -> AuthNzConfig {
         AuthNzConfig {
@@ -195,9 +196,9 @@ mod tests {
 
     #[test]
     fn tls_validate_ok() {
-        let dir = std::env::temp_dir();
-        let cert = write_temp_file(&dir, "test_server.crt");
-        let key = write_temp_file(&dir, "test_server.key");
+        let dir = TempDir::new().unwrap();
+        let cert = write_temp_file(dir.path(), "server.crt");
+        let key = write_temp_file(dir.path(), "server.key");
         let cfg = TlsConfig {
             cert_path: cert,
             key_path: key,
@@ -207,8 +208,8 @@ mod tests {
 
     #[test]
     fn tls_validate_empty_cert_path() {
-        let dir = std::env::temp_dir();
-        let key = write_temp_file(&dir, "test_server2.key");
+        let dir = TempDir::new().unwrap();
+        let key = write_temp_file(dir.path(), "server.key");
         let cfg = TlsConfig {
             cert_path: String::new(),
             key_path: key,
@@ -222,8 +223,8 @@ mod tests {
 
     #[test]
     fn tls_validate_empty_key_path() {
-        let dir = std::env::temp_dir();
-        let cert = write_temp_file(&dir, "test_server2.crt");
+        let dir = TempDir::new().unwrap();
+        let cert = write_temp_file(dir.path(), "server.crt");
         let cfg = TlsConfig {
             cert_path: cert,
             key_path: String::new(),
@@ -237,8 +238,8 @@ mod tests {
 
     #[test]
     fn tls_validate_missing_cert_file() {
-        let dir = std::env::temp_dir();
-        let key = write_temp_file(&dir, "test_server3.key");
+        let dir = TempDir::new().unwrap();
+        let key = write_temp_file(dir.path(), "server.key");
         let cfg = TlsConfig {
             cert_path: "/nonexistent/path/server.crt".to_string(),
             key_path: key,
@@ -252,8 +253,8 @@ mod tests {
 
     #[test]
     fn tls_validate_missing_key_file() {
-        let dir = std::env::temp_dir();
-        let cert = write_temp_file(&dir, "test_server3.crt");
+        let dir = TempDir::new().unwrap();
+        let cert = write_temp_file(dir.path(), "server.crt");
         let cfg = TlsConfig {
             cert_path: cert,
             key_path: "/nonexistent/path/server.key".to_string(),
@@ -267,10 +268,10 @@ mod tests {
 
     #[test]
     fn tls_validate_cert_path_is_directory() {
-        let dir = std::env::temp_dir();
-        let key = write_temp_file(&dir, "test_server4.key");
+        let dir = TempDir::new().unwrap();
+        let key = write_temp_file(dir.path(), "server.key");
         let cfg = TlsConfig {
-            cert_path: dir.to_string_lossy().into_owned(),
+            cert_path: dir.path().to_string_lossy().into_owned(),
             key_path: key,
         };
         let err = cfg.validate().unwrap_err().to_string();
@@ -282,11 +283,11 @@ mod tests {
 
     #[test]
     fn tls_validate_key_path_is_directory() {
-        let dir = std::env::temp_dir();
-        let cert = write_temp_file(&dir, "test_server4.crt");
+        let dir = TempDir::new().unwrap();
+        let cert = write_temp_file(dir.path(), "server.crt");
         let cfg = TlsConfig {
             cert_path: cert,
-            key_path: dir.to_string_lossy().into_owned(),
+            key_path: dir.path().to_string_lossy().into_owned(),
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
