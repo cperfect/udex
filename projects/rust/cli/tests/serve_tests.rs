@@ -2,9 +2,9 @@
 
 //! Tests for `udex serve`.
 //!
-//! Full server-up tests (TLS, live Postgres, health check) are covered in the
-//! integration test suite. These tests cover config loading and early error paths
-//! that don't require a running server or database.
+//! Full server-up tests (TLS, live Postgres, health check) are in
+//! `serve_live_tests.rs`. These tests cover config loading and early error
+//! paths that don't require a running server or database.
 
 use assert_cmd::Command;
 use predicates::prelude::*;

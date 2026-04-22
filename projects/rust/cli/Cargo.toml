@@ -32,6 +32,11 @@ assert_cmd = { workspace = true }
 predicates = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
+udex-datastore = { path = "../datastore", features = ["integration_test"] }
+tonic = { workspace = true }
+rustls = { workspace = true }
+maybe-once = { workspace = true }
+tokio-shared-rt = { workspace = true }
 
 [[bin]]
 name = "udex"

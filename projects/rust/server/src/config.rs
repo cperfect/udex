@@ -197,7 +197,11 @@ mod tests {
         let dir = std::env::temp_dir();
         let cert = write_temp_file(&dir, "test_server.crt");
         let key = write_temp_file(&dir, "test_server.key");
-        let cfg = TlsConfig { cert_path: cert, key_path: key, ca_cert_path: String::new() };
+        let cfg = TlsConfig {
+            cert_path: cert,
+            key_path: key,
+            ca_cert_path: String::new(),
+        };
         assert!(cfg.validate().is_ok());
     }
 
@@ -205,18 +209,32 @@ mod tests {
     fn tls_validate_empty_cert_path() {
         let dir = std::env::temp_dir();
         let key = write_temp_file(&dir, "test_server2.key");
-        let cfg = TlsConfig { cert_path: String::new(), key_path: key, ca_cert_path: String::new() };
+        let cfg = TlsConfig {
+            cert_path: String::new(),
+            key_path: key,
+            ca_cert_path: String::new(),
+        };
         let err = cfg.validate().unwrap_err().to_string();
-        assert!(err.contains("cert_path"), "expected cert_path in error: {err}");
+        assert!(
+            err.contains("cert_path"),
+            "expected cert_path in error: {err}"
+        );
     }
 
     #[test]
     fn tls_validate_empty_key_path() {
         let dir = std::env::temp_dir();
         let cert = write_temp_file(&dir, "test_server2.crt");
-        let cfg = TlsConfig { cert_path: cert, key_path: String::new(), ca_cert_path: String::new() };
+        let cfg = TlsConfig {
+            cert_path: cert,
+            key_path: String::new(),
+            ca_cert_path: String::new(),
+        };
         let err = cfg.validate().unwrap_err().to_string();
-        assert!(err.contains("key_path"), "expected key_path in error: {err}");
+        assert!(
+            err.contains("key_path"),
+            "expected key_path in error: {err}"
+        );
     }
 
     #[test]
@@ -229,7 +247,10 @@ mod tests {
             ca_cert_path: String::new(),
         };
         let err = cfg.validate().unwrap_err().to_string();
-        assert!(err.contains("cert_path"), "expected cert_path in error: {err}");
+        assert!(
+            err.contains("cert_path"),
+            "expected cert_path in error: {err}"
+        );
     }
 
     #[test]
@@ -242,7 +263,10 @@ mod tests {
             ca_cert_path: String::new(),
         };
         let err = cfg.validate().unwrap_err().to_string();
-        assert!(err.contains("key_path"), "expected key_path in error: {err}");
+        assert!(
+            err.contains("key_path"),
+            "expected key_path in error: {err}"
+        );
     }
 
     #[test]
