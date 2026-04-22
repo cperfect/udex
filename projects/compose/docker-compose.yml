@@ -1,0 +1,60 @@
+version: "3.9"
+services:
+
+  postgres:
+    image: "postgres:16"
+    environment:
+      - POSTGRES_PASSWORD=admin
+    ports:
+      - "5432:5432"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'  
+          memory: '1gb'
+    volumes:
+      - ./postgres/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 1s
+      timeout: 30s
+      retries: 30
+    # volumes:
+    #   - pg_data:.data/var/lib/postgresql/data
+
+  # This service runs the database migrations for Hydra. It will run once and then exit.
+  hydra-migrate:
+    image: oryd/hydra:v26.2.0
+    environment:
+      - DSN=postgres://hydra:secret@postgres:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+    command: migrate sql up -e --yes
+    pull_policy: missing
+    restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
+  
+  # OAuth2 Authorization Server
+  hydra:
+    image: oryd/hydra:v26.2.0
+    ports:
+      - "4444:4444" # Public port
+      - "4445:4445" # Admin port
+      - "5555:5555" # Port for hydra token user
+    command: serve all --dev --sqa-opt-out
+    pull_policy: missing
+    environment:
+      - DSN=postgres://hydra:secret@postgres:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+      - SECRETS_SYSTEM=8e44de99ad1e3c6bdad9aa238b6e2d502b21df35becdd3e9cbd74fd8969c8e07
+      - URLS_SELF_ISSUER=http://localhost:4444/
+      # OIDC is ignored if these aren't requested by clients
+      - URLS_LOGIN=http://localhost:3000/login
+      - URLS_CONSENT=http://localhost:3000/consent
+    restart: unless-stopped
+    depends_on:
+      hydra-migrate:
+        condition: service_completed_successfully
+  
+# volumes:
+#   pg_data:
+#     driver: local

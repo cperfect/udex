@@ -3,7 +3,10 @@
 {
 	"name": "Rust",
 	// Use Docker Compose for development environment
-	"dockerComposeFile": "docker-compose.yml",
+	"dockerComposeFile": [
+		"docker-compose.devcontainer.yml",
+		"../projects/compose/docker-compose.yml"
+	],
 	"service": "devcontainer",
 	"workspaceFolder": "/workspace",
 	"remoteEnv": {
@@ -42,7 +45,11 @@
 	// "features": {},
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
+	"forwardPorts": [
+		4444, // Hydra
+		4445, // Hydra Admin
+		5432  // Postgres
+	],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
 	"postCreateCommand": "./.devcontainer/post-create.sh"
