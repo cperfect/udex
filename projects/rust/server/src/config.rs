@@ -267,7 +267,7 @@ mod tests {
             tls: TlsConfig {
                 cert_path: "/nonexistent/server.crt".to_string(),
                 key_path: "/nonexistent/server.key".to_string(),
-                },
+            },
             authnz: valid_authnz(),
             ..ServerConfig::default()
         };
