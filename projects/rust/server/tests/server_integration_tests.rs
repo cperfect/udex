@@ -1722,10 +1722,13 @@ async fn test_tls_wrong_ca_rejected() {
         .tls_config(tls_config)
         .expect("Failed to configure TLS");
 
-    let result = HealthzServiceClient::connect(endpoint).await;
+    let err = HealthzServiceClient::connect(endpoint)
+        .await
+        .expect_err("Connection with wrong CA certificate must be rejected");
+    let err_str = format!("{err:?}");
     assert!(
-        result.is_err(),
-        "Connection with wrong CA certificate must be rejected"
+        err_str.to_lowercase().contains("certificate"),
+        "Expected a certificate validation error, got: {err_str}"
     );
     println!("✓ Connection with wrong CA correctly rejected");
 }
@@ -1750,10 +1753,13 @@ async fn test_tls_untrusted_ca_rejected() {
         .tls_config(tls_config)
         .expect("Failed to configure TLS");
 
-    let result = HealthzServiceClient::connect(endpoint).await;
+    let err = HealthzServiceClient::connect(endpoint)
+        .await
+        .expect_err("Connection using system trust store must be rejected for self-signed test CA");
+    let err_str = format!("{err:?}");
     assert!(
-        result.is_err(),
-        "Connection using system trust store must be rejected for self-signed test CA"
+        err_str.to_lowercase().contains("certificate"),
+        "Expected a certificate validation error, got: {err_str}"
     );
     println!("✓ Connection using system trust store correctly rejected");
 }
