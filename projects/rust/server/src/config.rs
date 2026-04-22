@@ -65,8 +65,36 @@ impl Default for ServerConfig {
 impl ServerConfig {
     /// Validate the server configuration.
     pub fn validate(&self) -> Result<(), crate::Error> {
+        self.tls.validate()?;
         self.authnz.validate()?;
+        Ok(())
+    }
+}
 
+impl TlsConfig {
+    pub fn validate(&self) -> Result<(), crate::Error> {
+        if self.cert_path.trim().is_empty() {
+            return Err(crate::Error::ConfigValidation(
+                "tls.cert_path must not be empty".to_string(),
+            ));
+        }
+        if self.key_path.trim().is_empty() {
+            return Err(crate::Error::ConfigValidation(
+                "tls.key_path must not be empty".to_string(),
+            ));
+        }
+        if !std::path::Path::new(&self.cert_path).exists() {
+            return Err(crate::Error::ConfigValidation(format!(
+                "tls.cert_path {:?} does not exist",
+                self.cert_path
+            )));
+        }
+        if !std::path::Path::new(&self.key_path).exists() {
+            return Err(crate::Error::ConfigValidation(format!(
+                "tls.key_path {:?} does not exist",
+                self.key_path
+            )));
+        }
         Ok(())
     }
 }
@@ -141,5 +169,93 @@ impl AuthNzConfig {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn valid_authnz() -> AuthNzConfig {
+        AuthNzConfig {
+            jwt_public_key_path: Some("some/key.pem".to_string()),
+            jwt_issuer: Some("https://issuer.example.com".to_string()),
+            jwt_audience: Some("udex".to_string()),
+        }
+    }
+
+    fn write_temp_file(dir: &std::path::Path, name: &str) -> String {
+        let path = dir.join(name);
+        let mut f = std::fs::File::create(&path).unwrap();
+        f.write_all(b"placeholder").unwrap();
+        path.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn tls_validate_ok() {
+        let dir = std::env::temp_dir();
+        let cert = write_temp_file(&dir, "test_server.crt");
+        let key = write_temp_file(&dir, "test_server.key");
+        let cfg = TlsConfig { cert_path: cert, key_path: key, ca_cert_path: String::new() };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn tls_validate_empty_cert_path() {
+        let dir = std::env::temp_dir();
+        let key = write_temp_file(&dir, "test_server2.key");
+        let cfg = TlsConfig { cert_path: String::new(), key_path: key, ca_cert_path: String::new() };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("cert_path"), "expected cert_path in error: {err}");
+    }
+
+    #[test]
+    fn tls_validate_empty_key_path() {
+        let dir = std::env::temp_dir();
+        let cert = write_temp_file(&dir, "test_server2.crt");
+        let cfg = TlsConfig { cert_path: cert, key_path: String::new(), ca_cert_path: String::new() };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("key_path"), "expected key_path in error: {err}");
+    }
+
+    #[test]
+    fn tls_validate_missing_cert_file() {
+        let dir = std::env::temp_dir();
+        let key = write_temp_file(&dir, "test_server3.key");
+        let cfg = TlsConfig {
+            cert_path: "/nonexistent/path/server.crt".to_string(),
+            key_path: key,
+            ca_cert_path: String::new(),
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("cert_path"), "expected cert_path in error: {err}");
+    }
+
+    #[test]
+    fn tls_validate_missing_key_file() {
+        let dir = std::env::temp_dir();
+        let cert = write_temp_file(&dir, "test_server3.crt");
+        let cfg = TlsConfig {
+            cert_path: cert,
+            key_path: "/nonexistent/path/server.key".to_string(),
+            ca_cert_path: String::new(),
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("key_path"), "expected key_path in error: {err}");
+    }
+
+    #[test]
+    fn server_config_validate_calls_tls_validate() {
+        let cfg = ServerConfig {
+            tls: TlsConfig {
+                cert_path: "/nonexistent/server.crt".to_string(),
+                key_path: "/nonexistent/server.key".to_string(),
+                ca_cert_path: String::new(),
+            },
+            authnz: valid_authnz(),
+            ..ServerConfig::default()
+        };
+        assert!(cfg.validate().is_err());
     }
 }
