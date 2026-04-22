@@ -1,28 +1,23 @@
 //! Live server integration tests for `udex serve`.
 //!
-//! Spins up a real gRPC server (with TLS and a live PostgreSQL database) and
-//! asserts that the healthz endpoint responds correctly over TLS.
+//! Exercises the full CLI path: TOML config file → `udex serve` binary →
+//! gRPC server with TLS. The binary is spawned as a real child process so
+//! that config loading, validation, and the serve command handler are all
+//! exercised end-to-end.
 //!
 //! Requires: `DATABASE_URL` environment variable pointing to a running
 //! PostgreSQL instance (same requirement as the datastore integration tests).
 
-use std::net::SocketAddr;
-use std::sync::OnceLock;
+use std::process::Command;
 
-use maybe_once::tokio::{Data, MaybeOnceAsync};
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzRequest};
 use udex_datastore::integration_test::init_postgres;
-use udex_server::{
-    config::{AuthNzConfig, ServerConfig, TlsConfig},
-    logging, server,
-};
 
 const BIND_ADDR: &str = "127.0.0.1:50054";
+const UDEX_BIN: &str = env!("CARGO_BIN_EXE_udex");
 
-// Absolute paths to the shared test PKI, resolved at compile time relative to
-// this crate's manifest directory.
 const SERVER_CERT: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../server/tests/certs/server.crt"
@@ -37,71 +32,119 @@ const JWT_PUBLIC_KEY: &str = concat!(
     "/../server/tests/jwt/signing_public_key.pem"
 );
 
-type FixtureType = (
-    ServerConfig,
-    tokio::task::JoinHandle<()>,
-    String, // db_name — kept alive for automatic cleanup on process exit
-);
+/// RAII guard that kills the child process on drop.
+struct ServerProcess(std::process::Child);
 
-async fn init_server() -> FixtureType {
-    logging::init_test_tracing();
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+impl Drop for ServerProcess {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
 
-    let (datastore, _, db_name) = init_postgres().await;
+/// Replace the database name in a `postgres://…/dbname[?params]` URL.
+fn replace_db_name(url: &str, db_name: &str) -> String {
+    if let Some(slash) = url.rfind('/') {
+        let after = &url[slash + 1..];
+        let params = after.find('?').map(|i| &after[i..]).unwrap_or("");
+        format!("{}/{}{}", &url[..slash], db_name, params)
+    } else {
+        format!("{}/{}", url, db_name)
+    }
+}
 
-    let bind_address: SocketAddr = BIND_ADDR.parse().expect("valid bind address");
+fn make_config(db_url: &str) -> String {
+    format!(
+        r#"[server]
+bind_address = "{BIND_ADDR}"
+request_timeout_secs = 30
+max_connections = 100
+max_message_size_bytes = 4194304
 
-    let server_config = ServerConfig {
-        bind_address,
-        tls: TlsConfig {
-            cert_path: SERVER_CERT.to_string(),
-            key_path: SERVER_KEY.to_string(),
-        },
-        authnz: AuthNzConfig {
-            jwt_public_key_path: Some(JWT_PUBLIC_KEY.to_string()),
-            jwt_issuer: Some("https://cli-serve-test-issuer.example.com".to_string()),
-            jwt_audience: Some("udex-cli-serve-test".to_string()),
-        },
-        ..ServerConfig::default()
-    };
+[server.tls]
+cert_path = "{SERVER_CERT}"
+key_path = "{SERVER_KEY}"
 
-    let server_config_clone = server_config.clone();
-    let handle = tokio::spawn(async move {
-        server::serve(server_config_clone, datastore)
+[server.authnz]
+jwt_public_key_path = "{JWT_PUBLIC_KEY}"
+jwt_issuer = "https://cli-serve-test-issuer.example.com"
+jwt_audience = "udex-cli-serve-test"
+
+[datastore]
+connection_url = "{db_url}"
+max_connections = 5
+min_connections = 1
+connection_timeout_secs = 10
+query_timeout_secs = 30
+dangerous_allow_non_tls = true
+"#
+    )
+}
+
+/// Poll healthz over TLS until the server responds or we give up.
+async fn wait_for_ready(ca_pem: &str) -> bool {
+    for _ in 0..30 {
+        sleep(Duration::from_millis(300)).await;
+        let tls = ClientTlsConfig::new()
+            .ca_certificate(Certificate::from_pem(ca_pem.to_string()))
+            .domain_name("localhost");
+        let Ok(ch) = Channel::from_shared(format!("https://{BIND_ADDR}"))
+            .unwrap()
+            .tls_config(tls)
+            .unwrap()
+            .connect()
             .await
-            .expect("server failed");
-    });
-
-    sleep(Duration::from_millis(200)).await;
-
-    (server_config, handle, db_name)
+        else {
+            continue;
+        };
+        if HealthzServiceClient::new(ch)
+            .healthz(tonic::Request::new(HealthzRequest {}))
+            .await
+            .is_ok()
+        {
+            return true;
+        }
+    }
+    false
 }
 
-async fn fixture(serial: bool) -> Data<'static, FixtureType> {
-    static DATA: OnceLock<MaybeOnceAsync<FixtureType>> = OnceLock::new();
-    DATA.get_or_init(|| MaybeOnceAsync::new(|| Box::pin(init_server())))
-        .data(serial)
-        .await
-}
-
-/// Verifies that the server started by `udex serve` responds to healthz
-/// requests over TLS, using the CA certificate from the test PKI.
-#[tokio_shared_rt::test]
+/// Verifies that `udex serve` starts correctly and serves healthz over TLS.
+///
+/// The test writes a complete `udex.toml`, spawns the binary, waits for the
+/// server to become ready, then asserts the healthz response is healthy.
+#[tokio::test]
 async fn test_serve_healthz_over_tls() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-    let data = fixture(false).await;
-    let bind_address = data.0.bind_address;
+    // Create a fresh database with migrations applied.
+    let (_, _, db_name) = init_postgres().await;
+    let base_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let db_url = replace_db_name(&base_url, &db_name);
 
-    let ca_pem = tokio::fs::read_to_string(CA_CERT)
-        .await
-        .expect("failed to read CA cert");
+    // Write a udex.toml that exercises the full CLI config path.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let config_path = dir.path().join("udex.toml");
+    std::fs::write(&config_path, make_config(&db_url)).expect("write config");
 
+    // Spawn the real binary — this exercises config loading and the serve handler.
+    let child = Command::new(UDEX_BIN)
+        .args(["serve", "--config", config_path.to_str().unwrap()])
+        .spawn()
+        .expect("failed to spawn udex serve");
+    let _server = ServerProcess(child);
+
+    // Wait for the server to become ready via TLS healthz.
+    let ca_pem = std::fs::read_to_string(CA_CERT).expect("read CA cert");
+    assert!(
+        wait_for_ready(&ca_pem).await,
+        "udex serve did not become ready within the timeout"
+    );
+
+    // Connect and assert the healthz response is healthy.
     let tls = ClientTlsConfig::new()
         .ca_certificate(Certificate::from_pem(ca_pem))
         .domain_name("localhost");
-
-    let channel = Channel::from_shared(format!("https://{}", bind_address))
+    let channel = Channel::from_shared(format!("https://{BIND_ADDR}"))
         .expect("invalid endpoint")
         .tls_config(tls)
         .expect("TLS config error")
@@ -109,13 +152,12 @@ async fn test_serve_healthz_over_tls() {
         .await
         .expect("failed to connect to server over TLS");
 
-    let mut client = HealthzServiceClient::new(channel);
-    let response = client
+    let body = HealthzServiceClient::new(channel)
         .healthz(tonic::Request::new(HealthzRequest {}))
         .await
-        .expect("healthz request failed");
+        .expect("healthz request failed")
+        .into_inner();
 
-    let body = response.into_inner();
     assert!(
         body.is_healthy,
         "server reported unhealthy: {:?}",
