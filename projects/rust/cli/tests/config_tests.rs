@@ -132,7 +132,6 @@ max_message_size_bytes = 4194304
 [server.tls]
 cert_path = "certs/server.crt"
 key_path = "certs/server.key"
-ca_cert_path = "certs/ca.crt"
 
 [server.authnz]
 jwt_issuer = "https://auth.example.com"

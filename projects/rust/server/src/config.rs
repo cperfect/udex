@@ -31,8 +31,6 @@ pub struct TlsConfig {
     pub cert_path: String,
     /// Path to the server private key
     pub key_path: String,
-    /// Path to the CA certificate
-    pub ca_cert_path: String,
 }
 
 // Authentication and Authorization configuration.
@@ -65,10 +63,42 @@ impl Default for ServerConfig {
 impl ServerConfig {
     /// Validate the server configuration.
     pub fn validate(&self) -> Result<(), crate::Error> {
+        self.tls.validate()?;
         self.authnz.validate()?;
-
         Ok(())
     }
+}
+
+impl TlsConfig {
+    pub fn validate(&self) -> Result<(), crate::Error> {
+        if self.cert_path.trim().is_empty() {
+            return Err(crate::Error::ConfigValidation(
+                "tls.cert_path must not be empty".to_string(),
+            ));
+        }
+        if self.key_path.trim().is_empty() {
+            return Err(crate::Error::ConfigValidation(
+                "tls.key_path must not be empty".to_string(),
+            ));
+        }
+        validate_tls_file("tls.cert_path", &self.cert_path)?;
+        validate_tls_file("tls.key_path", &self.key_path)?;
+        Ok(())
+    }
+}
+
+fn validate_tls_file(label: &str, path: &str) -> Result<(), crate::Error> {
+    let meta = std::fs::metadata(path)
+        .map_err(|e| crate::Error::ConfigValidation(format!("{label} {path:?}: {e}")))?;
+    if !meta.is_file() {
+        return Err(crate::Error::ConfigValidation(format!(
+            "{label} {path:?} is not a regular file"
+        )));
+    }
+    std::fs::File::open(path).map_err(|e| {
+        crate::Error::ConfigValidation(format!("{label} {path:?} is not readable: {e}"))
+    })?;
+    Ok(())
 }
 
 impl Default for TlsConfig {
@@ -76,7 +106,6 @@ impl Default for TlsConfig {
         Self {
             cert_path: "certs/server.crt".to_string(),
             key_path: "certs/server.key".to_string(),
-            ca_cert_path: "certs/ca.crt".to_string(),
         }
     }
 }
@@ -141,5 +170,142 @@ impl AuthNzConfig {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    fn valid_authnz() -> AuthNzConfig {
+        AuthNzConfig {
+            jwt_public_key_path: Some("some/key.pem".to_string()),
+            jwt_issuer: Some("https://issuer.example.com".to_string()),
+            jwt_audience: Some("udex".to_string()),
+        }
+    }
+
+    fn write_temp_file(dir: &std::path::Path, name: &str) -> String {
+        let path = dir.join(name);
+        let mut f = std::fs::File::create(&path).unwrap();
+        f.write_all(b"placeholder").unwrap();
+        path.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn tls_validate_ok() {
+        let dir = TempDir::new().unwrap();
+        let cert = write_temp_file(dir.path(), "server.crt");
+        let key = write_temp_file(dir.path(), "server.key");
+        let cfg = TlsConfig {
+            cert_path: cert,
+            key_path: key,
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn tls_validate_empty_cert_path() {
+        let dir = TempDir::new().unwrap();
+        let key = write_temp_file(dir.path(), "server.key");
+        let cfg = TlsConfig {
+            cert_path: String::new(),
+            key_path: key,
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("cert_path"),
+            "expected cert_path in error: {err}"
+        );
+    }
+
+    #[test]
+    fn tls_validate_empty_key_path() {
+        let dir = TempDir::new().unwrap();
+        let cert = write_temp_file(dir.path(), "server.crt");
+        let cfg = TlsConfig {
+            cert_path: cert,
+            key_path: String::new(),
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("key_path"),
+            "expected key_path in error: {err}"
+        );
+    }
+
+    #[test]
+    fn tls_validate_missing_cert_file() {
+        let dir = TempDir::new().unwrap();
+        let key = write_temp_file(dir.path(), "server.key");
+        let cfg = TlsConfig {
+            cert_path: "/nonexistent/path/server.crt".to_string(),
+            key_path: key,
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("cert_path"),
+            "expected cert_path in error: {err}"
+        );
+    }
+
+    #[test]
+    fn tls_validate_missing_key_file() {
+        let dir = TempDir::new().unwrap();
+        let cert = write_temp_file(dir.path(), "server.crt");
+        let cfg = TlsConfig {
+            cert_path: cert,
+            key_path: "/nonexistent/path/server.key".to_string(),
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("key_path"),
+            "expected key_path in error: {err}"
+        );
+    }
+
+    #[test]
+    fn tls_validate_cert_path_is_directory() {
+        let dir = TempDir::new().unwrap();
+        let key = write_temp_file(dir.path(), "server.key");
+        let cfg = TlsConfig {
+            cert_path: dir.path().to_string_lossy().into_owned(),
+            key_path: key,
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("cert_path") && err.contains("not a regular file"),
+            "expected 'not a regular file' for cert_path, got: {err}"
+        );
+    }
+
+    #[test]
+    fn tls_validate_key_path_is_directory() {
+        let dir = TempDir::new().unwrap();
+        let cert = write_temp_file(dir.path(), "server.crt");
+        let cfg = TlsConfig {
+            cert_path: cert,
+            key_path: dir.path().to_string_lossy().into_owned(),
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("key_path") && err.contains("not a regular file"),
+            "expected 'not a regular file' for key_path, got: {err}"
+        );
+    }
+
+    #[test]
+    fn server_config_validate_calls_tls_validate() {
+        let cfg = ServerConfig {
+            tls: TlsConfig {
+                cert_path: "/nonexistent/server.crt".to_string(),
+                key_path: "/nonexistent/server.key".to_string(),
+            },
+            authnz: valid_authnz(),
+            ..ServerConfig::default()
+        };
+        assert!(cfg.validate().is_err());
     }
 }
