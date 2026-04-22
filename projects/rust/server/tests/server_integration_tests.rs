@@ -1697,3 +1697,64 @@ async fn test_authnz() {
 
     println!("✓ All authentication and authorization tests passed successfully");
 }
+
+/// Verifies that a client presenting a wrong CA certificate cannot connect.
+///
+/// Uses the server's own leaf certificate as the "CA" — it is not a CA cert and
+/// was not used to sign itself, so rustls must reject the handshake.
+#[tokio_shared_rt::test]
+async fn test_tls_wrong_ca_rejected() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    let data = data(false).await;
+    let bind_address = data.1.bind_address;
+
+    // Deliberately supply the server's leaf cert as the trusted CA — this is wrong.
+    let wrong_ca = tokio::fs::read_to_string("tests/certs/server.crt")
+        .await
+        .expect("Failed to read server cert");
+
+    let tls_config = ClientTlsConfig::new()
+        .ca_certificate(tonic::transport::Certificate::from_pem(wrong_ca))
+        .domain_name("localhost");
+
+    let endpoint = Channel::from_shared(format!("https://{}", bind_address))
+        .expect("Invalid endpoint")
+        .tls_config(tls_config)
+        .expect("Failed to configure TLS");
+
+    let result = HealthzServiceClient::connect(endpoint).await;
+    assert!(
+        result.is_err(),
+        "Connection with wrong CA certificate must be rejected"
+    );
+    println!("✓ Connection with wrong CA correctly rejected");
+}
+
+/// Verifies that a client relying on the system trust store cannot connect.
+///
+/// The test server uses a self-signed CA that is not installed in the system
+/// trust store, so the TLS handshake must fail without an explicit CA override.
+#[tokio_shared_rt::test]
+async fn test_tls_untrusted_ca_rejected() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    let data = data(false).await;
+    let bind_address = data.1.bind_address;
+
+    // No explicit CA — falls back to the system trust store, which does not
+    // contain the self-signed test CA.
+    let tls_config = ClientTlsConfig::new().domain_name("localhost");
+
+    let endpoint = Channel::from_shared(format!("https://{}", bind_address))
+        .expect("Invalid endpoint")
+        .tls_config(tls_config)
+        .expect("Failed to configure TLS");
+
+    let result = HealthzServiceClient::connect(endpoint).await;
+    assert!(
+        result.is_err(),
+        "Connection using system trust store must be rejected for self-signed test CA"
+    );
+    println!("✓ Connection using system trust store correctly rejected");
+}
