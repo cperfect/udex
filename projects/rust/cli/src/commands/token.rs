@@ -2,6 +2,8 @@
 
 //! Handler for `udex token` subcommands.
 
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use oauth2::{basic::BasicClient, ClientId, ClientSecret, Scope, TokenResponse, TokenUrl};
 
@@ -61,6 +63,7 @@ pub async fn fetch(args: TokenFetchArgs, output: &OutputFormat) -> Result<()> {
 
     let http_client = oauth2::reqwest::ClientBuilder::new()
         .redirect(oauth2::reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(30))
         .build()
         .context("failed to build HTTP client")?;
 
