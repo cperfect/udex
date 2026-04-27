@@ -83,17 +83,37 @@ pub async fn fetch(args: TokenFetchArgs, output: &OutputFormat) -> Result<()> {
     match output {
         OutputFormat::Json => {
             let mut obj = serde_json::json!({ "token": raw_token });
-            if let Some((header, claims)) = decoded {
-                obj["header"] = header;
-                obj["claims"] = claims;
+            match decoded {
+                Some((header, claims)) => {
+                    obj["jwt"] = serde_json::json!(true);
+                    obj["header"] = header;
+                    obj["claims"] = claims;
+                }
+                // None means the server returned an opaque (non-JWT) access token.
+                // Some OAuth2 servers issue opaque tokens by default; Hydra does this
+                // when access_token_strategy is "opaque" rather than "jwt".
+                None => {
+                    obj["jwt"] = serde_json::json!(false);
+                    obj["message"] = serde_json::json!("not a JWT — decoded view unavailable");
+                }
             }
             println!("{}", serde_json::to_string_pretty(&obj)?);
         }
         OutputFormat::Yaml => {
             let mut obj = serde_json::json!({ "token": raw_token });
-            if let Some((header, claims)) = decoded {
-                obj["header"] = header;
-                obj["claims"] = claims;
+            match decoded {
+                Some((header, claims)) => {
+                    obj["jwt"] = serde_json::json!(true);
+                    obj["header"] = header;
+                    obj["claims"] = claims;
+                }
+                // None means the server returned an opaque (non-JWT) access token.
+                // Some OAuth2 servers issue opaque tokens by default; Hydra does this
+                // when access_token_strategy is "opaque" rather than "jwt".
+                None => {
+                    obj["jwt"] = serde_json::json!(false);
+                    obj["message"] = serde_json::json!("not a JWT — decoded view unavailable");
+                }
             }
             println!("{}", serde_yaml::to_string(&obj)?);
         }
