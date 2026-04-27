@@ -79,66 +79,44 @@ pub async fn fetch(args: TokenFetchArgs, output: &OutputFormat) -> Result<()> {
 
     let raw_token = token_response.access_token().secret();
 
-    // Attempt to decode as JWT for display. Opaque tokens are shown as-is.
-    let decoded = decode_jwt_for_display(raw_token);
+    // Udex requires JWT access tokens. An opaque token means the OAuth2 server
+    // is misconfigured (e.g. Hydra with access_token_strategy = "opaque" instead
+    // of "jwt"). Fail fast so the user knows to fix the server configuration.
+    let (header, claims) = decode_jwt_for_display(raw_token).ok_or_else(|| {
+        anyhow::anyhow!(
+            "server returned an opaque (non-JWT) access token — \
+             check that the OAuth2 client is configured with access_token_strategy = \"jwt\""
+        )
+    })?;
 
     match output {
         OutputFormat::Json => {
-            let mut obj = serde_json::json!({ "token": raw_token });
-            match decoded {
-                Some((header, claims)) => {
-                    obj["jwt"] = serde_json::json!(true);
-                    obj["header"] = header;
-                    obj["claims"] = claims;
-                }
-                // None means the server returned an opaque (non-JWT) access token.
-                // Some OAuth2 servers issue opaque tokens by default; Hydra does this
-                // when access_token_strategy is "opaque" rather than "jwt".
-                None => {
-                    obj["jwt"] = serde_json::json!(false);
-                    obj["message"] = serde_json::json!("not a JWT — decoded view unavailable");
-                }
-            }
+            let obj = serde_json::json!({
+                "token":  raw_token,
+                "header": header,
+                "claims": claims,
+            });
             println!("{}", serde_json::to_string_pretty(&obj)?);
         }
         OutputFormat::Yaml => {
-            let mut obj = serde_json::json!({ "token": raw_token });
-            match decoded {
-                Some((header, claims)) => {
-                    obj["jwt"] = serde_json::json!(true);
-                    obj["header"] = header;
-                    obj["claims"] = claims;
-                }
-                // None means the server returned an opaque (non-JWT) access token.
-                // Some OAuth2 servers issue opaque tokens by default; Hydra does this
-                // when access_token_strategy is "opaque" rather than "jwt".
-                None => {
-                    obj["jwt"] = serde_json::json!(false);
-                    obj["message"] = serde_json::json!("not a JWT — decoded view unavailable");
-                }
-            }
+            let obj = serde_json::json!({
+                "token":  raw_token,
+                "header": header,
+                "claims": claims,
+            });
             println!("{}", serde_yaml::to_string(&obj)?);
         }
         OutputFormat::Table => {
             println!("=== Token (encoded) ===");
             println!("{raw_token}");
-
-            match decoded {
-                Some((header, claims)) => {
-                    println!();
-                    println!("=== Token (decoded) ===");
-                    println!("--- Header ---");
-                    println!("{}", serde_json::to_string_pretty(&header)?);
-                    println!();
-                    println!("--- Claims ---");
-                    println!("{}", serde_json::to_string_pretty(&claims)?);
-                    print_expiry(&claims);
-                }
-                None => {
-                    println!();
-                    println!("(token is not a JWT — decoded view unavailable)");
-                }
-            }
+            println!();
+            println!("=== Token (decoded) ===");
+            println!("--- Header ---");
+            println!("{}", serde_json::to_string_pretty(&header)?);
+            println!();
+            println!("--- Claims ---");
+            println!("{}", serde_json::to_string_pretty(&claims)?);
+            print_expiry(&claims);
         }
     }
 
