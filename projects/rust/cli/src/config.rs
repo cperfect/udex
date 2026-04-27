@@ -149,19 +149,11 @@ impl UdexConfig {
             );
         }
 
-        // authz: exactly one of jwks_url or jwt_public_key_path must be set
-        let has_pem = self
-            .server
-            .authz
-            .jwt_public_key_path
-            .as_deref()
-            .is_some_and(|s| !s.trim().is_empty());
-        let has_jwks = self
-            .server
-            .authz
-            .jwks_url
-            .as_deref()
-            .is_some_and(|s| !s.trim().is_empty());
+        // authz: exactly one of jwks_url or jwt_public_key_path must be set.
+        // Presence is determined by Option::is_some (Some("") counts as set);
+        // emptiness is validated separately below, mirroring AuthzConfig::validate().
+        let has_pem = self.server.authz.jwt_public_key_path.is_some();
+        let has_jwks = self.server.authz.jwks_url.is_some();
         match (has_pem, has_jwks) {
             (true, true) => errors.push(
                 "server.authz: only one of jwt_public_key_path or jwks_url may be set".to_string(),
@@ -170,6 +162,17 @@ impl UdexConfig {
                 "server.authz: one of jwks_url or jwt_public_key_path must be set".to_string(),
             ),
             _ => {}
+        }
+
+        if let Some(path) = &self.server.authz.jwt_public_key_path {
+            if path.trim().is_empty() {
+                errors.push("server.authz.jwt_public_key_path cannot be empty".to_string());
+            }
+        }
+        if let Some(url) = &self.server.authz.jwks_url {
+            if url.trim().is_empty() {
+                errors.push("server.authz.jwks_url cannot be empty".to_string());
+            }
         }
 
         let jwt_issuer = self.server.authz.jwt_issuer.as_deref().unwrap_or("").trim();
