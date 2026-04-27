@@ -20,7 +20,20 @@ intent claude subagents install intent
 # Install CLaude Code skills
 intent claude skills install in-essentials
 
-# intall hydra so we can use the cli
-bash <(curl https://raw.githubusercontent.com/ory/meta/master/install.sh) -d -b . hydra v26.2.0
-sudo mv ./hydra /usr/local/bin/
+# install hydra CLI (pinned release, checksum-verified)
+HYDRA_VERSION="v26.2.0"
+HYDRA_TARBALL="hydra_26.2.0-linux_64bit.tar.gz"
+HYDRA_RELEASE_URL="https://github.com/ory/hydra/releases/download/${HYDRA_VERSION}"
+
+hydra_tmp="$(mktemp -d)"
+trap 'rm -rf "${hydra_tmp}"' EXIT
+
+curl -fsSL "${HYDRA_RELEASE_URL}/${HYDRA_TARBALL}" -o "${hydra_tmp}/${HYDRA_TARBALL}"
+curl -fsSL "${HYDRA_RELEASE_URL}/checksums.txt"    -o "${hydra_tmp}/checksums.txt"
+
+# Verify SHA-256 against the publisher's pinned release checksums
+(cd "${hydra_tmp}" && grep "${HYDRA_TARBALL}" checksums.txt | sha256sum --check --strict --quiet)
+
+tar -xzf "${hydra_tmp}/${HYDRA_TARBALL}" -C "${hydra_tmp}" hydra
+sudo mv "${hydra_tmp}/hydra" /usr/local/bin/
 hydra help
