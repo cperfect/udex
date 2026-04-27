@@ -12,7 +12,7 @@ use tonic::transport::{Channel, ClientTlsConfig};
 use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzRequest};
 use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
-use udex_server::config::AuthNzConfig;
+use udex_server::config::AuthzConfig;
 use udex_server::{config::ServerConfig, logging, server};
 
 const SERVER_BIND_ADDR: &str = "127.0.0.1:50052"; // different from default to avoid conflicts
@@ -67,7 +67,7 @@ async fn init_server() -> MaybeOnceType {
                 hash_algorithm: Some(HashAlgorithm::Xxh3 as i32), // Use Xxh3 for test consistency
             }),
         }],
-        authnz: udex_server::config::AuthNzConfig {
+        authz: udex_server::config::AuthzConfig {
             jwks_url: None,
             jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
             jwt_issuer: Some(format!("{}-issuer", ID_PREFIX)),
@@ -175,7 +175,7 @@ async fn init_server_hydra() -> HydraFixtureType {
                 hash_algorithm: Some(HashAlgorithm::Xxh3 as i32),
             }),
         }],
-        authnz: AuthNzConfig {
+        authz: AuthzConfig {
             jwks_url: Some(jwks_url),
             jwt_public_key_path: None,
             jwt_issuer: Some(issuer),
@@ -244,7 +244,7 @@ struct OverrideClaims {
 /// Generates claims for testing JWT authentication
 fn generate_test_claims(
     sub: &str,
-    authnz_config: &AuthNzConfig,
+    authz_config: &AuthzConfig,
     override_claims: Option<OverrideClaims>,
 ) -> udex_api::authz::claims::Claims {
     let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
@@ -257,7 +257,7 @@ fn generate_test_claims(
             .as_ref()
             .and_then(|c| c.issuer.clone())
             .unwrap_or_else(|| {
-                authnz_config
+                authz_config
                     .jwt_issuer
                     .clone()
                     .unwrap_or_else(|| "udex-test".to_string())
@@ -266,7 +266,7 @@ fn generate_test_claims(
             .as_ref()
             .and_then(|c| c.audience.clone())
             .unwrap_or_else(|| {
-                authnz_config
+                authz_config
                     .jwt_audience
                     .clone()
                     .unwrap_or_else(|| "udex-api".to_string())
@@ -421,7 +421,7 @@ async fn test_init_indexes() {
     // Generate JWT token for authentication
     let claims = generate_test_claims(
         "test-user",
-        &server_config.authnz,
+        &server_config.authz,
         Some(OverrideClaims {
             scope: Some(format!("udex:index:v1:{}:read", index_name)),
             sub: None,
@@ -484,7 +484,7 @@ async fn test_init_indexes() {
 
 /// Tests authentication and authorization for different services
 #[tokio_shared_rt::test]
-async fn test_authnz() {
+async fn test_authz() {
     // Initialize rustls crypto provider
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -606,7 +606,7 @@ async fn test_authnz() {
         // Generate JWT token for authentication with proper permissions
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 scope: Some(format!("udex:index:v1:{}:read", index_name)),
                 sub: None,
@@ -658,7 +658,7 @@ async fn test_authnz() {
         // Generate JWT token for authentication with proper permissions
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 scope: Some(format!("udex:entry:v1:{}:create", index_name)),
                 sub: None,
@@ -695,7 +695,7 @@ async fn test_authnz() {
         });
 
         // Generate invalid JWT token using bad signing key
-        let claims = generate_test_claims("test-user", &server_config.authnz, None);
+        let claims = generate_test_claims("test-user", &server_config.authz, None);
         let invalid_jwt_token = generate_test_jwt(&claims, bad_signing_key);
         let bearer_token = format!("Bearer {}", invalid_jwt_token);
         describe_request.metadata_mut().insert(
@@ -743,7 +743,7 @@ async fn test_authnz() {
         });
 
         // Add malformed authorization header (missing "Bearer" prefix)
-        let claims = generate_test_claims("test-user", &server_config.authnz, None);
+        let claims = generate_test_claims("test-user", &server_config.authz, None);
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
         create_request.metadata_mut().insert(
             "authorization",
@@ -780,19 +780,19 @@ async fn test_authnz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 sub: Some("".to_string()), // Invalid: empty subject
                 issuer: Some(
                     server_config
-                        .authnz
+                        .authz
                         .jwt_issuer
                         .clone()
                         .unwrap_or_else(|| "server_integration_test-issuer".to_string()),
                 ), // Valid
                 audience: Some(
                     server_config
-                        .authnz
+                        .authz
                         .jwt_audience
                         .clone()
                         .unwrap_or_else(|| "server_integration_test-audience".to_string()),
@@ -852,13 +852,13 @@ async fn test_authnz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 sub: Some("test-user".to_string()), // Valid
                 issuer: Some("".to_string()),       // Invalid: empty issuer
                 audience: Some(
                     server_config
-                        .authnz
+                        .authz
                         .jwt_audience
                         .clone()
                         .unwrap_or_else(|| "server_integration_test-audience".to_string()),
@@ -905,12 +905,12 @@ async fn test_authnz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 sub: Some("test-user".to_string()), // Valid
                 issuer: Some(
                     server_config
-                        .authnz
+                        .authz
                         .jwt_issuer
                         .clone()
                         .unwrap_or_else(|| "server_integration_test-issuer".to_string()),
@@ -971,19 +971,19 @@ async fn test_authnz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 sub: Some("test-user".to_string()), // Valid
                 issuer: Some(
                     server_config
-                        .authnz
+                        .authz
                         .jwt_issuer
                         .clone()
                         .unwrap_or_else(|| "server_integration_test-issuer".to_string()),
                 ), // Valid
                 audience: Some(
                     server_config
-                        .authnz
+                        .authz
                         .jwt_audience
                         .clone()
                         .unwrap_or_else(|| "server_integration_test-audience".to_string()),
@@ -1030,19 +1030,19 @@ async fn test_authnz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 sub: Some("test-user".to_string()), // Valid
                 issuer: Some(
                     server_config
-                        .authnz
+                        .authz
                         .jwt_issuer
                         .clone()
                         .unwrap_or_else(|| "server_integration_test-issuer".to_string()),
                 ), // Valid
                 audience: Some(
                     server_config
-                        .authnz
+                        .authz
                         .jwt_audience
                         .clone()
                         .unwrap_or_else(|| "server_integration_test-audience".to_string()),
@@ -1089,19 +1089,19 @@ async fn test_authnz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 sub: Some("test-user".to_string()), // Valid
                 issuer: Some(
                     server_config
-                        .authnz
+                        .authz
                         .jwt_issuer
                         .clone()
                         .unwrap_or_else(|| "server_integration_test-issuer".to_string()),
                 ), // Valid
                 audience: Some(
                     server_config
-                        .authnz
+                        .authz
                         .jwt_audience
                         .clone()
                         .unwrap_or_else(|| "server_integration_test-audience".to_string()),
@@ -1161,7 +1161,7 @@ async fn test_authnz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 sub: None,
                 issuer: None,
@@ -1200,19 +1200,19 @@ async fn test_authnz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 sub: Some("test-user".to_string()), // Valid
                 issuer: Some(
                     server_config
-                        .authnz
+                        .authz
                         .jwt_issuer
                         .clone()
                         .unwrap_or_else(|| "server_integration_test-issuer".to_string()),
                 ), // Valid
                 audience: Some(
                     server_config
-                        .authnz
+                        .authz
                         .jwt_audience
                         .clone()
                         .unwrap_or_else(|| "server_integration_test-audience".to_string()),
@@ -1259,7 +1259,7 @@ async fn test_authnz() {
         // Generate JWT token with wrong permission (entry permission for index service)
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 scope: Some("udex:entry:v1:read".to_string()),
                 sub: None,
@@ -1318,7 +1318,7 @@ async fn test_authnz() {
         // Generate JWT token with wrong permission (index permission for entry service)
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 scope: Some("udex:index:v1:read".to_string()),
                 sub: None,
@@ -1362,7 +1362,7 @@ async fn test_authnz() {
         });
 
         // Generate JWT token without permissions field
-        let claims = generate_test_claims("test-user", &server_config.authnz, None);
+        let claims = generate_test_claims("test-user", &server_config.authz, None);
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
         let bearer_token = format!("Bearer {}", jwt_token);
         describe_request.metadata_mut().insert(
@@ -1412,7 +1412,7 @@ async fn test_authnz() {
         // Non-udex: scope values are silently discarded → no permissions granted → denied
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 scope: Some("openid profile email".to_string()),
                 sub: None,
@@ -1471,7 +1471,7 @@ async fn test_authnz() {
         // Mixed scope: non-udex values are silently discarded; the udex: value grants access
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 scope: Some(format!(
                     "openid profile email udex:entry:v1:{}:create",
@@ -1515,7 +1515,7 @@ async fn test_authnz() {
         // Empty scope claim → no permissions granted → denied
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 scope: Some("".to_string()),
                 sub: None,
@@ -1572,7 +1572,7 @@ async fn test_authnz() {
         });
 
         // No scope claim → no permissions → denied
-        let claims = generate_test_claims("test-user", &server_config.authnz, None);
+        let claims = generate_test_claims("test-user", &server_config.authz, None);
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
         let bearer_token = format!("Bearer {}", jwt_token);
         create_request.metadata_mut().insert(
@@ -1609,7 +1609,7 @@ async fn test_authnz() {
         // Generate JWT token with multiple permissions including the required one for describe
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 scope: Some(format!(
                     "udex:index:v1:{0}:read udex:index:v1:{0}:write udex:entry:v1:{0}:create",
@@ -1653,7 +1653,7 @@ async fn test_authnz() {
         // Generate JWT token with permissions but not the required one for describe
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authnz,
+            &server_config.authz,
             Some(OverrideClaims {
                 // Missing the required udex:index:v1:{name}:read permission
                 scope: Some("udex:index:v1:write udex:entry:v1:read".to_string()),
@@ -1752,7 +1752,7 @@ async fn test_token_reuse() {
 
     let claims = generate_test_claims(
         "test-user",
-        &server_config.authnz,
+        &server_config.authz,
         Some(OverrideClaims {
             scope: Some(format!("udex:index:v1:{index_name}:read")),
             sub: None,

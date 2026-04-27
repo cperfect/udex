@@ -22,14 +22,14 @@ The workspace has three crates. New code goes in the crate that owns its layer �
 | Glob pattern matching | `udex_api::authz::glob` | Used for permission scope matching |
 | Timestamp conversion utilities | `udex_api` (lib.rs) | `google_timestamp_to_offset_datetime`, `offset_datetime_to_google_timestamp`, `now_timestamp` |
 
-### `udex-server` — gRPC handlers, authentication, configuration, and observability
+### `udex-server` — gRPC handlers, authorization, configuration, and observability
 
 | Concern | Module | Notes |
 | ------- | ------ | ----- |
 | gRPC server startup & TLS | `udex_server::server` | Wires interceptors, TLS config, and service registration |
-| JWT authentication interceptor | `udex_server::authn` | `AuthnInterceptor` — validates JWT on every request; supports static PEM key or JWKS URL; private to crate |
+| JWT validation & authz interceptor | `udex_server::authz` | `AuthzInterceptor` — validates JWT and checks permissions on every request; supports static PEM key or JWKS URL; private to crate |
 | OAuth2 test helpers (Hydra) | `tests::auth_server` (server crate) | Test-only; Hydra client creation + client_credentials token exchange; not compiled into the server binary |
-| Server & AuthNz configuration | `udex_server::config` | Loads and validates runtime config; no mutation after init |
+| Server & authz configuration | `udex_server::config` | `AuthzConfig` — loads and validates runtime config; no mutation after init |
 | Entry gRPC service handler | `udex_server::entry` | `EntryService` — thin handler; delegates to datastore |
 | Index gRPC service handler | `udex_server::index` | `IndexService` — thin handler; delegates to datastore |
 | Health check gRPC handler | `udex_server::healthz` | `HealthzService` |

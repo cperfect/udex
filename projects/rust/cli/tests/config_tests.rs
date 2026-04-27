@@ -37,7 +37,7 @@ fn test_config_init_creates_file() {
     );
     assert!(
         content.contains("jwt_public_key_path"),
-        "config should contain authnz fields"
+        "config should contain authz fields"
     );
 }
 
@@ -133,7 +133,7 @@ max_message_size_bytes = 4194304
 cert_path = "certs/server.crt"
 key_path = "certs/server.key"
 
-[server.authnz]
+[server.authz]
 jwt_issuer = "https://auth.example.com"
 jwt_audience = "udex"
 

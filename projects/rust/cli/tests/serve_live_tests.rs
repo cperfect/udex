@@ -65,7 +65,7 @@ max_message_size_bytes = 4194304
 cert_path = "{SERVER_CERT}"
 key_path = "{SERVER_KEY}"
 
-[server.authnz]
+[server.authz]
 jwt_public_key_path = "{JWT_PUBLIC_KEY}"
 jwt_issuer = "https://cli-serve-test-issuer.example.com"
 jwt_audience = "udex-cli-serve-test"

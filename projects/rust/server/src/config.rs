@@ -18,8 +18,8 @@ pub struct ServerConfig {
     pub max_message_size: usize,
     /// TLS configuration
     pub tls: TlsConfig,
-    /// AuthNZ configuration
-    pub authnz: AuthNzConfig,
+    /// authz configuration
+    pub authz: AuthzConfig,
     /// statically defined indexes
     pub init_indexes: Vec<udex_api::index::UpdateIndexRequest>,
 }
@@ -35,7 +35,7 @@ pub struct TlsConfig {
 
 // Authentication and Authorization configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct AuthNzConfig {
+pub struct AuthzConfig {
     /// JWT public key path for token validation (ECDSA public key in PEM format) - either this or jwks url must be provided
     pub jwt_public_key_path: Option<String>,
     /// JWKS endpoint for public key for token validation - - either this or jwt public key path must be provided
@@ -57,7 +57,7 @@ impl Default for ServerConfig {
             max_message_size: 4 * 1024 * 1024, // 4MB
             tls: TlsConfig::default(),
             init_indexes: Vec::new(),
-            authnz: AuthNzConfig::default(),
+            authz: AuthzConfig::default(),
         }
     }
 }
@@ -66,7 +66,7 @@ impl ServerConfig {
     /// Validate the server configuration.
     pub fn validate(&self) -> Result<(), crate::Error> {
         self.tls.validate()?;
-        self.authnz.validate()?;
+        self.authz.validate()?;
         Ok(())
     }
 }
@@ -112,7 +112,7 @@ impl Default for TlsConfig {
     }
 }
 
-impl AuthNzConfig {
+impl AuthzConfig {
     pub fn validate(&self) -> Result<(), crate::Error> {
         match (&self.jwks_url, &self.jwt_public_key_path) {
             (Some(_), Some(_)) => {
@@ -194,8 +194,8 @@ mod tests {
     use std::io::Write;
     use tempfile::TempDir;
 
-    fn valid_authnz() -> AuthNzConfig {
-        AuthNzConfig {
+    fn valid_authz() -> AuthzConfig {
+        AuthzConfig {
             jwks_url: None,
             jwt_public_key_path: Some("some/key.pem".to_string()),
             jwt_issuer: Some("https://issuer.example.com".to_string()),
@@ -203,8 +203,8 @@ mod tests {
         }
     }
 
-    fn valid_authnz_jwks() -> AuthNzConfig {
-        AuthNzConfig {
+    fn valid_authz_jwks() -> AuthzConfig {
+        AuthzConfig {
             jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
             jwt_public_key_path: None,
             jwt_issuer: Some("http://hydra:4444".to_string()),
@@ -328,25 +328,25 @@ mod tests {
                 cert_path: "/nonexistent/server.crt".to_string(),
                 key_path: "/nonexistent/server.key".to_string(),
             },
-            authnz: valid_authnz(),
+            authz: valid_authz(),
             ..ServerConfig::default()
         };
         assert!(cfg.validate().is_err());
     }
 
     #[test]
-    fn authnz_validate_static_key_ok() {
-        assert!(valid_authnz().validate().is_ok());
+    fn authz_validate_static_key_ok() {
+        assert!(valid_authz().validate().is_ok());
     }
 
     #[test]
-    fn authnz_validate_jwks_url_ok() {
-        assert!(valid_authnz_jwks().validate().is_ok());
+    fn authz_validate_jwks_url_ok() {
+        assert!(valid_authz_jwks().validate().is_ok());
     }
 
     #[test]
-    fn authnz_validate_both_key_sources_is_err() {
-        let cfg = AuthNzConfig {
+    fn authz_validate_both_key_sources_is_err() {
+        let cfg = AuthzConfig {
             jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
             jwt_public_key_path: Some("some/key.pem".to_string()),
             jwt_issuer: Some("https://issuer.example.com".to_string()),
@@ -360,8 +360,8 @@ mod tests {
     }
 
     #[test]
-    fn authnz_validate_no_key_source_is_err() {
-        let cfg = AuthNzConfig {
+    fn authz_validate_no_key_source_is_err() {
+        let cfg = AuthzConfig {
             jwks_url: None,
             jwt_public_key_path: None,
             jwt_issuer: Some("https://issuer.example.com".to_string()),
@@ -375,8 +375,8 @@ mod tests {
     }
 
     #[test]
-    fn authnz_validate_empty_jwks_url_is_err() {
-        let cfg = AuthNzConfig {
+    fn authz_validate_empty_jwks_url_is_err() {
+        let cfg = AuthzConfig {
             jwks_url: Some("   ".to_string()),
             jwt_public_key_path: None,
             jwt_issuer: Some("https://issuer.example.com".to_string()),
@@ -390,8 +390,8 @@ mod tests {
     }
 
     #[test]
-    fn authnz_validate_issuer_equals_audience_is_err() {
-        let cfg = AuthNzConfig {
+    fn authz_validate_issuer_equals_audience_is_err() {
+        let cfg = AuthzConfig {
             jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
             jwt_public_key_path: None,
             jwt_issuer: Some("udex".to_string()),

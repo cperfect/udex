@@ -2,7 +2,7 @@
 
 # udex-server
 
-gRPC server crate for Udex. Implements the `IndexService` and `EntryService` handlers, authentication/authorisation middleware, TLS transport, structured logging, and configuration validation.
+gRPC server crate for Udex. Implements the `IndexService` and `EntryService` handlers, JWT validation and authorization middleware, TLS transport, structured logging, and configuration validation.
 
 ## Crate layout
 
@@ -12,8 +12,8 @@ gRPC server crate for Udex. Implements the `IndexService` and `EntryService` han
 | `index.rs` | `IndexService` gRPC handler |
 | `entry.rs` | `EntryService` gRPC handler |
 | `healthz.rs` | `HealthzService` — unauthenticated liveness check |
-| `authn.rs` | `AuthnInterceptor` — JWT Bearer token validation |
-| `config.rs` | `ServerConfig` with `validate()` |
+| `authz.rs` | `AuthzInterceptor` — JWT validation and permission enforcement on every request |
+| `config.rs` | `ServerConfig` / `AuthzConfig` with `validate()` |
 | `logging.rs` | `init_tracing()` — JSON structured logs via `tracing-subscriber` |
 
 ## Running the server
@@ -37,7 +37,8 @@ udex_server::serve(server_config, datastore).await?;
 
 - `bind_address` — socket address (e.g. `127.0.0.1:50051`)
 - `tls.cert_path` / `tls.key_path` — TLS certificate and private key paths
-- `authnz.jwt_public_key_path` / `authnz.jwt_issuer` / `authnz.jwt_audience` — JWT validation parameters (ES256; see [JWT Claims](../api/README.md#jwt-claims) for the required token structure and permission format)
+- `authz.jwt_public_key_path` or `authz.jwks_url` — JWT key source (static EC PEM file or JWKS endpoint URL; exactly one must be set)
+- `authz.jwt_issuer` / `authz.jwt_audience` — expected `iss` and `aud` claims (ES256; see [JWT Claims](../api/README.md#jwt-claims) for the required token structure and permission format)
 - `init_indexes` — list of indexes to ensure exist on startup
 
 ## Testing

@@ -8,7 +8,7 @@ use tonic::Status;
 use tonic_middleware::RequestInterceptor;
 use udex_api::authz::claims::Claims;
 
-use crate::config::AuthNzConfig;
+use crate::config::AuthzConfig;
 use crate::Error;
 
 #[derive(Clone)]
@@ -18,14 +18,14 @@ enum KeySource {
 }
 
 #[derive(Clone)]
-pub struct AuthnInterceptor {
+pub struct AuthzInterceptor {
     key_source: KeySource,
     expected_issuer: String,
     expected_audience: String,
 }
 
-impl AuthnInterceptor {
-    pub fn new(config: AuthNzConfig) -> Result<Self, Error> {
+impl AuthzInterceptor {
+    pub fn new(config: AuthzConfig) -> Result<Self, Error> {
         let key_source = match (config.jwks_url, config.jwt_public_key_path) {
             (Some(url), None) => {
                 let url_for_err = url.clone();
@@ -167,7 +167,7 @@ impl AuthnInterceptor {
 }
 
 #[tonic::async_trait]
-impl RequestInterceptor for AuthnInterceptor {
+impl RequestInterceptor for AuthzInterceptor {
     async fn intercept(&self, mut req: Request<Body>) -> Result<Request<Body>, Status> {
         match req
             .headers()
@@ -194,11 +194,11 @@ impl RequestInterceptor for AuthnInterceptor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::AuthNzConfig;
+    use crate::config::AuthzConfig;
     use tracing_test::traced_test;
 
-    fn test_interceptor() -> AuthnInterceptor {
-        AuthnInterceptor::new(AuthNzConfig {
+    fn test_interceptor() -> AuthzInterceptor {
+        AuthzInterceptor::new(AuthzConfig {
             jwks_url: None,
             jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
             jwt_issuer: Some("test-issuer".to_string()),
@@ -209,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_new_rejects_both_key_sources() {
-        let result = AuthnInterceptor::new(AuthNzConfig {
+        let result = AuthzInterceptor::new(AuthzConfig {
             jwks_url: Some("http://localhost:4444/.well-known/jwks.json".to_string()),
             jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
             jwt_issuer: Some("test-issuer".to_string()),
@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn test_new_rejects_no_key_source() {
-        let result = AuthnInterceptor::new(AuthNzConfig {
+        let result = AuthzInterceptor::new(AuthzConfig {
             jwks_url: None,
             jwt_public_key_path: None,
             jwt_issuer: Some("test-issuer".to_string()),
