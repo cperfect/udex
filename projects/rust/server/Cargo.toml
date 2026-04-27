@@ -31,6 +31,8 @@ jsonwebtoken = { workspace = true }
 validator = { version = "0.20", features = ["derive"] }
 tokio-rustls = "0.26.2"
 time = { workspace = true }
+oauth2 = { version = "5", features = ["reqwest"]} # TODO can we use an HTTP client we alredy have?
+url = "2.5.8"
 
 [[bench]]
 name = "entry_service"
@@ -49,5 +51,6 @@ mockall = { workspace = true }
 rustls = { workspace = true }
 criterion = { workspace = true }
 tempfile = { workspace = true }
+ory-hydra-client = "26.2"
 
  
