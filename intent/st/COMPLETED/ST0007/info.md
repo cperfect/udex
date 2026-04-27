@@ -4,7 +4,7 @@ intent_version: 2.4.0
 status: Completed
 slug: integrated-oauth2-authorization-server
 created: 20260427
-completed:
+completed: 2026-04-27T00:00:00Z
 ---
 
 # ST0007: Integrated OAuth2 Authorization Server
