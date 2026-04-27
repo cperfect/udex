@@ -4,6 +4,8 @@
 ARG VARIANT="bookworm"
 ARG RUST_VERSION="1.95.0"
 FROM mcr.microsoft.com/devcontainers/rust:${VARIANT}
+# Re-declare after FROM: ARGs before FROM are scoped to the FROM instruction only.
+ARG RUST_VERSION
 
 # [Optional] Uncomment this section to install additional packages.
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
