@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
@@ -30,7 +31,12 @@ impl AuthzInterceptor {
             (Some(url), None) => {
                 let url_for_err = url.clone();
                 let jwks_text = std::thread::spawn(move || -> Result<String, String> {
-                    reqwest::blocking::get(&url)
+                    reqwest::blocking::Client::builder()
+                        .timeout(Duration::from_secs(10))
+                        .build()
+                        .map_err(|e| e.to_string())?
+                        .get(&url)
+                        .send()
                         .map_err(|e| e.to_string())?
                         .error_for_status()
                         .map_err(|e| e.to_string())?
