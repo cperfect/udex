@@ -7,6 +7,7 @@ use ory_hydra_client::apis::{configuration::Configuration, o_auth2_api};
 use ory_hydra_client::models::o_auth2_client::OAuth2Client as HydraClient;
 
 /// Configuration for an OAuth2 client registered in Hydra.
+#[derive(Clone)]
 pub struct OAuthClientConfig {
     pub name: String,
     pub id: String,

@@ -3,7 +3,7 @@ verblock: "27 Apr 2026:v0.1: vscode - Initial version"
 wp_id: WP-04
 title: "Extend server_integration_tests.rs with Hydra-JWKS fixture and scope/token-reuse tests"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-04: Extend server_integration_tests.rs with Hydra-JWKS fixture and scope/token-reuse tests

@@ -1,3 +1,6 @@
+#[path = "auth_server.rs"]
+mod auth_server;
+
 use jsonwebtoken::{encode, EncodingKey, Header};
 // we don't test all the services exhaustively here as they will be tested via the client & end-to-end tests
 use maybe_once::tokio::{Data, MaybeOnceAsync};
@@ -12,8 +15,11 @@ use udex_datastore::integration_test::init_postgres;
 use udex_server::config::AuthNzConfig;
 use udex_server::{config::ServerConfig, logging, server};
 
-const SERVER_BIND_ADDR: &str = "127.0.0.1:50052"; // different from default  to avoid conflicts
+const SERVER_BIND_ADDR: &str = "127.0.0.1:50052"; // different from default to avoid conflicts
 const ID_PREFIX: &str = "server-integration-test";
+
+const SERVER_USING_HYDRA_BIND_ADDR: &str = "127.0.0.1:50053";
+const ID_USING_HYDRA_PREFIX: &str = "hydra-integration-test";
 
 // See https://github.com/ufoscout/maybe-once for the MaybeOnceAsync pattern used here.
 type MaybeOnceType = (
@@ -109,6 +115,119 @@ async fn init_server() -> MaybeOnceType {
 pub async fn data(serial: bool) -> Data<'static, MaybeOnceType> {
     static DATA: OnceLock<MaybeOnceAsync<MaybeOnceType>> = OnceLock::new();
     DATA.get_or_init(|| MaybeOnceAsync::new(|| Box::pin(init_server())))
+        .data(serial)
+        .await
+}
+
+// ── Hydra JWKS fixture ────────────────────────────────────────────────────────
+//
+// Activated when HYDRA_ADMIN_URL (and optionally HYDRA_PUBLIC_URL) env vars are
+// set. Starts a second server instance that validates tokens via Hydra's JWKS
+// endpoint. Tests that depend on this fixture skip gracefully when the env vars
+// are absent.
+
+type HydraFixtureType = (
+    String,                         // index name
+    ServerConfig,                   // server config (bind address etc.)
+    auth_server::OAuthClientConfig, // Hydra client credentials for test token requests
+    String,                         // Hydra public base URL
+    tokio::task::JoinHandle<()>,    // server task handle (keeps server alive)
+    String,                         // database name (kept for automatic cleanup)
+);
+
+async fn init_server_hydra() -> HydraFixtureType {
+    let admin_url =
+        std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string());
+    let public_url =
+        std::env::var("HYDRA_PUBLIC_URL").unwrap_or_else(|_| "http://localhost:4444".to_string());
+    // URLS_SELF_ISSUER in the docker-compose config has a trailing slash.
+    let issuer = std::env::var("HYDRA_ISSUER")
+        .unwrap_or_else(|_| format!("{}/", public_url.trim_end_matches('/')));
+    let audience = format!("{ID_USING_HYDRA_PREFIX}-audience");
+    let jwks_url = format!("{public_url}/.well-known/jwks.json");
+
+    logging::init_test_tracing();
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    let datastore_fixtures = init_postgres().await;
+    let datastore = datastore_fixtures.0;
+    let db_name = datastore_fixtures.2;
+
+    let index_name = format!("{ID_USING_HYDRA_PREFIX}-index");
+    let bind_address: SocketAddr = SERVER_USING_HYDRA_BIND_ADDR
+        .parse()
+        .expect("Invalid bind address");
+
+    let server_config = ServerConfig {
+        bind_address,
+        tls: udex_server::config::TlsConfig {
+            cert_path: "tests/certs/server.crt".to_string(),
+            key_path: "tests/certs/server.key".to_string(),
+        },
+        init_indexes: vec![UpdateIndexRequest {
+            name: index_name.clone(),
+            update: Some(IndexUpdate {
+                description: Some(index_name.clone()),
+                max_bulk_operations: Some(100),
+                max_key_length: Some(256),
+                max_value_length: Some(1024),
+                max_kv_pairs_per_context: Some(50),
+                hash_algorithm: Some(HashAlgorithm::Xxh3 as i32),
+            }),
+        }],
+        authnz: AuthNzConfig {
+            jwks_url: Some(jwks_url),
+            jwt_public_key_path: None,
+            jwt_issuer: Some(issuer),
+            jwt_audience: Some(audience.clone()),
+        },
+        ..ServerConfig::default()
+    };
+
+    let server_config_clone = server_config.clone();
+    let server_handle = tokio::spawn(async move {
+        server::serve(server_config_clone, datastore)
+            .await
+            .expect("Hydra-backed server failed to start");
+    });
+
+    // Extra startup time: AuthnInterceptor fetches the JWKS on startup.
+    sleep(Duration::from_millis(500)).await;
+
+    // One shared Hydra client for all Hydra integration tests.
+    // Scopes cover all operations tested across the Hydra test suite.
+    let client_config = auth_server::OAuthClientConfig {
+        name: format!("{ID_USING_HYDRA_PREFIX}-client"),
+        id: format!("{ID_USING_HYDRA_PREFIX}-client"),
+        secret: "hydra-test-secret".to_string(),
+        scopes: vec![
+            format!("udex:index:v1:{index_name}:read"),
+            format!("udex:entry:v1:{index_name}:create"),
+        ],
+        audience,
+    };
+
+    // Idempotent: 409 means the client already exists from a previous run.
+    match auth_server::create_oauth2_client(&admin_url, client_config.clone()).await {
+        Ok(_) => {}
+        Err(e) if e.to_string().contains("409") => {}
+        Err(e) => panic!("Failed to create Hydra OAuth2 client: {e}"),
+    }
+
+    (
+        index_name,
+        server_config,
+        client_config,
+        public_url,
+        server_handle,
+        db_name,
+    )
+}
+
+pub async fn data_using_hydra(serial: bool) -> Data<'static, HydraFixtureType> {
+    static HYDRA_DATA: OnceLock<MaybeOnceAsync<HydraFixtureType>> = OnceLock::new();
+    HYDRA_DATA
+        .get_or_init(|| MaybeOnceAsync::new(|| Box::pin(init_server_hydra())))
         .data(serial)
         .await
 }
@@ -1606,6 +1725,426 @@ async fn test_tls_wrong_ca_rejected() {
         "Expected a certificate validation error, got: {err_str}"
     );
     println!("✓ Connection with wrong CA correctly rejected");
+}
+
+/// Verifies that a valid, unexpired token is accepted on two sequential requests
+/// (i.e. the server has no token blacklist and does not revoke on first use).
+#[tokio_shared_rt::test]
+async fn test_token_reuse() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    let data = data(false).await;
+    let bind_address = data.1.bind_address;
+    let index_name = &data.0;
+    let server_config = &data.1;
+    let jwt_signing_key = &data.2;
+
+    let ca_cert = tokio::fs::read_to_string("tests/certs/ca.crt")
+        .await
+        .expect("Failed to read CA certificate");
+    let tls_config = ClientTlsConfig::new()
+        .ca_certificate(tonic::transport::Certificate::from_pem(ca_cert))
+        .domain_name("localhost");
+    let endpoint = Channel::from_shared(format!("https://{}", bind_address))
+        .expect("Invalid endpoint")
+        .tls_config(tls_config)
+        .expect("Failed to configure TLS");
+
+    let claims = generate_test_claims(
+        "test-user",
+        &server_config.authnz,
+        Some(OverrideClaims {
+            scope: Some(format!("udex:index:v1:{index_name}:read")),
+            sub: None,
+            issuer: None,
+            audience: None,
+            exp: None,
+            iat: None,
+        }),
+    );
+    let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
+    let bearer_token = format!("Bearer {jwt_token}");
+
+    let mut index_client =
+        udex_api::index::index_service_client::IndexServiceClient::connect(endpoint)
+            .await
+            .expect("Failed to connect");
+
+    let mut req1 = tonic::Request::new(udex_api::index::DescribeRequest {
+        name: index_name.clone(),
+    });
+    req1.metadata_mut().insert(
+        "authorization",
+        bearer_token.parse().expect("Failed to parse bearer token"),
+    );
+    assert!(
+        index_client.describe(req1).await.is_ok(),
+        "First use of token should succeed"
+    );
+
+    let mut req2 = tonic::Request::new(udex_api::index::DescribeRequest {
+        name: index_name.clone(),
+    });
+    req2.metadata_mut().insert(
+        "authorization",
+        bearer_token.parse().expect("Failed to parse bearer token"),
+    );
+    assert!(
+        index_client.describe(req2).await.is_ok(),
+        "Re-use of same token should succeed (no server-side token blacklist)"
+    );
+
+    println!("✓ Token re-use: same unexpired token accepted on two sequential requests");
+}
+
+/// Verifies that a Hydra-issued token is accepted twice in a row.
+/// Skipped when HYDRA_ADMIN_URL is not set.
+#[tokio_shared_rt::test]
+async fn test_hydra_token_reuse() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    if std::env::var("HYDRA_ADMIN_URL").is_err() {
+        println!("Skipping test_hydra_token_reuse: HYDRA_ADMIN_URL not set");
+        return;
+    }
+
+    let data = data_using_hydra(false).await;
+    let bind_address = data.1.bind_address;
+    let index_name = &data.0;
+    let client_config = data.2.clone();
+    let public_url = &data.3;
+
+    let token = auth_server::authenticate(
+        public_url,
+        client_config,
+        vec![format!("udex:index:v1:{index_name}:read")],
+    )
+    .await
+    .expect("Failed to obtain Hydra token");
+
+    let ca_cert = tokio::fs::read_to_string("tests/certs/ca.crt")
+        .await
+        .expect("Failed to read CA certificate");
+    let tls_config = ClientTlsConfig::new()
+        .ca_certificate(tonic::transport::Certificate::from_pem(ca_cert))
+        .domain_name("localhost");
+    let endpoint = Channel::from_shared(format!("https://{}", bind_address))
+        .expect("Invalid endpoint")
+        .tls_config(tls_config)
+        .expect("Failed to configure TLS");
+
+    let bearer_token = format!("Bearer {token}");
+
+    let mut index_client =
+        udex_api::index::index_service_client::IndexServiceClient::connect(endpoint)
+            .await
+            .expect("Failed to connect");
+
+    let mut req1 = tonic::Request::new(udex_api::index::DescribeRequest {
+        name: index_name.clone(),
+    });
+    req1.metadata_mut().insert(
+        "authorization",
+        bearer_token.parse().expect("Failed to parse bearer token"),
+    );
+    assert!(
+        index_client.describe(req1).await.is_ok(),
+        "First Hydra token request should succeed"
+    );
+
+    let mut req2 = tonic::Request::new(udex_api::index::DescribeRequest {
+        name: index_name.clone(),
+    });
+    req2.metadata_mut().insert(
+        "authorization",
+        bearer_token.parse().expect("Failed to parse bearer token"),
+    );
+    assert!(
+        index_client.describe(req2).await.is_ok(),
+        "Re-use of same Hydra token should succeed"
+    );
+
+    println!("✓ Hydra token re-use: same token accepted on two sequential requests");
+}
+
+/// Verifies scope sub-setting against a live Hydra instance.
+///
+/// A single Hydra client is registered with two scopes (index read + entry
+/// create). The test authenticates requesting only the index read scope, then
+/// confirms the server grants index read but denies entry create — proving the
+/// token carries only the requested subset of scopes.
+///
+/// Skipped when HYDRA_ADMIN_URL is not set.
+#[tokio_shared_rt::test]
+async fn test_hydra_scope_subset() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    if std::env::var("HYDRA_ADMIN_URL").is_err() {
+        println!("Skipping test_hydra_scope_subset: HYDRA_ADMIN_URL not set");
+        return;
+    }
+
+    let data = data_using_hydra(false).await;
+    let bind_address = data.1.bind_address;
+    let index_name = &data.0;
+    let client_config = data.2.clone();
+    let public_url = &data.3;
+
+    // Authenticate with only the index read scope — a strict subset of the
+    // client's registered scopes (which also include entry create).
+    let token = auth_server::authenticate(
+        public_url,
+        client_config,
+        vec![format!("udex:index:v1:{index_name}:read")],
+    )
+    .await
+    .expect("Failed to obtain Hydra token for subset scope");
+
+    let ca_cert = tokio::fs::read_to_string("tests/certs/ca.crt")
+        .await
+        .expect("Failed to read CA certificate");
+    let tls_config = ClientTlsConfig::new()
+        .ca_certificate(tonic::transport::Certificate::from_pem(ca_cert))
+        .domain_name("localhost");
+    let endpoint = Channel::from_shared(format!("https://{}", bind_address))
+        .expect("Invalid endpoint")
+        .tls_config(tls_config)
+        .expect("Failed to configure TLS");
+
+    let bearer_token = format!("Bearer {token}");
+
+    // Index describe should SUCCEED — token has udex:index:v1:{index}:read.
+    {
+        let mut index_client =
+            udex_api::index::index_service_client::IndexServiceClient::connect(endpoint.clone())
+                .await
+                .expect("Failed to connect to index service");
+
+        let mut req = tonic::Request::new(udex_api::index::DescribeRequest {
+            name: index_name.clone(),
+        });
+        req.metadata_mut().insert(
+            "authorization",
+            bearer_token.parse().expect("Failed to parse bearer token"),
+        );
+        assert!(
+            index_client.describe(req).await.is_ok(),
+            "Index describe should succeed: token has the required read scope"
+        );
+        println!("✓ Hydra scope subset: index read scope grants describe access");
+    }
+
+    // Entry create should FAIL — token lacks udex:entry:v1:{index}:create.
+    {
+        let mut entry_client =
+            udex_api::entry::entry_service_client::EntryServiceClient::connect(endpoint)
+                .await
+                .expect("Failed to connect to entry service");
+
+        let mut req = tonic::Request::new(udex_api::entry::CreateEntryRequest {
+            index_name: index_name.clone(),
+            context: Some(udex_api::entry::ContextInput {
+                pairs: vec![udex_api::entry::KeyValuePair {
+                    key: "scope_test_key".to_string(),
+                    value: Some(udex_api::entry::Value {
+                        value: Some(udex_api::entry::value::Value::StringValue(
+                            "scope_test_value".to_string(),
+                        )),
+                    }),
+                    kek_id: None,
+                }],
+                dek: None,
+                kek_id: None,
+            }),
+        });
+        req.metadata_mut().insert(
+            "authorization",
+            bearer_token.parse().expect("Failed to parse bearer token"),
+        );
+
+        let response = entry_client.create_entry(req).await;
+        assert!(
+            response.is_err(),
+            "Entry create should be denied: token does not have the entry create scope"
+        );
+        assert_eq!(
+            response.unwrap_err().code(),
+            tonic::Code::PermissionDenied,
+            "Should return PermissionDenied"
+        );
+        println!("✓ Hydra scope subset: missing entry create scope correctly denied");
+    }
+}
+
+/// Verifies that a token carrying only non-udex scopes (e.g. `api:read`) is
+/// accepted as a valid JWT but denied by the permission layer because it
+/// contains no `udex:*` scope values.
+///
+/// Skipped when HYDRA_ADMIN_URL is not set.
+#[tokio_shared_rt::test]
+async fn test_hydra_non_udex_scopes_denied() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    if std::env::var("HYDRA_ADMIN_URL").is_err() {
+        println!("Skipping test_hydra_non_udex_scopes_denied: HYDRA_ADMIN_URL not set");
+        return;
+    }
+
+    let admin_url =
+        std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string());
+
+    let data = data_using_hydra(false).await;
+    let bind_address = data.1.bind_address;
+    let public_url = &data.3;
+
+    // A client registered with a non-udex scope only.
+    let client = auth_server::OAuthClientConfig {
+        name: format!("{ID_USING_HYDRA_PREFIX}-non-udex-client"),
+        id: format!("{ID_USING_HYDRA_PREFIX}-non-udex-client"),
+        secret: "non-udex-secret".to_string(),
+        scopes: vec!["api:read".to_string()],
+        audience: format!("{ID_USING_HYDRA_PREFIX}-audience"),
+    };
+
+    match auth_server::create_oauth2_client(&admin_url, client.clone()).await {
+        Ok(_) => {}
+        Err(e) if e.to_string().contains("409") => {}
+        Err(e) => panic!("Failed to create non-udex Hydra client: {e}"),
+    }
+
+    let token = auth_server::authenticate(public_url, client, vec!["api:read".to_string()])
+        .await
+        .expect("Failed to obtain Hydra token with non-udex scope");
+
+    let ca_cert = tokio::fs::read_to_string("tests/certs/ca.crt")
+        .await
+        .expect("Failed to read CA certificate");
+    let tls_config = ClientTlsConfig::new()
+        .ca_certificate(tonic::transport::Certificate::from_pem(ca_cert))
+        .domain_name("localhost");
+    let endpoint = Channel::from_shared(format!("https://{}", bind_address))
+        .expect("Invalid endpoint")
+        .tls_config(tls_config)
+        .expect("Failed to configure TLS");
+
+    let mut index_client =
+        udex_api::index::index_service_client::IndexServiceClient::connect(endpoint)
+            .await
+            .expect("Failed to connect to index service");
+
+    let index_name = &data.0;
+    let mut req = tonic::Request::new(udex_api::index::DescribeRequest {
+        name: index_name.clone(),
+    });
+    req.metadata_mut().insert(
+        "authorization",
+        format!("Bearer {token}")
+            .parse()
+            .expect("Failed to parse bearer token"),
+    );
+
+    let response = index_client.describe(req).await;
+    assert!(
+        response.is_err(),
+        "Request with non-udex scope token should be denied"
+    );
+    assert_eq!(
+        response.unwrap_err().code(),
+        tonic::Code::PermissionDenied,
+        "Non-udex token should yield PermissionDenied, not Unauthenticated"
+    );
+    println!("✓ Hydra: token with non-udex scope only is correctly denied with PermissionDenied");
+}
+
+/// Verifies that a token issued to a client configured with the wrong audience
+/// is rejected by the server with Unauthenticated.
+///
+/// Hydra embeds the client's `audience` field as the JWT `aud` claim; the
+/// server is configured to expect a different audience, so validation fails.
+///
+/// Note: the JWT issuer is controlled globally by Hydra's URLS_SELF_ISSUER
+/// and is the same for all clients on the same Hydra instance. Wrong-issuer
+/// behaviour is already covered by the static-PEM test suite.
+///
+/// Skipped when HYDRA_ADMIN_URL is not set.
+#[tokio_shared_rt::test]
+async fn test_hydra_wrong_audience_rejected() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    if std::env::var("HYDRA_ADMIN_URL").is_err() {
+        println!("Skipping test_hydra_wrong_audience_rejected: HYDRA_ADMIN_URL not set");
+        return;
+    }
+
+    let admin_url =
+        std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string());
+
+    let data = data_using_hydra(false).await;
+    let bind_address = data.1.bind_address;
+    let index_name = &data.0;
+    let public_url = &data.3;
+
+    // Client configured with an audience that does not match the server's
+    // expected jwt_audience ("hydra-integration-test-audience").
+    let client = auth_server::OAuthClientConfig {
+        name: format!("{ID_USING_HYDRA_PREFIX}-wrong-aud-client"),
+        id: format!("{ID_USING_HYDRA_PREFIX}-wrong-aud-client"),
+        secret: "wrong-aud-secret".to_string(),
+        scopes: vec![format!("udex:index:v1:{index_name}:read")],
+        audience: "wrong-audience".to_string(),
+    };
+
+    match auth_server::create_oauth2_client(&admin_url, client.clone()).await {
+        Ok(_) => {}
+        Err(e) if e.to_string().contains("409") => {}
+        Err(e) => panic!("Failed to create wrong-audience Hydra client: {e}"),
+    }
+
+    let token = auth_server::authenticate(
+        public_url,
+        client,
+        vec![format!("udex:index:v1:{index_name}:read")],
+    )
+    .await
+    .expect("Failed to obtain Hydra token with wrong audience");
+
+    let ca_cert = tokio::fs::read_to_string("tests/certs/ca.crt")
+        .await
+        .expect("Failed to read CA certificate");
+    let tls_config = ClientTlsConfig::new()
+        .ca_certificate(tonic::transport::Certificate::from_pem(ca_cert))
+        .domain_name("localhost");
+    let endpoint = Channel::from_shared(format!("https://{}", bind_address))
+        .expect("Invalid endpoint")
+        .tls_config(tls_config)
+        .expect("Failed to configure TLS");
+
+    let mut index_client =
+        udex_api::index::index_service_client::IndexServiceClient::connect(endpoint)
+            .await
+            .expect("Failed to connect to index service");
+
+    let mut req = tonic::Request::new(udex_api::index::DescribeRequest {
+        name: index_name.clone(),
+    });
+    req.metadata_mut().insert(
+        "authorization",
+        format!("Bearer {token}")
+            .parse()
+            .expect("Failed to parse bearer token"),
+    );
+
+    let response = index_client.describe(req).await;
+    assert!(
+        response.is_err(),
+        "Token with wrong audience should be rejected"
+    );
+    assert_eq!(
+        response.unwrap_err().code(),
+        tonic::Code::Unauthenticated,
+        "Wrong-audience token should yield Unauthenticated"
+    );
+    println!("✓ Hydra: token with wrong audience is correctly rejected with Unauthenticated");
 }
 
 /// Verifies that a client relying on the system trust store cannot connect.
