@@ -99,16 +99,9 @@ impl AuthzInterceptor {
             _ => unreachable!("AuthzConfig::validate() ensures exactly one key source is set"),
         };
 
-        let expected_issuer = config.jwt_issuer.ok_or_else(|| {
-            Error::ConfigValidation(
-                "jwt_issuer is required when using JWT authentication".to_string(),
-            )
-        })?;
-        let expected_audience = config.jwt_audience.ok_or_else(|| {
-            Error::ConfigValidation(
-                "jwt_audience is required when using JWT authentication".to_string(),
-            )
-        })?;
+        // config.validate() above guarantees both fields are Some and non-empty.
+        let expected_issuer = config.jwt_issuer.expect("validated");
+        let expected_audience = config.jwt_audience.expect("validated");
 
         Ok(Self {
             key_source,
