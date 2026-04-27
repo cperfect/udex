@@ -286,9 +286,26 @@ mod tests {
     }
 
     #[test]
-    fn test_missing_jwt_key_is_invalid() {
+    fn test_jwks_url_only_is_valid() {
         let mut cfg = UdexConfig::default();
         cfg.server.authz.jwt_public_key_path = None;
+        cfg.server.authz.jwks_url = Some("http://localhost:4444/.well-known/jwks.json".to_string());
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn test_both_key_sources_is_invalid() {
+        let mut cfg = UdexConfig::default();
+        cfg.server.authz.jwks_url = Some("http://localhost:4444/.well-known/jwks.json".to_string());
+        // jwt_public_key_path is already Some(...) from default — both set is invalid
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn test_no_key_source_is_invalid() {
+        let mut cfg = UdexConfig::default();
+        cfg.server.authz.jwt_public_key_path = None;
+        cfg.server.authz.jwks_url = None;
         assert!(cfg.validate().is_err());
     }
 
