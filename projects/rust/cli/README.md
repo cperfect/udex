@@ -66,11 +66,13 @@ server and prints the raw encoded JWT followed by the decoded header and claims.
 Use it to obtain a token for development/debugging or to verify token contents.
 
 ```bash
-# Fetch a token (all three required flags can also be supplied via env vars)
+# Fetch a token.
+# All three required flags can also be supplied via env vars:
+#   UDEX_CLIENT_ID, UDEX_CLIENT_SECRET, UDEX_TOKEN_URL
 udex token fetch \
-  --client-id     my-client          \   # [env: UDEX_CLIENT_ID]
-  --client-secret my-secret          \   # [env: UDEX_CLIENT_SECRET]
-  --url http://localhost:4444/oauth2/token  # [env: UDEX_TOKEN_URL]
+  --client-id     my-client \
+  --client-secret my-secret \
+  --url http://localhost:4444/oauth2/token
 
 # Request a specific subset of the client's registered scopes
 udex token fetch \
