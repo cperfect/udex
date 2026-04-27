@@ -54,8 +54,7 @@ pub fn inspect(args: TokenInspectArgs) -> Result<()> {
 pub async fn fetch(args: TokenFetchArgs, output: &OutputFormat) -> Result<()> {
     let token_url = TokenUrl::new(args.url.clone()).context("invalid token URL")?;
 
-    // auth_uri is not used for client_credentials but is part of the builder API.
-    // We derive it from the token URL to keep the client construction valid.
+    // auth_uri is not required for client_credentials — only token_uri is needed.
     let client = BasicClient::new(ClientId::new(args.client_id))
         .set_client_secret(ClientSecret::new(args.client_secret))
         .set_token_uri(token_url);
