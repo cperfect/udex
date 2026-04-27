@@ -28,6 +28,7 @@ pub struct AuthzInterceptor {
 impl AuthzInterceptor {
     pub fn new(config: AuthzConfig) -> Result<Self, Error> {
         config.validate()?;
+        // TODO If the identity provider rotates signing keys, a server restart would be required to pick up the new JWKS. This is acceptable for test/demo purposes (which is the case for now) but for production use, consider implementing periodic JWKS refresh (e.g., background task with configurable interval, or refresh on kid miss with rate limiting).
         let key_source = match (config.jwks_url, config.jwt_public_key_path) {
             (Some(url), None) => {
                 let url_for_err = url.clone();
