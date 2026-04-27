@@ -27,7 +27,7 @@ For full detail on the data model, operations, components, security model, and d
 
 ### Prerequisites
 
-- **Rust** (stable) — install via [rustup](https://rustup.rs/)
+- **Rust** (1.95.0) — install via [rustup](https://rustup.rs/)
 - **PostgreSQL 16+** — the datastore; run locally via Docker or use the dev container (which starts it automatically)
 - **Docker** — used to run a local PostgreSQL instance for integration tests
 - **protoc** (Protocol Buffers compiler) — required to build the API crate from `.proto` definitions
