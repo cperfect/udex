@@ -27,6 +27,7 @@ pub struct AuthzInterceptor {
 
 impl AuthzInterceptor {
     pub fn new(config: AuthzConfig) -> Result<Self, Error> {
+        config.validate()?;
         let key_source = match (config.jwks_url, config.jwt_public_key_path) {
             (Some(url), None) => {
                 let url_for_err = url.clone();
@@ -88,17 +89,9 @@ impl AuthzInterceptor {
                 })?;
                 KeySource::Static(key)
             }
-            (Some(_), Some(_)) => {
-                return Err(Error::ConfigValidation(
-                    "Exactly one of jwks_url or jwt_public_key_path must be set, not both"
-                        .to_string(),
-                ));
-            }
-            (None, None) => {
-                return Err(Error::ConfigValidation(
-                    "One of jwks_url or jwt_public_key_path must be set".to_string(),
-                ));
-            }
+            // Both-set and neither-set are unreachable: config.validate() above
+            // guarantees exactly one key source is present.
+            _ => unreachable!("AuthzConfig::validate() ensures exactly one key source is set"),
         };
 
         let expected_issuer = config.jwt_issuer.ok_or_else(|| {
