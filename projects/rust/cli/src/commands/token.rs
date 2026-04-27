@@ -154,23 +154,34 @@ fn decode_jwt_for_display(token: &str) -> Option<(serde_json::Value, serde_json:
 }
 
 fn print_expiry(claims: &serde_json::Value) {
-    if let Some(exp) = claims.get("exp").and_then(|v| v.as_i64()) {
-        use time::OffsetDateTime;
-        if let Ok(dt) = OffsetDateTime::from_unix_timestamp(exp) {
-            let now = OffsetDateTime::now_utc();
-            println!();
-            if dt < now {
-                println!(
-                    "exp: EXPIRED {} seconds ago ({})",
-                    (now - dt).whole_seconds(),
-                    dt
-                );
-            } else {
-                println!(
-                    "exp: valid for {} more seconds ({})",
-                    (dt - now).whole_seconds(),
-                    dt
-                );
+    let Some(raw_exp) = claims.get("exp") else {
+        return;
+    };
+    println!();
+    match raw_exp.as_i64() {
+        None => {
+            println!("exp: invalid/unreadable: {raw_exp}");
+        }
+        Some(exp) => {
+            use time::OffsetDateTime;
+            match OffsetDateTime::from_unix_timestamp(exp) {
+                Err(_) => println!("exp: invalid/unreadable: {exp}"),
+                Ok(dt) => {
+                    let now = OffsetDateTime::now_utc();
+                    if dt < now {
+                        println!(
+                            "exp: EXPIRED {} seconds ago ({})",
+                            (now - dt).whole_seconds(),
+                            dt
+                        );
+                    } else {
+                        println!(
+                            "exp: valid for {} more seconds ({})",
+                            (dt - now).whole_seconds(),
+                            dt
+                        );
+                    }
+                }
             }
         }
     }
