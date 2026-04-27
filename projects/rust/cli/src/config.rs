@@ -149,14 +149,29 @@ impl UdexConfig {
             );
         }
 
-        // authz
-        let jwt_key = self
+        // authz: exactly one of jwks_url or jwt_public_key_path must be set
+        let has_pem = self
             .server
             .authz
             .jwt_public_key_path
             .as_deref()
-            .unwrap_or("")
-            .trim();
+            .is_some_and(|s| !s.trim().is_empty());
+        let has_jwks = self
+            .server
+            .authz
+            .jwks_url
+            .as_deref()
+            .is_some_and(|s| !s.trim().is_empty());
+        match (has_pem, has_jwks) {
+            (true, true) => errors.push(
+                "server.authz: only one of jwt_public_key_path or jwks_url may be set".to_string(),
+            ),
+            (false, false) => errors.push(
+                "server.authz: one of jwks_url or jwt_public_key_path must be set".to_string(),
+            ),
+            _ => {}
+        }
+
         let jwt_issuer = self.server.authz.jwt_issuer.as_deref().unwrap_or("").trim();
         let jwt_audience = self
             .server
@@ -165,10 +180,6 @@ impl UdexConfig {
             .as_deref()
             .unwrap_or("")
             .trim();
-
-        if jwt_key.is_empty() {
-            errors.push("server.authz.jwt_public_key_path is required".to_string());
-        }
         if jwt_issuer.is_empty() {
             errors.push("server.authz.jwt_issuer is required".to_string());
         } else if jwt_issuer.len() > 255 {

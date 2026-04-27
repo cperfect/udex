@@ -117,11 +117,11 @@ fn test_config_validate_fails_for_invalid_toml() {
 }
 
 #[test]
-fn test_config_validate_fails_for_missing_jwt_key() {
+fn test_config_validate_fails_when_no_key_source_set() {
     let dir = TempDir::new().unwrap();
     let config_path = dir.path().join("udex.toml");
 
-    // Write a config without jwt_public_key_path
+    // Neither jwt_public_key_path nor jwks_url is set — exactly one is required.
     let content = r#"
 [server]
 bind_address = "127.0.0.1:50051"
@@ -155,5 +155,7 @@ query_timeout_secs = 30
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("jwt_public_key_path is required"));
+        .stderr(predicate::str::contains(
+            "one of jwks_url or jwt_public_key_path must be set",
+        ));
 }
