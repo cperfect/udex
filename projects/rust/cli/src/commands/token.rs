@@ -89,21 +89,17 @@ pub async fn fetch(args: TokenFetchArgs, output: &OutputFormat) -> Result<()> {
         )
     })?;
 
+    let obj = serde_json::json!({
+        "token":  raw_token,
+        "header": header,
+        "claims": claims,
+    });
+
     match output {
         OutputFormat::Json => {
-            let obj = serde_json::json!({
-                "token":  raw_token,
-                "header": header,
-                "claims": claims,
-            });
             println!("{}", serde_json::to_string_pretty(&obj)?);
         }
         OutputFormat::Yaml => {
-            let obj = serde_json::json!({
-                "token":  raw_token,
-                "header": header,
-                "claims": claims,
-            });
             println!("{}", serde_yaml::to_string(&obj)?);
         }
         OutputFormat::Table => {
