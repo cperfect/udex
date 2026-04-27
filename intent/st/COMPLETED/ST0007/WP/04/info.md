@@ -40,14 +40,20 @@ pass unchanged.
 
 ## Acceptance Criteria
 
-- [ ] All pre-existing integration tests pass in static-PEM mode.
-- [ ] Hydra-JWKS fixture starts a server and issues/validates real Hydra JWTs
+- [x] All pre-existing integration tests pass in static-PEM mode.
+- [x] Hydra-JWKS fixture starts a server and issues/validates real Hydra JWTs
       when `HYDRA_ADMIN_URL`/`HYDRA_PUBLIC_URL` are set.
-- [ ] Scope sub-set test passes (Hydra only).
-- [ ] Token re-use test passes (both fixtures).
-- [ ] Expired token test passes (both fixtures).
-- [ ] Tests that need Hydra are skipped gracefully when Hydra is not available.
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and
+- [x] Scope sub-set test passes (Hydra only) — `test_hydra_scope_subset`.
+- [x] Token re-use test passes (both fixtures) — `test_token_reuse` (static PEM)
+      and `test_hydra_token_reuse` (Hydra).
+- [x] Expired token test passes (static PEM) — covered by tests 11, 13, 15 in
+      `test_authz`. Hydra variant not implemented: Hydra-issued tokens carry a
+      real expiry and cannot be backdated without Hydra config changes; replaced
+      by `test_hydra_wrong_audience_rejected` (UNAUTHENTICATED) and
+      `test_hydra_non_udex_scopes_denied` (PermissionDenied) as equivalent
+      negative-path coverage.
+- [x] Tests that need Hydra are skipped gracefully when Hydra is not available.
+- [x] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and
       the full `cargo test -p udex-server` suite pass.
 
 ## Dependencies

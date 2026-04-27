@@ -24,15 +24,18 @@ two must be set; providing both or neither is a `ConfigValidation` error.
 
 ## Acceptance Criteria
 
-- [ ] `validate()` returns `Ok(())` when only `jwt_public_key_path` is set
+- [x] `validate()` returns `Ok(())` when only `jwt_public_key_path` is set
       (existing behaviour preserved).
-- [ ] `validate()` returns `Ok(())` when only `jwks_url` is set (new).
-- [ ] `validate()` returns `ConfigValidation` error when both are set.
-- [ ] `validate()` returns `ConfigValidation` error when neither is set.
-- [ ] `jwt_issuer` and `jwt_audience` remain required in all cases.
-- [ ] All existing config unit tests pass.
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and
+- [x] `validate()` returns `Ok(())` when only `jwks_url` is set (new).
+- [x] `validate()` returns `ConfigValidation` error when both are set.
+- [x] `validate()` returns `ConfigValidation` error when neither is set.
+- [x] `jwt_issuer` and `jwt_audience` remain required in all cases.
+- [x] All existing config unit tests pass.
+- [x] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and
       `cargo test -p udex-server` pass.
+
+Note: `AuthNzConfig` was renamed to `AuthzConfig` and the `authnz` field on
+`ServerConfig` was renamed to `authz` to align with the authn/authz separation.
 
 ## Dependencies
 

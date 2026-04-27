@@ -51,18 +51,18 @@ JSON output: `{ "token": "...", "header": {...}, "claims": {...} }`
 
 ## Acceptance Criteria
 
-- [ ] `udex token fetch --client-id … --client-secret … --url …` obtains a
+- [x] `udex token fetch --client-id … --client-secret … --url …` obtains a
       token from a live Hydra instance and prints it.
-- [ ] Both the raw encoded token and the decoded claims are shown by default.
-- [ ] `--output json` emits a single JSON object with `token`, `header`, and
+- [x] Both the raw encoded token and the decoded claims are shown by default.
+- [x] `--output json` emits a single JSON object with `token`, `header`, and
       `claims` keys.
-- [ ] `--output yaml` emits equivalent YAML.
-- [ ] Repeated `--scope` args are each added to the token request.
-- [ ] `UDEX_CLIENT_ID`, `UDEX_CLIENT_SECRET`, and `UDEX_TOKEN_URL` env vars
+- [x] `--output yaml` emits equivalent YAML.
+- [x] Repeated `--scope` args are each added to the token request.
+- [x] `UDEX_CLIENT_ID`, `UDEX_CLIENT_SECRET`, and `UDEX_TOKEN_URL` env vars
       are honoured.
-- [ ] If the server returns a non-JWT (opaque) token, a clear message is
+- [x] If the server returns a non-JWT (opaque) token, a clear message is
       printed and the raw token is still shown.
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and
+- [x] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and
       `cargo test -p udex-cli` pass.
 
 ## Dependencies

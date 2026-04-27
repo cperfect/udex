@@ -1,7 +1,7 @@
 ---
 verblock: "27 Apr 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: WIP
+status: Completed
 slug: integrated-oauth2-authorization-server
 created: 20260427
 completed:
@@ -72,20 +72,23 @@ standard OAuth2/JWKS only.
 
 ## Acceptance Criteria
 
-- [ ] `AuthnInterceptor::new()` compiles and handles both `jwt_public_key_path`
+- [x] `AuthzInterceptor::new()` compiles and handles both `jwt_public_key_path`
       and `jwks_url`; exactly one must be set or `ConfigValidation` error is
       returned.
-- [ ] JWKS path: fetches the JWKS URL at startup, builds a `kid → DecodingKey`
+- [x] JWKS path: fetches the JWKS URL at startup, builds a `kid → DecodingKey`
       map, and selects the correct key per token.
-- [ ] Static PEM path: behaviour unchanged from pre-ST0007.
-- [ ] `AuthNzConfig::validate()` accepts either field (not both, not neither).
-- [ ] `tests/auth_server.rs` compiles; provides `create_oauth2_client` and
+- [x] Static PEM path: behaviour unchanged from pre-ST0007.
+- [x] `AuthzConfig::validate()` accepts either field (not both, not neither).
+- [x] `tests/auth_server.rs` compiles; provides `create_oauth2_client` and
       `authenticate` helpers (Hydra-backed, test-only).
-- [ ] Integration tests pass in static-PEM mode (existing CI).
-- [ ] Integration tests pass in Hydra-JWKS mode when Hydra is available.
-- [ ] Scope sub-set authentication tested: client created with scopes A+B,
+- [x] Integration tests pass in static-PEM mode (existing CI).
+- [x] Integration tests pass in Hydra-JWKS mode when Hydra is available.
+- [x] Scope sub-set authentication tested: client created with scopes A+B,
       token requested with scope A only — server accepts and grants only A.
-- [ ] Token re-use test: same unexpired token accepted on a second request.
-- [ ] Expired token test: token with past `exp` is rejected with UNAUTHENTICATED.
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, all
+- [x] Token re-use test: same unexpired token accepted on a second request.
+- [x] Expired token test: token with past `exp` is rejected with UNAUTHENTICATED
+      (static PEM fixture; Hydra-issued tokens cannot be backdated — covered by
+      `test_hydra_wrong_audience_rejected` and `test_hydra_non_udex_scopes_denied`
+      as equivalent negative-path tests).
+- [x] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, all
       tests pass.

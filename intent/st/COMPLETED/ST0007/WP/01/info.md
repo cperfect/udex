@@ -31,15 +31,19 @@ map, and select the correct key per token by reading the `kid` header claim.
 
 ## Acceptance Criteria
 
-- [ ] `AuthnInterceptor::new()` compiles with no `todo!()`, `unwrap()` on
+- [x] `AuthzInterceptor::new()` compiles with no `todo!()`, `unwrap()` on
       fallible paths, or syntax errors.
-- [ ] Given `jwks_url`, fetches the endpoint at construction time and rejects
+- [x] Given `jwks_url`, fetches the endpoint at construction time and rejects
       an unreachable URL with `ConfigValidation`.
-- [ ] Token signed by a key in the JWKS is accepted; token with unknown `kid`
+- [x] Token signed by a key in the JWKS is accepted; token with unknown `kid`
       is rejected with `UNAUTHENTICATED`.
-- [ ] Given `jwt_public_key_path`, behaviour is identical to pre-ST0007.
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and
+- [x] Given `jwt_public_key_path`, behaviour is identical to pre-ST0007.
+- [x] `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and
       `cargo test -p udex-server` (unit tests only) pass.
+
+Note: `AuthnInterceptor` was renamed to `AuthzInterceptor` (in `authz.rs`) during
+implementation to better reflect that the server only enforces authorization;
+authentication is the responsibility of the upstream OAuth2 server.
 
 ## Dependencies
 

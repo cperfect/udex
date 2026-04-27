@@ -34,15 +34,15 @@ a JWT, with no Hydra-specific types leaking into callers.
 
 ## Acceptance Criteria
 
-- [ ] `tests/auth_server.rs` compiles with `cargo test -p udex-server
+- [x] `tests/auth_server.rs` compiles with `cargo test -p udex-server
       --test auth_server` (even when Hydra is not running — compilation only).
-- [ ] `create_oauth2_client` creates a client against a live Hydra instance
+- [x] `create_oauth2_client` creates a client against a live Hydra instance
       when `HYDRA_ADMIN_URL` is set.
-- [ ] `authenticate` returns a non-empty JWT string against a live Hydra
+- [x] `authenticate` returns a non-empty JWT string against a live Hydra
       instance when `HYDRA_PUBLIC_URL` is set.
-- [ ] Requesting a subset of client scopes succeeds; the returned token's
+- [x] Requesting a subset of client scopes succeeds; the returned token's
       `scope` claim contains only the requested scopes.
-- [ ] `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` pass.
+- [x] `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` pass.
 
 ## Dependencies
 
