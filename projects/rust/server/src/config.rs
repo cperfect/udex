@@ -38,7 +38,7 @@ pub struct TlsConfig {
 pub struct AuthzConfig {
     /// JWT public key path for token validation (ECDSA public key in PEM format) - either this or jwks url must be provided
     pub jwt_public_key_path: Option<String>,
-    /// JWKS endpoint for public key for token validation - - either this or jwt public key path must be provided
+    /// JWKS endpoint for public key for token validation — either this or jwt_public_key_path must be provided
     pub jwks_url: Option<String>,
     /// JWT issuer for token validation
     pub jwt_issuer: Option<String>,
