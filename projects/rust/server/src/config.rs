@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::time::Duration;
+use url::{Url, ParseError};
 
 /// Server-related configuration for gRPC.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,8 +37,10 @@ pub struct TlsConfig {
 // Authentication and Authorization configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AuthNzConfig {
-    /// JWT public key path for token validation (ECDSA public key in PEM format)
+    /// JWT public key path for token validation (ECDSA public key in PEM format) - either this or jwks url must be provided
     pub jwt_public_key_path: Option<String>,
+    /// JWKS endpoint for public key for token validation - - either this or jwt public key path must be provided
+    pub jwks_url: Option<String>,
     /// JWT issuer for token validation
     pub jwt_issuer: Option<String>,
     /// JWT audience for token validation
