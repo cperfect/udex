@@ -27,3 +27,6 @@ WORKDIR /opt/intent
 RUN git clone https://github.com/matthewsinclair/intent.git .
 RUN ln -s /opt/intent/bin/intent /usr/local/bin/intent
 
+# expose arg as env var for post create script
+ENV RUST_VERSION=${RUST_VERSION}
+
