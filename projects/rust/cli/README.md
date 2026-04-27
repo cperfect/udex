@@ -80,7 +80,7 @@ udex token fetch \
   --scope udex:entry:v1:my-index:create
 
 # Structured output — useful for scripting
-udex token fetch ... --output json   # {"token":"eyJ...","jwt":true,"header":{...},"claims":{...}}
+udex token fetch ... --output json   # {"token":"eyJ...","header":{...},"claims":{...}}
 udex token fetch ... --output yaml
 ```
 
@@ -99,8 +99,9 @@ udex index list
 udex entry create my-index --context name=alice --context role=admin
 ```
 
-If the server returns an opaque (non-JWT) token, the raw token is printed with
-a `"jwt": false` marker in structured output and a note in table output.
+If the server returns an opaque (non-JWT) token the command exits with an error
+and a message directing you to set `access_token_strategy = "jwt"` on the OAuth2
+client (e.g. in Hydra). Udex only accepts JWT access tokens.
 
 See [Development with Hydra](../server/README.md#development-with-hydra) for
 how to register a client in Hydra before fetching tokens.
