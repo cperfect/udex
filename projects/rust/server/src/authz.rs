@@ -213,24 +213,34 @@ mod tests {
 
     #[test]
     fn test_new_rejects_both_key_sources() {
-        let result = AuthzInterceptor::new(AuthzConfig {
+        let Err(err) = AuthzInterceptor::new(AuthzConfig {
             jwks_url: Some("http://localhost:4444/.well-known/jwks.json".to_string()),
             jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
-        });
-        assert!(result.is_err());
+        }) else {
+            panic!("expected ConfigValidation error for both key sources");
+        };
+        assert!(
+            matches!(&err, Error::ConfigValidation(msg) if msg.contains("not both")),
+            "expected 'not both' error, got: {err}"
+        );
     }
 
     #[test]
     fn test_new_rejects_no_key_source() {
-        let result = AuthzInterceptor::new(AuthzConfig {
+        let Err(err) = AuthzInterceptor::new(AuthzConfig {
             jwks_url: None,
             jwt_public_key_path: None,
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
-        });
-        assert!(result.is_err());
+        }) else {
+            panic!("expected ConfigValidation error for no key source");
+        };
+        assert!(
+            matches!(&err, Error::ConfigValidation(msg) if msg.contains("must be set")),
+            "expected 'must be set' error, got: {err}"
+        );
     }
 
     #[traced_test]
