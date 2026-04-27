@@ -2,10 +2,10 @@
 
 ## Work Packages
 
-- [ ] WP-01: Fix AuthnInterceptor — JWKS startup fetch and kid-based key selection
-- [ ] WP-02: Update AuthNzConfig validation — accept jwks_url as alternative to jwt_public_key_path
-- [ ] WP-03: Complete auth_server.rs test helper — Hydra client creation and client_credentials token exchange
-- [ ] WP-04: Extend server_integration_tests.rs — Hydra-JWKS fixture and scope/token-reuse tests
+- [x] WP-01: Fix AuthzInterceptor — JWKS startup fetch and kid-based key selection
+- [x] WP-02: Update AuthzConfig validation — accept jwks_url as alternative to jwt_public_key_path
+- [x] WP-03: Complete auth_server.rs test helper — Hydra client creation and client_credentials token exchange
+- [x] WP-04: Extend server_integration_tests.rs — Hydra-JWKS fixture and scope/token-reuse tests
 
 ## Dependencies
 
