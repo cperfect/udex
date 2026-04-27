@@ -204,7 +204,7 @@ mod tests {
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
         })
-        .expect("Failed to create test AuthnInterceptor")
+        .expect("Failed to create test AuthzInterceptor")
     }
 
     #[test]
