@@ -207,12 +207,9 @@ async fn init_server_hydra() -> HydraFixtureType {
         audience,
     };
 
-    // Idempotent: 409 means the client already exists from a previous run.
-    match auth_server::create_oauth2_client(&admin_url, client_config.clone()).await {
-        Ok(_) => {}
-        Err(e) if e.to_string().contains("409") => {}
-        Err(e) => panic!("Failed to create Hydra OAuth2 client: {e}"),
-    }
+    auth_server::create_oauth2_client(&admin_url, client_config.clone())
+        .await
+        .expect("Failed to create Hydra OAuth2 client");
 
     (
         index_name,
@@ -2006,11 +2003,9 @@ async fn test_hydra_non_udex_scopes_denied() {
         audience: format!("{ID_USING_HYDRA_PREFIX}-audience"),
     };
 
-    match auth_server::create_oauth2_client(&admin_url, client.clone()).await {
-        Ok(_) => {}
-        Err(e) if e.to_string().contains("409") => {}
-        Err(e) => panic!("Failed to create non-udex Hydra client: {e}"),
-    }
+    auth_server::create_oauth2_client(&admin_url, client.clone())
+        .await
+        .expect("Failed to create non-udex Hydra client");
 
     let token = auth_server::authenticate(public_url, client, vec!["api:read".to_string()])
         .await
@@ -2094,11 +2089,9 @@ async fn test_hydra_wrong_audience_rejected() {
         audience: "wrong-audience".to_string(),
     };
 
-    match auth_server::create_oauth2_client(&admin_url, client.clone()).await {
-        Ok(_) => {}
-        Err(e) if e.to_string().contains("409") => {}
-        Err(e) => panic!("Failed to create wrong-audience Hydra client: {e}"),
-    }
+    auth_server::create_oauth2_client(&admin_url, client.clone())
+        .await
+        .expect("Failed to create wrong-audience Hydra client");
 
     let token = auth_server::authenticate(
         public_url,

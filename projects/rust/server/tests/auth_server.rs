@@ -43,9 +43,14 @@ pub async fn create_oauth2_client(
     body.scope = Some(client.scopes.join(" "));
     body.token_endpoint_auth_method = Some("client_secret_post".to_string());
 
-    o_auth2_api::create_o_auth2_client(&config, body)
-        .await
-        .map_err(|e| anyhow::anyhow!("Hydra create_client failed: {e}"))?;
+    // 409 Conflict means the client already exists from a previous run — treat as success
+    // so test setup is idempotent. All other errors are propagated.
+    match o_auth2_api::create_o_auth2_client(&config, body).await {
+        Ok(_) => {}
+        Err(ory_hydra_client::apis::Error::ResponseError(ref rc))
+            if rc.status == reqwest::StatusCode::CONFLICT => {}
+        Err(e) => return Err(anyhow::anyhow!("Hydra create_client failed: {e}")),
+    }
 
     Ok(())
 }
