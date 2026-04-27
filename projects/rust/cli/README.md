@@ -2,7 +2,7 @@
 
 # udex-cli
 
-Command-line interface for Udex — manages server lifecycle, configuration, indices, and entries, and provides offline utilities for token inspection and context hashing.
+Command-line interface for Udex — manages server lifecycle, configuration, indices, and entries, provides OAuth2 token fetch and inspection, and offline context hashing.
 
 ## Commands
 
@@ -57,14 +57,69 @@ udex entry lookup my-index --context name=alice --context role=admin
 udex entry delete my-index --key 550e8400-e29b-41d4-a716-446655440000
 ```
 
-### Offline utilities
+### Token commands
 
-See [JWT Claims](../api/README.md#jwt-claims) for the required token structure and permission format.
+#### Fetch a token from an OAuth2 server
+
+`udex token fetch` performs a `client_credentials` grant against any OAuth2
+server and prints the raw encoded JWT followed by the decoded header and claims.
+Use it to obtain a token for development/debugging or to verify token contents.
 
 ```bash
-# Decode a JWT header and claims without verifying the signature
-udex token inspect eyJhbGci...
+# Fetch a token (all three required flags can also be supplied via env vars)
+udex token fetch \
+  --client-id     my-client          \   # [env: UDEX_CLIENT_ID]
+  --client-secret my-secret          \   # [env: UDEX_CLIENT_SECRET]
+  --url http://localhost:4444/oauth2/token  # [env: UDEX_TOKEN_URL]
 
+# Request a specific subset of the client's registered scopes
+udex token fetch \
+  --client-id my-client --client-secret my-secret \
+  --url http://localhost:4444/oauth2/token \
+  --scope udex:index:v1:my-index:read \
+  --scope udex:entry:v1:my-index:create
+
+# Structured output — useful for scripting
+udex token fetch ... --output json   # {"token":"eyJ...","jwt":true,"header":{...},"claims":{...}}
+udex token fetch ... --output yaml
+```
+
+When used with Ory Hydra (the OAuth2 server in the dev compose stack), pair
+`token fetch` with `UDEX_TOKEN` to run subsequent CLI commands without manually
+copying the token:
+
+```bash
+export UDEX_TOKEN=$(
+  udex token fetch \
+    --url http://localhost:4444/oauth2/token \
+    --output json | jq -r .token
+)
+
+udex index list
+udex entry create my-index --context name=alice --context role=admin
+```
+
+If the server returns an opaque (non-JWT) token, the raw token is printed with
+a `"jwt": false` marker in structured output and a note in table output.
+
+See [Development with Hydra](../server/README.md#development-with-hydra) for
+how to register a client in Hydra before fetching tokens.
+
+#### Inspect a token offline
+
+Decodes a JWT header and claims without verifying the signature — useful for
+examining an existing token.
+
+```bash
+udex token inspect eyJhbGci...
+```
+
+See [JWT Claims](../api/README.md#jwt-claims) for the required token structure
+and permission format.
+
+### Context utilities
+
+```bash
 # Compute the xxh3 context hash that the server would assign (no connection needed)
 udex context hash --context name=alice --context role=admin
 ```
@@ -78,6 +133,17 @@ udex context hash --context name=alice --context role=admin
 | `--ca-cert PATH` | `UDEX_CA_CERT` | — | Custom CA certificate (PEM) for TLS verification |
 | `--output FORMAT` | — | `table` | Output format: `table`, `json`, or `yaml` |
 | `--verbose` | — | off | Set `RUST_LOG=debug` if `RUST_LOG` is not already set |
+
+### `token fetch` flags
+
+These flags apply only to `udex token fetch` and have no effect on other subcommands:
+
+| Flag | Env var | Description |
+|------|---------|-------------|
+| `--client-id ID` | `UDEX_CLIENT_ID` | OAuth2 client ID |
+| `--client-secret SECRET` | `UDEX_CLIENT_SECRET` | OAuth2 client secret |
+| `--url URL` | `UDEX_TOKEN_URL` | Full token endpoint URL (e.g. `http://localhost:4444/oauth2/token`) |
+| `--scope SCOPE` | — | Scope to request; may be repeated for multiple scopes |
 
 ## Output formats
 
