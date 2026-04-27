@@ -113,12 +113,11 @@ impl AuthzInterceptor {
 
     #[allow(clippy::result_large_err)]
     fn extract_bearer_token<'a>(&self, auth_header: &'a str) -> Result<&'a str, Status> {
-        if let Some(token) = auth_header.strip_prefix("Bearer ") {
-            Ok(token.trim())
-        } else {
-            Err(Status::unauthenticated(
+        match auth_header.splitn(2, ' ').collect::<Vec<_>>().as_slice() {
+            [scheme, token] if scheme.eq_ignore_ascii_case("Bearer") => Ok(token.trim()),
+            _ => Err(Status::unauthenticated(
                 "Authorization header must start with 'Bearer '",
-            ))
+            )),
         }
     }
 
@@ -238,6 +237,62 @@ mod tests {
             matches!(&err, Error::ConfigValidation(msg) if msg.contains("must be set")),
             "expected 'must be set' error, got: {err}"
         );
+    }
+
+    #[test]
+    fn extract_bearer_token_canonical() {
+        let interceptor = test_interceptor();
+        assert_eq!(
+            interceptor.extract_bearer_token("Bearer mytoken").unwrap(),
+            "mytoken"
+        );
+    }
+
+    #[test]
+    fn extract_bearer_token_lowercase_scheme() {
+        let interceptor = test_interceptor();
+        assert_eq!(
+            interceptor.extract_bearer_token("bearer mytoken").unwrap(),
+            "mytoken"
+        );
+    }
+
+    #[test]
+    fn extract_bearer_token_uppercase_scheme() {
+        let interceptor = test_interceptor();
+        assert_eq!(
+            interceptor.extract_bearer_token("BEARER mytoken").unwrap(),
+            "mytoken"
+        );
+    }
+
+    #[test]
+    fn extract_bearer_token_trims_token_whitespace() {
+        let interceptor = test_interceptor();
+        assert_eq!(
+            interceptor
+                .extract_bearer_token("Bearer   mytoken  ")
+                .unwrap(),
+            "mytoken"
+        );
+    }
+
+    #[test]
+    fn extract_bearer_token_wrong_scheme_is_err() {
+        let interceptor = test_interceptor();
+        assert!(interceptor.extract_bearer_token("Basic mytoken").is_err());
+    }
+
+    #[test]
+    fn extract_bearer_token_missing_token_is_err() {
+        let interceptor = test_interceptor();
+        assert!(interceptor.extract_bearer_token("Bearer").is_err());
+    }
+
+    #[test]
+    fn extract_bearer_token_empty_is_err() {
+        let interceptor = test_interceptor();
+        assert!(interceptor.extract_bearer_token("").is_err());
     }
 
     #[traced_test]
