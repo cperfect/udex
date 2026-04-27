@@ -62,6 +62,7 @@ async fn init_server() -> MaybeOnceType {
             }),
         }],
         authnz: udex_server::config::AuthNzConfig {
+            jwks_url: None,
             jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
             jwt_issuer: Some(format!("{}-issuer", ID_PREFIX)),
             jwt_audience: Some(format!("{}-audience", ID_PREFIX)),

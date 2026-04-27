@@ -4,7 +4,6 @@
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::time::Duration;
-use url::{Url, ParseError};
 
 /// Server-related configuration for gRPC.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,15 +113,38 @@ impl Default for TlsConfig {
 }
 
 impl AuthNzConfig {
-    // Validate the AuthNZ configuration.
     pub fn validate(&self) -> Result<(), crate::Error> {
-        // Validate JWT configuration if any JWT field is
-        // If any JWT field is provided, all must be provided
-        let jwt_public_key_path = self.jwt_public_key_path.as_ref().ok_or_else(|| {
-            crate::Error::ConfigValidation(
-                "jwt_public_key_path is required when using JWT authentication".to_string(),
-            )
-        })?;
+        match (&self.jwks_url, &self.jwt_public_key_path) {
+            (Some(_), Some(_)) => {
+                return Err(crate::Error::ConfigValidation(
+                    "Exactly one of jwks_url or jwt_public_key_path must be set, not both"
+                        .to_string(),
+                ));
+            }
+            (None, None) => {
+                return Err(crate::Error::ConfigValidation(
+                    "One of jwks_url or jwt_public_key_path must be set".to_string(),
+                ));
+            }
+            _ => {}
+        }
+
+        if let Some(path) = &self.jwt_public_key_path {
+            if path.trim().is_empty() {
+                return Err(crate::Error::ConfigValidation(
+                    "jwt_public_key_path cannot be empty".to_string(),
+                ));
+            }
+        }
+
+        if let Some(url) = &self.jwks_url {
+            if url.trim().is_empty() {
+                return Err(crate::Error::ConfigValidation(
+                    "jwks_url cannot be empty".to_string(),
+                ));
+            }
+        }
+
         let jwt_issuer = self.jwt_issuer.as_ref().ok_or_else(|| {
             crate::Error::ConfigValidation(
                 "jwt_issuer is required when using JWT authentication".to_string(),
@@ -134,14 +156,6 @@ impl AuthNzConfig {
             )
         })?;
 
-        // Validate JWT public key path
-        if jwt_public_key_path.trim().is_empty() {
-            return Err(crate::Error::ConfigValidation(
-                "jwt_public_key_path cannot be empty".to_string(),
-            ));
-        }
-
-        // Validate JWT issuer
         if jwt_issuer.trim().is_empty() {
             return Err(crate::Error::ConfigValidation(
                 "jwt_issuer cannot be empty".to_string(),
@@ -153,7 +167,6 @@ impl AuthNzConfig {
             ));
         }
 
-        // Validate JWT audience
         if jwt_audience.trim().is_empty() {
             return Err(crate::Error::ConfigValidation(
                 "jwt_audience cannot be empty".to_string(),
@@ -165,7 +178,6 @@ impl AuthNzConfig {
             ));
         }
 
-        // Validate issuer and audience are different (best practice)
         if jwt_issuer == jwt_audience {
             return Err(crate::Error::ConfigValidation(
                 "jwt_issuer and jwt_audience should be different values".to_string(),
@@ -184,8 +196,18 @@ mod tests {
 
     fn valid_authnz() -> AuthNzConfig {
         AuthNzConfig {
+            jwks_url: None,
             jwt_public_key_path: Some("some/key.pem".to_string()),
             jwt_issuer: Some("https://issuer.example.com".to_string()),
+            jwt_audience: Some("udex".to_string()),
+        }
+    }
+
+    fn valid_authnz_jwks() -> AuthNzConfig {
+        AuthNzConfig {
+            jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
+            jwt_public_key_path: None,
+            jwt_issuer: Some("http://hydra:4444".to_string()),
             jwt_audience: Some("udex".to_string()),
         }
     }
@@ -308,6 +330,72 @@ mod tests {
             },
             authnz: valid_authnz(),
             ..ServerConfig::default()
+        };
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn authnz_validate_static_key_ok() {
+        assert!(valid_authnz().validate().is_ok());
+    }
+
+    #[test]
+    fn authnz_validate_jwks_url_ok() {
+        assert!(valid_authnz_jwks().validate().is_ok());
+    }
+
+    #[test]
+    fn authnz_validate_both_key_sources_is_err() {
+        let cfg = AuthNzConfig {
+            jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
+            jwt_public_key_path: Some("some/key.pem".to_string()),
+            jwt_issuer: Some("https://issuer.example.com".to_string()),
+            jwt_audience: Some("udex".to_string()),
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("not both"),
+            "expected 'not both' in error: {err}"
+        );
+    }
+
+    #[test]
+    fn authnz_validate_no_key_source_is_err() {
+        let cfg = AuthNzConfig {
+            jwks_url: None,
+            jwt_public_key_path: None,
+            jwt_issuer: Some("https://issuer.example.com".to_string()),
+            jwt_audience: Some("udex".to_string()),
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("must be set"),
+            "expected 'must be set' in error: {err}"
+        );
+    }
+
+    #[test]
+    fn authnz_validate_empty_jwks_url_is_err() {
+        let cfg = AuthNzConfig {
+            jwks_url: Some("   ".to_string()),
+            jwt_public_key_path: None,
+            jwt_issuer: Some("https://issuer.example.com".to_string()),
+            jwt_audience: Some("udex".to_string()),
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("jwks_url"),
+            "expected 'jwks_url' in error: {err}"
+        );
+    }
+
+    #[test]
+    fn authnz_validate_issuer_equals_audience_is_err() {
+        let cfg = AuthNzConfig {
+            jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
+            jwt_public_key_path: None,
+            jwt_issuer: Some("udex".to_string()),
+            jwt_audience: Some("udex".to_string()),
         };
         assert!(cfg.validate().is_err());
     }
