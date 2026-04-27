@@ -3,8 +3,9 @@
 //! Handler for `udex token` subcommands.
 
 use anyhow::{Context, Result};
+use oauth2::{basic::BasicClient, ClientId, ClientSecret, Scope, TokenResponse, TokenUrl};
 
-use crate::cli::TokenInspectArgs;
+use crate::cli::{OutputFormat, TokenFetchArgs, TokenInspectArgs};
 
 /// Decode and display a JWT without signature verification.
 ///
@@ -46,4 +47,109 @@ pub fn inspect(args: TokenInspectArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Fetch a token from an OAuth2 server using the client_credentials grant,
+/// then print the raw (encoded) token and the decoded header + claims.
+pub async fn fetch(args: TokenFetchArgs, output: &OutputFormat) -> Result<()> {
+    let token_url = TokenUrl::new(args.url.clone()).context("invalid token URL")?;
+
+    // auth_uri is not used for client_credentials but is part of the builder API.
+    // We derive it from the token URL to keep the client construction valid.
+    let client = BasicClient::new(ClientId::new(args.client_id))
+        .set_client_secret(ClientSecret::new(args.client_secret))
+        .set_token_uri(token_url);
+
+    let http_client = oauth2::reqwest::ClientBuilder::new()
+        .redirect(oauth2::reqwest::redirect::Policy::none())
+        .build()
+        .context("failed to build HTTP client")?;
+
+    let mut token_request = client.exchange_client_credentials();
+    for scope in &args.scopes {
+        token_request = token_request.add_scope(Scope::new(scope.clone()));
+    }
+
+    let token_response = token_request
+        .request_async(&http_client)
+        .await
+        .map_err(|e| anyhow::anyhow!("token request failed: {e}"))?;
+
+    let raw_token = token_response.access_token().secret();
+
+    // Attempt to decode as JWT for display. Opaque tokens are shown as-is.
+    let decoded = decode_jwt_for_display(raw_token);
+
+    match output {
+        OutputFormat::Json => {
+            let mut obj = serde_json::json!({ "token": raw_token });
+            if let Some((header, claims)) = decoded {
+                obj["header"] = header;
+                obj["claims"] = claims;
+            }
+            println!("{}", serde_json::to_string_pretty(&obj)?);
+        }
+        OutputFormat::Yaml => {
+            let mut obj = serde_json::json!({ "token": raw_token });
+            if let Some((header, claims)) = decoded {
+                obj["header"] = header;
+                obj["claims"] = claims;
+            }
+            println!("{}", serde_yaml::to_string(&obj)?);
+        }
+        OutputFormat::Table => {
+            println!("=== Token (encoded) ===");
+            println!("{raw_token}");
+
+            match decoded {
+                Some((header, claims)) => {
+                    println!();
+                    println!("=== Token (decoded) ===");
+                    println!("--- Header ---");
+                    println!("{}", serde_json::to_string_pretty(&header)?);
+                    println!();
+                    println!("--- Claims ---");
+                    println!("{}", serde_json::to_string_pretty(&claims)?);
+                    print_expiry(&claims);
+                }
+                None => {
+                    println!();
+                    println!("(token is not a JWT — decoded view unavailable)");
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Attempt to decode a JWT without signature verification.
+/// Returns `None` if the token is not a valid JWT.
+fn decode_jwt_for_display(token: &str) -> Option<(serde_json::Value, serde_json::Value)> {
+    let header = jsonwebtoken::decode_header(token).ok()?;
+    let claims = jsonwebtoken::dangerous::insecure_decode::<serde_json::Value>(token).ok()?;
+    Some((serde_json::to_value(header).ok()?, claims.claims))
+}
+
+fn print_expiry(claims: &serde_json::Value) {
+    if let Some(exp) = claims.get("exp").and_then(|v| v.as_i64()) {
+        use time::OffsetDateTime;
+        if let Ok(dt) = OffsetDateTime::from_unix_timestamp(exp) {
+            let now = OffsetDateTime::now_utc();
+            println!();
+            if dt < now {
+                println!(
+                    "exp: EXPIRED {} seconds ago ({})",
+                    (now - dt).whole_seconds(),
+                    dt
+                );
+            } else {
+                println!(
+                    "exp: valid for {} more seconds ({})",
+                    (dt - now).whole_seconds(),
+                    dt
+                );
+            }
+        }
+    }
 }

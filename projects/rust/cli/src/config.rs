@@ -46,6 +46,8 @@ pub struct TlsConfig {
 /// Authentication and authorisation configuration.
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct AuthNzConfig {
+    /// JWKS endpoint for token validation — either this or jwt_public_key_path must be set
+    pub jwks_url: Option<String>,
     /// Path to the JWT public key for token validation (ECDSA PEM)
     pub jwt_public_key_path: Option<String>,
     /// Expected JWT issuer claim
@@ -85,6 +87,7 @@ impl Default for UdexConfig {
                     key_path: "certs/server.key".to_string(),
                 },
                 authnz: AuthNzConfig {
+                    jwks_url: None,
                     jwt_public_key_path: Some("certs/jwt_public_key.pem".to_string()),
                     jwt_issuer: Some("https://auth.example.com".to_string()),
                     jwt_audience: Some("udex".to_string()),
@@ -220,6 +223,7 @@ impl UdexConfig {
                 key_path: self.server.tls.key_path.clone(),
             },
             authnz: udex_server::config::AuthNzConfig {
+                jwks_url: self.server.authnz.jwks_url.clone(),
                 jwt_public_key_path: self.server.authnz.jwt_public_key_path.clone(),
                 jwt_issuer: self.server.authnz.jwt_issuer.clone(),
                 jwt_audience: self.server.authnz.jwt_audience.clone(),

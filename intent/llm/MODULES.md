@@ -46,6 +46,20 @@ The workspace has three crates. New code goes in the crate that owns its layer �
 | Datastore configuration | `udex_datastore::config` | `DatastoreConfig` |
 | Integration test helpers | `udex_datastore::integration_test` | Feature-gated (`integration_test`); shared fixtures for integration tests |
 
+### `udex-cli` — Command-line interface binary
+
+| Concern | Module | Notes |
+| ------- | ------ | ----- |
+| CLI arg parsing & top-level dispatch | `udex_cli::cli` + `src/main.rs` | Clap types; `run()` dispatches to command handlers |
+| gRPC client connection setup | `udex_cli::client` | `ClientConfig` — TLS + token injection |
+| `serve` command | `udex_cli::commands::serve` | Starts the embedded server |
+| `config` commands | `udex_cli::commands::config` | Init/validate config file |
+| `index` commands | `udex_cli::commands::index` | CRUD over the index gRPC service |
+| `entry` commands | `udex_cli::commands::entry` | CRUD over the entry gRPC service |
+| `token inspect` | `udex_cli::commands::token::inspect` | Offline JWT decode (no signature check) |
+| `token fetch` (OAuth2 client_credentials) | `udex_cli::commands::token::fetch` | Fetches a JWT from an OAuth2 token endpoint; decodes and displays header + claims |
+| `context hash` | `udex_cli::commands::context` | Offline context hash computation |
+
 ## How to Use This File
 
 1. **Before creating a new module**: Search this table. If the concern is listed, use that module.

@@ -26,6 +26,7 @@ toml = { workspace = true }
 jsonwebtoken = { workspace = true }
 time = { workspace = true }
 rustls = { workspace = true }
+oauth2 = { version = "5", features = ["reqwest"] }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }

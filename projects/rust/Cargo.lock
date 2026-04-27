@@ -3918,6 +3918,7 @@ dependencies = [
  "assert_cmd",
  "clap",
  "jsonwebtoken",
+ "oauth2",
  "predicates",
  "rustls",
  "serde",
