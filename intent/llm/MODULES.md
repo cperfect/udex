@@ -27,7 +27,8 @@ The workspace has three crates. New code goes in the crate that owns its layer �
 | Concern | Module | Notes |
 | ------- | ------ | ----- |
 | gRPC server startup & TLS | `udex_server::server` | Wires interceptors, TLS config, and service registration |
-| JWT authentication interceptor | `udex_server::authn` | `AuthnInterceptor` — validates JWT on every request; private to crate |
+| JWT authentication interceptor | `udex_server::authn` | `AuthnInterceptor` — validates JWT on every request; supports static PEM key or JWKS URL; private to crate |
+| OAuth2 test helpers (Hydra) | `tests::auth_server` (server crate) | Test-only; Hydra client creation + client_credentials token exchange; not compiled into the server binary |
 | Server & AuthNz configuration | `udex_server::config` | Loads and validates runtime config; no mutation after init |
 | Entry gRPC service handler | `udex_server::entry` | `EntryService` — thin handler; delegates to datastore |
 | Index gRPC service handler | `udex_server::index` | `IndexService` — thin handler; delegates to datastore |
