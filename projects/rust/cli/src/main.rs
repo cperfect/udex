@@ -121,6 +121,7 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
 
         Commands::Token { command } => match command {
             TokenCommands::Inspect(args) => commands::token::inspect(args),
+            TokenCommands::Fetch(args) => commands::token::fetch(args, &cli.output).await,
         },
 
         Commands::Context { command } => match command {

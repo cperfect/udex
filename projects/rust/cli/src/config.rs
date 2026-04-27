@@ -31,7 +31,7 @@ pub struct ServerConfig {
     /// Maximum message size in bytes
     pub max_message_size_bytes: usize,
     pub tls: TlsConfig,
-    pub authnz: AuthNzConfig,
+    pub authz: AuthzConfig,
 }
 
 /// TLS certificate configuration.
@@ -45,13 +45,19 @@ pub struct TlsConfig {
 
 /// Authentication and authorisation configuration.
 #[derive(Debug, Serialize, Deserialize, Default)]
-pub struct AuthNzConfig {
+pub struct AuthzConfig {
+    /// JWKS endpoint for token validation — either this or jwt_public_key_path must be set
+    pub jwks_url: Option<String>,
     /// Path to the JWT public key for token validation (ECDSA PEM)
     pub jwt_public_key_path: Option<String>,
     /// Expected JWT issuer claim
     pub jwt_issuer: Option<String>,
     /// Expected JWT audience claim
     pub jwt_audience: Option<String>,
+    /// Allow plain HTTP for jwks_url. MUST NOT be set in production; intended for
+    /// local development environments (e.g. Hydra without TLS).
+    #[serde(default)]
+    pub danger_allow_non_tls: bool,
 }
 
 /// PostgreSQL datastore configuration.
@@ -84,10 +90,12 @@ impl Default for UdexConfig {
                     cert_path: "certs/server.crt".to_string(),
                     key_path: "certs/server.key".to_string(),
                 },
-                authnz: AuthNzConfig {
+                authz: AuthzConfig {
+                    jwks_url: None,
                     jwt_public_key_path: Some("certs/jwt_public_key.pem".to_string()),
                     jwt_issuer: Some("https://auth.example.com".to_string()),
                     jwt_audience: Some("udex".to_string()),
+                    danger_allow_non_tls: false,
                 },
             },
             datastore: DatastoreConfig {
@@ -146,45 +154,53 @@ impl UdexConfig {
             );
         }
 
-        // authnz
-        let jwt_key = self
-            .server
-            .authnz
-            .jwt_public_key_path
-            .as_deref()
-            .unwrap_or("")
-            .trim();
-        let jwt_issuer = self
-            .server
-            .authnz
-            .jwt_issuer
-            .as_deref()
-            .unwrap_or("")
-            .trim();
+        // authz: exactly one of jwks_url or jwt_public_key_path must be set.
+        // Presence is determined by Option::is_some (Some("") counts as set);
+        // emptiness is validated separately below, mirroring AuthzConfig::validate().
+        let has_pem = self.server.authz.jwt_public_key_path.is_some();
+        let has_jwks = self.server.authz.jwks_url.is_some();
+        match (has_pem, has_jwks) {
+            (true, true) => errors.push(
+                "server.authz: only one of jwt_public_key_path or jwks_url may be set".to_string(),
+            ),
+            (false, false) => errors.push(
+                "server.authz: one of jwks_url or jwt_public_key_path must be set".to_string(),
+            ),
+            _ => {}
+        }
+
+        if let Some(path) = &self.server.authz.jwt_public_key_path {
+            if path.trim().is_empty() {
+                errors.push("server.authz.jwt_public_key_path cannot be empty".to_string());
+            }
+        }
+        if let Some(url) = &self.server.authz.jwks_url {
+            if url.trim().is_empty() {
+                errors.push("server.authz.jwks_url cannot be empty".to_string());
+            }
+        }
+
+        let jwt_issuer = self.server.authz.jwt_issuer.as_deref().unwrap_or("").trim();
         let jwt_audience = self
             .server
-            .authnz
+            .authz
             .jwt_audience
             .as_deref()
             .unwrap_or("")
             .trim();
-
-        if jwt_key.is_empty() {
-            errors.push("server.authnz.jwt_public_key_path is required".to_string());
-        }
         if jwt_issuer.is_empty() {
-            errors.push("server.authnz.jwt_issuer is required".to_string());
+            errors.push("server.authz.jwt_issuer is required".to_string());
         } else if jwt_issuer.len() > 255 {
-            errors.push("server.authnz.jwt_issuer must be 255 characters or fewer".to_string());
+            errors.push("server.authz.jwt_issuer must be 255 characters or fewer".to_string());
         }
         if jwt_audience.is_empty() {
-            errors.push("server.authnz.jwt_audience is required".to_string());
+            errors.push("server.authz.jwt_audience is required".to_string());
         } else if jwt_audience.len() > 255 {
-            errors.push("server.authnz.jwt_audience must be 255 characters or fewer".to_string());
+            errors.push("server.authz.jwt_audience must be 255 characters or fewer".to_string());
         }
         if !jwt_issuer.is_empty() && !jwt_audience.is_empty() && jwt_issuer == jwt_audience {
             errors.push(
-                "server.authnz.jwt_issuer and server.authnz.jwt_audience must be different"
+                "server.authz.jwt_issuer and server.authz.jwt_audience must be different"
                     .to_string(),
             );
         }
@@ -219,10 +235,12 @@ impl UdexConfig {
                 cert_path: self.server.tls.cert_path.clone(),
                 key_path: self.server.tls.key_path.clone(),
             },
-            authnz: udex_server::config::AuthNzConfig {
-                jwt_public_key_path: self.server.authnz.jwt_public_key_path.clone(),
-                jwt_issuer: self.server.authnz.jwt_issuer.clone(),
-                jwt_audience: self.server.authnz.jwt_audience.clone(),
+            authz: udex_server::config::AuthzConfig {
+                jwks_url: self.server.authz.jwks_url.clone(),
+                jwt_public_key_path: self.server.authz.jwt_public_key_path.clone(),
+                jwt_issuer: self.server.authz.jwt_issuer.clone(),
+                jwt_audience: self.server.authz.jwt_audience.clone(),
+                danger_allow_non_tls: self.server.authz.danger_allow_non_tls,
             },
             init_indexes: vec![],
         })
@@ -277,17 +295,34 @@ mod tests {
     }
 
     #[test]
-    fn test_missing_jwt_key_is_invalid() {
+    fn test_jwks_url_only_is_valid() {
         let mut cfg = UdexConfig::default();
-        cfg.server.authnz.jwt_public_key_path = None;
+        cfg.server.authz.jwt_public_key_path = None;
+        cfg.server.authz.jwks_url = Some("http://localhost:4444/.well-known/jwks.json".to_string());
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn test_both_key_sources_is_invalid() {
+        let mut cfg = UdexConfig::default();
+        cfg.server.authz.jwks_url = Some("http://localhost:4444/.well-known/jwks.json".to_string());
+        // jwt_public_key_path is already Some(...) from default — both set is invalid
+        assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn test_no_key_source_is_invalid() {
+        let mut cfg = UdexConfig::default();
+        cfg.server.authz.jwt_public_key_path = None;
+        cfg.server.authz.jwks_url = None;
         assert!(cfg.validate().is_err());
     }
 
     #[test]
     fn test_identical_issuer_and_audience_is_invalid() {
         let mut cfg = UdexConfig::default();
-        cfg.server.authnz.jwt_issuer = Some("same".to_string());
-        cfg.server.authnz.jwt_audience = Some("same".to_string());
+        cfg.server.authz.jwt_issuer = Some("same".to_string());
+        cfg.server.authz.jwt_audience = Some("same".to_string());
         assert!(cfg.validate().is_err());
     }
 

@@ -22,13 +22,14 @@ The workspace has three crates. New code goes in the crate that owns its layer �
 | Glob pattern matching | `udex_api::authz::glob` | Used for permission scope matching |
 | Timestamp conversion utilities | `udex_api` (lib.rs) | `google_timestamp_to_offset_datetime`, `offset_datetime_to_google_timestamp`, `now_timestamp` |
 
-### `udex-server` — gRPC handlers, authentication, configuration, and observability
+### `udex-server` — gRPC handlers, authorization, configuration, and observability
 
 | Concern | Module | Notes |
 | ------- | ------ | ----- |
 | gRPC server startup & TLS | `udex_server::server` | Wires interceptors, TLS config, and service registration |
-| JWT authentication interceptor | `udex_server::authn` | `AuthnInterceptor` — validates JWT on every request; private to crate |
-| Server & AuthNz configuration | `udex_server::config` | Loads and validates runtime config; no mutation after init |
+| JWT validation & authz interceptor | `udex_server::authz` | `AuthzInterceptor` — validates JWT and checks permissions on every request; supports static PEM key or JWKS URL; private to crate |
+| OAuth2 test helpers (Hydra) | `tests::auth_server` (server crate) | Test-only; Hydra client creation + client_credentials token exchange; not compiled into the server binary |
+| Server & authz configuration | `udex_server::config` | `AuthzConfig` — loads and validates runtime config; no mutation after init |
 | Entry gRPC service handler | `udex_server::entry` | `EntryService` — thin handler; delegates to datastore |
 | Index gRPC service handler | `udex_server::index` | `IndexService` — thin handler; delegates to datastore |
 | Health check gRPC handler | `udex_server::healthz` | `HealthzService` |
@@ -44,6 +45,20 @@ The workspace has three crates. New code goes in the crate that owns its layer �
 | PostgreSQL implementation | `udex_datastore::postgres` | Concrete `Datastore` + `Migrator` impl; all SQL lives here |
 | Datastore configuration | `udex_datastore::config` | `DatastoreConfig` |
 | Integration test helpers | `udex_datastore::integration_test` | Feature-gated (`integration_test`); shared fixtures for integration tests |
+
+### `udex-cli` — Command-line interface binary
+
+| Concern | Module | Notes |
+| ------- | ------ | ----- |
+| CLI arg parsing & top-level dispatch | `udex_cli::cli` + `src/main.rs` | Clap types; `run()` dispatches to command handlers |
+| gRPC client connection setup | `udex_cli::client` | `ClientConfig` — TLS + token injection |
+| `serve` command | `udex_cli::commands::serve` | Starts the embedded server |
+| `config` commands | `udex_cli::commands::config` | Init/validate config file |
+| `index` commands | `udex_cli::commands::index` | CRUD over the index gRPC service |
+| `entry` commands | `udex_cli::commands::entry` | CRUD over the entry gRPC service |
+| `token inspect` | `udex_cli::commands::token::inspect` | Offline JWT decode (no signature check) |
+| `token fetch` (OAuth2 client_credentials) | `udex_cli::commands::token::fetch` | Fetches a JWT from an OAuth2 token endpoint; decodes and displays header + claims |
+| `context hash` | `udex_cli::commands::context` | Offline context hash computation |
 
 ## How to Use This File
 

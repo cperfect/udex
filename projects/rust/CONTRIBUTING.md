@@ -20,7 +20,15 @@ Additional inline comments **SHOULD** be added for clarity when needed — e.g. 
 
 ## Developing
 
-Requires Rust stable. A dev container configuration is provided for VS Code and compatible editors — this is the recommended way to get a consistent environment.
+A dev container configuration is provided for VS Code and compatible editors — this is the recommended way to get a consistent environment. The container pins the following versions:
+
+| Component | Version | Defined in |
+|-----------|---------|------------|
+| Rust | 1.95.0 | `.devcontainer/Dockerfile` (`ARG RUST_VERSION`) |
+| Ory Hydra | v26.2.0 | `projects/compose/docker-compose.yml` |
+| PostgreSQL | 16 | `projects/compose/docker-compose.yml` |
+
+To update any of these, change the version in the file listed above. For Hydra, also update `HYDRA_VERSION` and `HYDRA_TARBALL` in `.devcontainer/post-create.sh` and fetch the new SHA-256 from the corresponding `checksums.txt` release asset.
 
 ```bash
 # Build the workspace

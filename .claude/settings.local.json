@@ -19,7 +19,8 @@
       "Bash(intent st:*)",
       "Bash(cargo fmt:*)",
       "Bash(cargo clippy:*)",
-      "Read(//home/vscode/.claude/skills/**)"
+      "Read(//home/vscode/.claude/skills/**)",
+      "WebFetch(domain:docs.rs)"
     ]
   }
 }

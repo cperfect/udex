@@ -6,8 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
       # [Optional] You can use build args to set options. e.g. 'VARIANT' below affects the image in the Dockerfile
-      args: 
-        VARIANT: bullseye
+      # args: 
+      #   VARIANT: bullseye
     volumes:
       # This is where VS Code should expect to find your project's source code and the value of "workspaceFolder" in .devcontainer/devcontainer.json
       - ..:/workspace:cached
@@ -23,27 +23,3 @@ services:
 
     # Uncomment the next line to use a non-root user for all processes - See https://aka.ms/vscode-remote/containers/non-root for details.
     user: vscode
-
-  postgres:
-    image: "postgres:13.2"
-    environment:
-      POSTGRES_PASSWORD: admin
-    ports:
-      - "5432:5432"
-    deploy:
-      resources:
-        limits:
-          cpus: '1'  
-          memory: '1gb'
-    # volumes:
-    #   - pg_data:.data/var/lib/postgresql/data
-
-  # sqlite:
-  #   image: keinos/sqlite3:latest
-  #   volumes:
-  #     - ../data:/data
-  #   command: /bin/sh -c "while sleep 1000; do :; done"
-  
-# volumes:
-#   pg_data:
-#     driver: local

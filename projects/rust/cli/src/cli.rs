@@ -245,6 +245,8 @@ pub struct EntryDeleteArgs {
 pub enum TokenCommands {
     /// Decode and display a JWT without signature verification
     Inspect(TokenInspectArgs),
+    /// Fetch a token from an OAuth2 server using client credentials
+    Fetch(TokenFetchArgs),
 }
 
 /// Arguments for `udex token inspect`.
@@ -252,6 +254,23 @@ pub enum TokenCommands {
 pub struct TokenInspectArgs {
     /// JWT to inspect
     pub token: String,
+}
+
+/// Arguments for `udex token fetch`.
+#[derive(Parser)]
+pub struct TokenFetchArgs {
+    /// OAuth2 client ID [env: UDEX_CLIENT_ID]
+    #[arg(long, env = "UDEX_CLIENT_ID")]
+    pub client_id: String,
+    /// OAuth2 client secret [env: UDEX_CLIENT_SECRET]
+    #[arg(long, env = "UDEX_CLIENT_SECRET")]
+    pub client_secret: String,
+    /// Full token endpoint URL (e.g. http://localhost:4444/oauth2/token) [env: UDEX_TOKEN_URL]
+    #[arg(long, env = "UDEX_TOKEN_URL")]
+    pub url: String,
+    /// Scopes to request (may be repeated)
+    #[arg(long = "scope", value_name = "SCOPE")]
+    pub scopes: Vec<String>,
 }
 
 // --- context ---

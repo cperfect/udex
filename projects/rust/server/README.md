@@ -2,7 +2,7 @@
 
 # udex-server
 
-gRPC server crate for Udex. Implements the `IndexService` and `EntryService` handlers, authentication/authorisation middleware, TLS transport, structured logging, and configuration validation.
+gRPC server crate for Udex. Implements the `IndexService` and `EntryService` handlers, JWT validation and authorization middleware, TLS transport, structured logging, and configuration validation.
 
 ## Crate layout
 
@@ -12,8 +12,8 @@ gRPC server crate for Udex. Implements the `IndexService` and `EntryService` han
 | `index.rs` | `IndexService` gRPC handler |
 | `entry.rs` | `EntryService` gRPC handler |
 | `healthz.rs` | `HealthzService` — unauthenticated liveness check |
-| `authn.rs` | `AuthnInterceptor` — JWT Bearer token validation |
-| `config.rs` | `ServerConfig` with `validate()` |
+| `authz.rs` | `AuthzInterceptor` — JWT validation and permission enforcement on every request |
+| `config.rs` | `ServerConfig` / `AuthzConfig` with `validate()` |
 | `logging.rs` | `init_tracing()` — JSON structured logs via `tracing-subscriber` |
 
 ## Running the server
@@ -31,13 +31,101 @@ Or programmatically (e.g. in integration tests):
 udex_server::serve(server_config, datastore).await?;
 ```
 
+## Authorization
+
+The server enforces authorization on every gRPC request except `/healthz`.
+Authentication — establishing *who* the caller is — is the responsibility of an
+upstream OAuth2 server (or a self-signed key pair in development/test).
+
+### How it works
+
+Every request must carry an `Authorization: Bearer <jwt>` header. The
+`AuthzInterceptor` validates the token in three steps:
+
+1. **Signature** — The JWT is verified using the configured key source (see
+   below). EC P-256 / ES256 is the only supported algorithm.
+2. **Standard claims** — `iss`, `aud`, `exp`, and `iat` are checked against
+   the values in `authz.*` config.
+3. **Permissions** — `udex:` scope values from the RFC 8693 `scope` claim are
+   extracted and matched against the required permission for the requested
+   operation. Non-`udex:` scopes (e.g. `openid`, `profile`) are silently
+   discarded. See [JWT Claims](../api/README.md#jwt-claims) for the full token
+   structure and scope format.
+
+Requests that fail signature or claims validation receive `UNAUTHENTICATED`.
+Requests with a valid token but insufficient scope receive `PERMISSION_DENIED`.
+
+### Key source: static PEM file
+
+Suitable for development and test environments where tokens are self-signed (e.g.
+by the integration test suite or `cargo test`).
+
+```toml
+[server.authz]
+jwt_public_key_path = "certs/signing_public_key.pem"  # EC P-256 public key, PEM format
+jwt_issuer          = "https://auth.example.com"
+jwt_audience        = "udex"
+```
+
+The key is read from disk once at startup. To rotate the key the server must be
+restarted.
+
+### Key source: JWKS endpoint
+
+Suitable for production and for development against a real OAuth2 server (see
+[Development with Hydra](#development-with-hydra) below). The server fetches the
+JWKS document once at startup, builds an in-memory map of `kid → DecodingKey`,
+and selects the correct key for each token by reading the `kid` header claim.
+
+```toml
+[server.authz]
+jwks_url     = "http://localhost:4444/.well-known/jwks.json"
+jwt_issuer   = "http://localhost:4444/"   # must match Hydra's URLS_SELF_ISSUER
+jwt_audience = "udex"
+```
+
+Exactly one of `jwt_public_key_path` and `jwks_url` must be set; providing
+neither or both is a configuration error caught at startup.
+
+### Development with Hydra
+
+[Ory Hydra](https://www.ory.sh/hydra/) v26.2.0 is included in the Docker Compose
+stack and is the reference OAuth2 server for development. To obtain a token:
+
+```bash
+# 1. Register an OAuth2 client (once per Hydra instance)
+#    Scopes must match the permissions required by your requests.
+hydra create client \
+  --endpoint http://localhost:4445 \
+  --id my-client \
+  --secret my-secret \
+  --grant-type client_credentials \
+  --token-endpoint-auth-method client_secret_post \
+  --audience udex \
+  --scope "udex:index:v1:my-index:read udex:entry:v1:my-index:create"
+
+# 2. Fetch a token using the CLI
+udex token fetch \
+  --client-id my-client \
+  --client-secret my-secret \
+  --url http://localhost:4444/oauth2/token \
+  --scope udex:index:v1:my-index:read
+
+# 3. Use the token (or set UDEX_TOKEN in your shell)
+udex --token eyJ... index get my-index
+```
+
+The `udex token fetch` command prints both the raw encoded JWT and the decoded
+header and claims, making it easy to verify the token contents before use.
+
 ## Configuration
 
 `ServerConfig` is loaded from a TOML file by the CLI. Key fields:
 
 - `bind_address` — socket address (e.g. `127.0.0.1:50051`)
 - `tls.cert_path` / `tls.key_path` — TLS certificate and private key paths
-- `authnz.jwt_public_key_path` / `authnz.jwt_issuer` / `authnz.jwt_audience` — JWT validation parameters (ES256; see [JWT Claims](../api/README.md#jwt-claims) for the required token structure and permission format)
+- `authz.jwt_public_key_path` or `authz.jwks_url` — JWT key source; see [Authorization](#authorization) above
+- `authz.jwt_issuer` / `authz.jwt_audience` — expected `iss` and `aud` claims
 - `init_indexes` — list of indexes to ensure exist on startup
 
 ## Testing

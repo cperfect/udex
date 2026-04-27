@@ -1,9 +1,11 @@
 # See here for image contents: https://github.com/microsoft/vscode-dev-containers/tree/v0.245.2/containers/rust/.devcontainer/base.Dockerfile
 
-# [Choice] Debian OS version (use bullseye on local arm64/Apple Silicon): buster, bullseye
-ARG VARIANT="buster"
-ARG RUST_VERISON="stable"
-FROM mcr.microsoft.com/vscode/devcontainers/rust:0-1-${VARIANT}
+# [Choice] Debian OS version: bookworm (default), bullseye, buster
+ARG VARIANT="bookworm"
+ARG RUST_VERSION="1.95.0"
+FROM mcr.microsoft.com/devcontainers/rust:${VARIANT}
+# Re-declare after FROM: ARGs before FROM are scoped to the FROM instruction only.
+ARG RUST_VERSION
 
 # [Optional] Uncomment this section to install additional packages.
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
@@ -26,4 +28,7 @@ RUN mkdir -p /opt/intent
 WORKDIR /opt/intent
 RUN git clone https://github.com/matthewsinclair/intent.git .
 RUN ln -s /opt/intent/bin/intent /usr/local/bin/intent
+
+# expose arg as env var for post create script
+ENV RUST_VERSION=${RUST_VERSION}
 

@@ -2,9 +2,12 @@
 
 //! Handler for `udex token` subcommands.
 
-use anyhow::{Context, Result};
+use std::time::Duration;
 
-use crate::cli::TokenInspectArgs;
+use anyhow::{Context, Result};
+use oauth2::{basic::BasicClient, ClientId, ClientSecret, Scope, TokenResponse, TokenUrl};
+
+use crate::cli::{OutputFormat, TokenFetchArgs, TokenInspectArgs};
 
 /// Decode and display a JWT without signature verification.
 ///
@@ -46,4 +49,114 @@ pub fn inspect(args: TokenInspectArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Fetch a token from an OAuth2 server using the client_credentials grant,
+/// then print the raw (encoded) token and the decoded header + claims.
+pub async fn fetch(args: TokenFetchArgs, output: &OutputFormat) -> Result<()> {
+    let token_url = TokenUrl::new(args.url.clone()).context("invalid token URL")?;
+
+    // auth_uri is not required for client_credentials — only token_uri is needed.
+    let client = BasicClient::new(ClientId::new(args.client_id))
+        .set_client_secret(ClientSecret::new(args.client_secret))
+        .set_token_uri(token_url);
+
+    let http_client = oauth2::reqwest::ClientBuilder::new()
+        .redirect(oauth2::reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(30))
+        .build()
+        .context("failed to build HTTP client")?;
+
+    let mut token_request = client.exchange_client_credentials();
+    for scope in &args.scopes {
+        token_request = token_request.add_scope(Scope::new(scope.clone()));
+    }
+
+    let token_response = token_request
+        .request_async(&http_client)
+        .await
+        .map_err(|e| anyhow::anyhow!("token request failed: {e}"))?;
+
+    let raw_token = token_response.access_token().secret();
+
+    // Udex requires JWT access tokens. An opaque token means the OAuth2 server
+    // is misconfigured (e.g. Hydra with access_token_strategy = "opaque" instead
+    // of "jwt"). Fail fast so the user knows to fix the server configuration.
+    let (header, claims) = decode_jwt_for_display(raw_token).ok_or_else(|| {
+        anyhow::anyhow!(
+            "server returned an opaque (non-JWT) access token — \
+             check that the OAuth2 client is configured with access_token_strategy = \"jwt\""
+        )
+    })?;
+
+    let obj = serde_json::json!({
+        "token":  raw_token,
+        "header": header,
+        "claims": claims,
+    });
+
+    match output {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&obj)?);
+        }
+        OutputFormat::Yaml => {
+            println!("{}", serde_yaml::to_string(&obj)?);
+        }
+        OutputFormat::Table => {
+            println!("=== Token (encoded) ===");
+            println!("{raw_token}");
+            println!();
+            println!("=== Token (decoded) ===");
+            println!("--- Header ---");
+            println!("{}", serde_json::to_string_pretty(&header)?);
+            println!();
+            println!("--- Claims ---");
+            println!("{}", serde_json::to_string_pretty(&claims)?);
+            print_expiry(&claims);
+        }
+    }
+
+    Ok(())
+}
+
+/// Attempt to decode a JWT without signature verification.
+/// Returns `None` if the token is not a valid JWT.
+fn decode_jwt_for_display(token: &str) -> Option<(serde_json::Value, serde_json::Value)> {
+    let header = jsonwebtoken::decode_header(token).ok()?;
+    let claims = jsonwebtoken::dangerous::insecure_decode::<serde_json::Value>(token).ok()?;
+    Some((serde_json::to_value(header).ok()?, claims.claims))
+}
+
+fn print_expiry(claims: &serde_json::Value) {
+    let Some(raw_exp) = claims.get("exp") else {
+        return;
+    };
+    println!();
+    match raw_exp.as_i64() {
+        None => {
+            println!("exp: invalid/unreadable: {raw_exp}");
+        }
+        Some(exp) => {
+            use time::OffsetDateTime;
+            match OffsetDateTime::from_unix_timestamp(exp) {
+                Err(_) => println!("exp: invalid/unreadable: {exp}"),
+                Ok(dt) => {
+                    let now = OffsetDateTime::now_utc();
+                    if dt < now {
+                        println!(
+                            "exp: EXPIRED {} seconds ago ({})",
+                            (now - dt).whole_seconds(),
+                            dt
+                        );
+                    } else {
+                        println!(
+                            "exp: valid for {} more seconds ({})",
+                            (dt - now).whole_seconds(),
+                            dt
+                        );
+                    }
+                }
+            }
+        }
+    }
 }

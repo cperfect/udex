@@ -42,8 +42,8 @@ claims and extracts permissions from the RFC 8693 `scope` claim.
 | Claim | Type | Description |
 |-------|------|-------------|
 | `sub` | string | Subject — non-empty identifier for the caller |
-| `iss` | string | Issuer — must match `authnz.jwt_issuer` in server config |
-| `aud` | string | Audience — must match `authnz.jwt_audience` in server config |
+| `iss` | string | Issuer — must match `authz.jwt_issuer` in server config |
+| `aud` | string | Audience — must match `authz.jwt_audience` in server config |
 | `exp` | number | Expiration time (Unix seconds) |
 | `iat` | number | Issued-at time (Unix seconds, must be non-zero) |
 | `scope` | string | Space-delimited list of scope values (RFC 8693 §4.2) |

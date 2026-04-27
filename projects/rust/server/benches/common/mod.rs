@@ -203,10 +203,12 @@ async fn start_server_and_connect() -> (
                 hash_algorithm: Some(HashAlgorithm::Xxh3 as i32),
             }),
         }],
-        authnz: udex_server::config::AuthNzConfig {
+        authz: udex_server::config::AuthzConfig {
+            jwks_url: None,
             jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
             jwt_issuer: Some(format!("{}-issuer", ID_PREFIX)),
             jwt_audience: Some(format!("{}-audience", ID_PREFIX)),
+            danger_allow_non_tls: false,
         },
         ..ServerConfig::default()
     };

@@ -1,5 +1,5 @@
 use crate::{
-    authn::AuthnInterceptor, config::ServerConfig, logging, EntryService, Error, HealthzService,
+    authz::AuthzInterceptor, config::ServerConfig, logging, EntryService, Error, HealthzService,
     IndexService,
 };
 use std::sync::Arc;
@@ -88,7 +88,7 @@ where
     // using the cert and key read from the config paths
     let identity = Identity::from_pem(cert, key);
 
-    let auth_interceptor = AuthnInterceptor::new(config.authnz.clone())?;
+    let auth_interceptor = AuthzInterceptor::new(config.authz.clone())?;
 
     let entry_server = EntryServiceServer::new(entry_service);
     let index_server = IndexServiceServer::new(index_service);
