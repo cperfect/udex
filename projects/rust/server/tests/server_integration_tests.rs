@@ -72,6 +72,7 @@ async fn init_server() -> MaybeOnceType {
             jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
             jwt_issuer: Some(format!("{}-issuer", ID_PREFIX)),
             jwt_audience: Some(format!("{}-audience", ID_PREFIX)),
+            danger_allow_non_tls: false,
         },
         ..ServerConfig::default()
     };
@@ -180,6 +181,7 @@ async fn init_server_hydra() -> HydraFixtureType {
             jwt_public_key_path: None,
             jwt_issuer: Some(issuer),
             jwt_audience: Some(audience.clone()),
+            danger_allow_non_tls: false,
         },
         ..ServerConfig::default()
     };

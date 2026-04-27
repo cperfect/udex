@@ -201,6 +201,7 @@ mod tests {
             jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
+            danger_allow_non_tls: false,
         })
         .expect("Failed to create test AuthzInterceptor")
     }
@@ -212,6 +213,7 @@ mod tests {
             jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
+            danger_allow_non_tls: false,
         }) else {
             panic!("expected ConfigValidation error for both key sources");
         };
@@ -228,6 +230,7 @@ mod tests {
             jwt_public_key_path: None,
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
+            danger_allow_non_tls: false,
         }) else {
             panic!("expected ConfigValidation error for no key source");
         };

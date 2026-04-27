@@ -208,6 +208,7 @@ async fn start_server_and_connect() -> (
             jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
             jwt_issuer: Some(format!("{}-issuer", ID_PREFIX)),
             jwt_audience: Some(format!("{}-audience", ID_PREFIX)),
+            danger_allow_non_tls: false,
         },
         ..ServerConfig::default()
     };

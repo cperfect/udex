@@ -54,6 +54,10 @@ pub struct AuthzConfig {
     pub jwt_issuer: Option<String>,
     /// Expected JWT audience claim
     pub jwt_audience: Option<String>,
+    /// Allow plain HTTP for jwks_url. MUST NOT be set in production; intended for
+    /// local development environments (e.g. Hydra without TLS).
+    #[serde(default)]
+    pub danger_allow_non_tls: bool,
 }
 
 /// PostgreSQL datastore configuration.
@@ -91,6 +95,7 @@ impl Default for UdexConfig {
                     jwt_public_key_path: Some("certs/jwt_public_key.pem".to_string()),
                     jwt_issuer: Some("https://auth.example.com".to_string()),
                     jwt_audience: Some("udex".to_string()),
+                    danger_allow_non_tls: false,
                 },
             },
             datastore: DatastoreConfig {
@@ -235,6 +240,7 @@ impl UdexConfig {
                 jwt_public_key_path: self.server.authz.jwt_public_key_path.clone(),
                 jwt_issuer: self.server.authz.jwt_issuer.clone(),
                 jwt_audience: self.server.authz.jwt_audience.clone(),
+                danger_allow_non_tls: self.server.authz.danger_allow_non_tls,
             },
             init_indexes: vec![],
         })

@@ -36,7 +36,7 @@ pub struct TlsConfig {
 // Authentication and Authorization configuration.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AuthzConfig {
-    /// JWT public key path for token validation (ECDSA public key in PEM format) - either this or jwks url must be provided
+    /// JWT public key path for token validation (ECDSA public key in PEM format) — either this or jwks_url must be provided
     pub jwt_public_key_path: Option<String>,
     /// JWKS endpoint for public key for token validation — either this or jwt_public_key_path must be provided
     pub jwks_url: Option<String>,
@@ -44,6 +44,10 @@ pub struct AuthzConfig {
     pub jwt_issuer: Option<String>,
     /// JWT audience for token validation
     pub jwt_audience: Option<String>,
+    /// Allow plain HTTP for jwks_url. MUST NOT be set in production; intended for
+    /// local development environments (e.g. Hydra without TLS).
+    #[serde(default)]
+    pub danger_allow_non_tls: bool,
 }
 
 impl Default for ServerConfig {
@@ -138,10 +142,18 @@ impl AuthzConfig {
         }
 
         if let Some(url) = &self.jwks_url {
-            if url.trim().is_empty() {
+            let u = url.trim();
+            if u.is_empty() {
                 return Err(crate::Error::ConfigValidation(
                     "jwks_url cannot be empty".to_string(),
                 ));
+            }
+            // Require HTTPS unless danger_allow_non_tls is explicitly set.
+            if !self.danger_allow_non_tls && !u.starts_with("https://") {
+                return Err(crate::Error::ConfigValidation(format!(
+                    "jwks_url '{u}' must use HTTPS; set danger_allow_non_tls = true \
+                     to permit plain HTTP (local/dev only, never in production)"
+                )));
             }
         }
 
@@ -200,15 +212,17 @@ mod tests {
             jwt_public_key_path: Some("some/key.pem".to_string()),
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
+            danger_allow_non_tls: false,
         }
     }
 
     fn valid_authz_jwks() -> AuthzConfig {
         AuthzConfig {
-            jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
+            jwks_url: Some("https://hydra:4444/.well-known/jwks.json".to_string()),
             jwt_public_key_path: None,
-            jwt_issuer: Some("http://hydra:4444".to_string()),
+            jwt_issuer: Some("https://hydra:4444".to_string()),
             jwt_audience: Some("udex".to_string()),
+            danger_allow_non_tls: false,
         }
     }
 
@@ -347,10 +361,11 @@ mod tests {
     #[test]
     fn authz_validate_both_key_sources_is_err() {
         let cfg = AuthzConfig {
-            jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
+            jwks_url: Some("https://hydra:4444/.well-known/jwks.json".to_string()),
             jwt_public_key_path: Some("some/key.pem".to_string()),
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
+            danger_allow_non_tls: false,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -366,6 +381,7 @@ mod tests {
             jwt_public_key_path: None,
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
+            danger_allow_non_tls: false,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -381,6 +397,7 @@ mod tests {
             jwt_public_key_path: None,
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
+            danger_allow_non_tls: false,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -392,11 +409,68 @@ mod tests {
     #[test]
     fn authz_validate_issuer_equals_audience_is_err() {
         let cfg = AuthzConfig {
-            jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
+            jwks_url: Some("https://hydra:4444/.well-known/jwks.json".to_string()),
             jwt_public_key_path: None,
             jwt_issuer: Some("udex".to_string()),
             jwt_audience: Some("udex".to_string()),
+            danger_allow_non_tls: false,
         };
         assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn authz_validate_jwks_http_non_localhost_is_err() {
+        let cfg = AuthzConfig {
+            jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
+            jwt_public_key_path: None,
+            jwt_issuer: Some("https://issuer.example.com".to_string()),
+            jwt_audience: Some("udex".to_string()),
+            danger_allow_non_tls: false,
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("must use HTTPS"),
+            "expected HTTPS error: {err}"
+        );
+    }
+
+    #[test]
+    fn authz_validate_jwks_localhost_http_is_err_without_flag() {
+        let cfg = AuthzConfig {
+            jwks_url: Some("http://localhost:4444/.well-known/jwks.json".to_string()),
+            jwt_public_key_path: None,
+            jwt_issuer: Some("http://localhost:4444/".to_string()),
+            jwt_audience: Some("udex".to_string()),
+            danger_allow_non_tls: false,
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("must use HTTPS"),
+            "expected HTTPS error for localhost without flag: {err}"
+        );
+    }
+
+    #[test]
+    fn authz_validate_jwks_localhost_http_ok_with_flag() {
+        let cfg = AuthzConfig {
+            jwks_url: Some("http://localhost:4444/.well-known/jwks.json".to_string()),
+            jwt_public_key_path: None,
+            jwt_issuer: Some("http://localhost:4444/".to_string()),
+            jwt_audience: Some("udex".to_string()),
+            danger_allow_non_tls: true,
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn authz_validate_jwks_danger_allow_non_tls_ok() {
+        let cfg = AuthzConfig {
+            jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
+            jwt_public_key_path: None,
+            jwt_issuer: Some("http://hydra:4444/".to_string()),
+            jwt_audience: Some("udex".to_string()),
+            danger_allow_non_tls: true,
+        };
+        assert!(cfg.validate().is_ok());
     }
 }
