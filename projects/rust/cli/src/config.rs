@@ -157,13 +157,7 @@ impl UdexConfig {
             .as_deref()
             .unwrap_or("")
             .trim();
-        let jwt_issuer = self
-            .server
-            .authz
-            .jwt_issuer
-            .as_deref()
-            .unwrap_or("")
-            .trim();
+        let jwt_issuer = self.server.authz.jwt_issuer.as_deref().unwrap_or("").trim();
         let jwt_audience = self
             .server
             .authz
