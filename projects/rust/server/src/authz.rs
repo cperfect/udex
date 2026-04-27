@@ -61,6 +61,11 @@ impl AuthzInterceptor {
                 let mut key_map = HashMap::new();
                 for jwk in &jwks.keys {
                     if let Some(kid) = &jwk.common.key_id {
+                        if key_map.contains_key(kid) {
+                            return Err(Error::ConfigValidation(format!(
+                                "JWKS at '{url_for_err}' contains duplicate kid '{kid}'"
+                            )));
+                        }
                         let decoding_key = DecodingKey::from_jwk(jwk).map_err(|e| {
                             Error::ConfigValidation(format!("Invalid JWK (kid='{kid}'): {e}"))
                         })?;
