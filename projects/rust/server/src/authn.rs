@@ -1,3 +1,4 @@
+use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use tonic::body::Body;
 use tonic::codegen::http::Request;
@@ -10,6 +11,7 @@ use crate::Error;
 
 #[derive(Clone)]
 pub struct AuthnInterceptor {
+    //need to be able to handle a map based on kid
     public_key: DecodingKey,
     expected_issuer: String,
     expected_audience: String,
@@ -17,8 +19,18 @@ pub struct AuthnInterceptor {
 
 impl AuthnInterceptor {
     pub fn new(config: AuthNzConfig) -> Result<Self, Error> {
-        let public_key =
-            std::fs::read_to_string(config.jwt_public_key_path.as_ref().ok_or_else(|| {
+        // this needs to change
+// with jwks we can have multiple decoding keys
+// each with a kid and then we need to pick one based on the 
+// kid in the token
+        let public_key = match(config.jwks_url, config.jwt_public_key_path) {
+            (Some(url), None) => {
+                // need to get the url
+                // and then parse to jwks set
+                let jwks: JwkSet = serde_json::from_str(JWKS_REPLY).unwrap();
+            },
+            (None, Some(path)) => {
+            std::fs::read_to_string(path (|| {
                 Error::ConfigValidation(
                     "jwt_public_key_path is required when using JWT authentication".to_string(),
                 )
@@ -31,6 +43,12 @@ impl AuthnInterceptor {
                     Error::ConfigValidation(format!("Failed to create decoding key: {}", e))
                 })
             })??;
+        },
+        (_, _) => Error::ConfigValidation(
+                    "One of jwks_url or jwt_public_key_path must be set when using JWT authentication".to_string(),
+                )//throw error
+
+        }
         let jwt_issuer = config
             .jwt_issuer
             .as_ref()
