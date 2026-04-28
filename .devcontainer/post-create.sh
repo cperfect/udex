@@ -43,8 +43,8 @@ sudo mv "${hydra_tmp}/hydra" /usr/local/bin/
 hydra help
 
 # ── Developer secret & key setup ──────────────────────────────────────────────
-# The workspace volume persists across container rebuilds, so these only run
-# when the output files are absent (fresh clone or after manual deletion).
+# gen-env.sh prompts when .env exists, so guard it externally and pass --force.
+# gen-keys-and-certs.sh skips silently when key material exists; --force rotates.
 
 cd /workspace
 
@@ -61,12 +61,7 @@ if [ ! -L ".devcontainer/.env" ]; then
   ln -s .env .devcontainer/.env
 fi
 
-if [[ ! -f projects/rust/server/tests/jwt/signing_private_key.pem ]]; then
-  echo "Key material absent — generating certs and keys..."
-  bash scripts/gen-keys-and-certs.sh
-else
-  echo "Key material already exists — skipping key generation."
-fi
+bash scripts/gen-keys-and-certs.sh
 
 # see comment above
 # Install Claude Code subagent 
