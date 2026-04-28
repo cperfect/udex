@@ -1,5 +1,5 @@
 ---
-verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria"
+verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria; 28 Apr 2026:v0.3: vscode - Add WP-09: Fix CI key material generation"
 ---
 
 # ST0008: Tasks — Inject keys and secrets
@@ -14,6 +14,7 @@ verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance c
 - [ ] WP-06: Remove secrets from CLI arguments
 - [x] WP-07: Inject secrets into Compose and CI via env vars *(completed within WP-01)*
 - [ ] WP-08: Update CONTRIBUTING.md, SECRETS.md, SECURITY.md
+- [ ] WP-09: Fix CI — generate key material before tests
 
 ## Acceptance Criteria
 
@@ -69,6 +70,12 @@ verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance c
 - `SECURITY.md` documents the injection model, `_secret` naming convention,
   file-injection guard, and CLI arg restriction
 
+### WP-09
+- `01-Validation.yml` `test` job includes a "Generate key material" step running
+  `scripts/gen-keys-and-certs.sh` before `cargo build`
+- The step runs from the workspace root (not `projects/rust/`)
+- `cargo test` passes end-to-end in CI with no file-not-found errors for certs/keys
+
 ## Sequencing
 
 ```
@@ -83,6 +90,8 @@ WP-04  (decide config approach + naming convention)   ← next
         └─► WP-06  (remove secrets from CLI args)
 
 WP-08  (docs — after all implementation WPs complete)
+
+WP-09  (CI fix — can run in parallel with WP-04/05/06; depends only on WP-01 ✓)
 ```
 
 ## Dependencies
