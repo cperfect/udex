@@ -1,6 +1,13 @@
 # scatch dirs are ingored
 scratch/
 
+# Generated secrets & keys — never commit
+.env
+projects/rust/server/tests/certs/ca.key
+projects/rust/server/tests/certs/server.key
+projects/rust/server/tests/jwt/signing_private_key.pem
+projects/rust/server/tests/jwt/bad_signing_private_key.pem
+
 # ignore mcp state
 .mcp/
 

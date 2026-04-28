@@ -10,7 +10,6 @@
 	"service": "devcontainer",
 	"workspaceFolder": "/workspace",
 	"remoteEnv": {
-		"DATABASE_URL": "postgres://postgres:admin@localhost:5432/postgres",
 		"RUST_BACKTRACE": "1",
 		// info globally; debug for udex crates only. Set to "trace" locally for full output.
 		"RUST_LOG": "info,udex=debug"
