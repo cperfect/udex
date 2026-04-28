@@ -8,17 +8,21 @@ rustup component add rustfmt
 rustup show
 
 # install claude code
-npm install -g @anthropic-ai/claude-code
+# npm install -g @anthropic-ai/claude-code
+# curl -fsSL https://claude.ai/install.sh | bash
+# verify claude
 claude --version
 
 # intent setup
 # Verify installation
 intent --version
 cd /workspace
-# Install Claude Code subagent 
-intent claude subagents install intent
-# Install CLaude Code skills
-intent claude skills install in-essentials
+
+# moved to last as it seems flakey?
+# # Install Claude Code subagent 
+# intent claude subagents install intent
+# # Install CLaude Code skills
+# intent claude skills install in-essentials
 
 # install hydra CLI (pinned release, checksum-verified)
 HYDRA_VERSION="v26.2.0"
@@ -51,9 +55,21 @@ else
   echo ".env already exists — skipping secret generation."
 fi
 
+# need to link the .env into decontainer
+# so docker compose can pick it up
+if [ ! -L ".devcontainer/.env" ]; then
+  ln -s .env .devcontainer/.env
+fi
+
 if [[ ! -f projects/rust/server/tests/jwt/signing_private_key.pem ]]; then
   echo "Key material absent — generating certs and keys..."
   bash scripts/gen-keys-and-certs.sh
 else
   echo "Key material already exists — skipping key generation."
 fi
+
+# see comment above
+# Install Claude Code subagent 
+intent claude subagents install intent
+# Install CLaude Code skills
+intent claude skills install in-essentials

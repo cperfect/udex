@@ -22,6 +22,9 @@ RUN wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --
   && apt-get update \
   && apt-get -y install --no-install-recommends trivy
 
+# install claude 
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
 # install intent
 # Clone the repository
 RUN mkdir -p /opt/intent
