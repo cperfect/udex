@@ -37,3 +37,23 @@ curl -fsSL "${HYDRA_RELEASE_URL}/checksums.txt"    -o "${hydra_tmp}/checksums.tx
 tar -xzf "${hydra_tmp}/${HYDRA_TARBALL}" -C "${hydra_tmp}" hydra
 sudo mv "${hydra_tmp}/hydra" /usr/local/bin/
 hydra help
+
+# ── Developer secret & key setup ──────────────────────────────────────────────
+# The workspace volume persists across container rebuilds, so these only run
+# when the output files are absent (fresh clone or after manual deletion).
+
+cd /workspace
+
+if [[ ! -f .env ]]; then
+  echo "No .env found — generating dev secrets..."
+  bash scripts/gen-env.sh --force
+else
+  echo ".env already exists — skipping secret generation."
+fi
+
+if [[ ! -f projects/rust/server/tests/jwt/signing_private_key.pem ]]; then
+  echo "Key material absent — generating certs and keys..."
+  bash scripts/gen-keys-and-certs.sh
+else
+  echo "Key material already exists — skipping key generation."
+fi
