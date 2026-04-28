@@ -50,6 +50,10 @@ Tests **MUST** be automated and reliable. Flakey tests are broken tests — fix 
 1. **Datastores that do not support TLS MUST NOT be supported** — all datastore connections require transport encryption.
 1. **Configuration MUST be consumed as static or injected values** — the application layer MUST NOT mutate configuration at runtime. Dynamic configuration (e.g. via etcd) is handled at the infrastructure layer before values reach the application.
 
+#### Security
+1. **`SECRETS.md` MUST be kept current** — any change that adds, removes, or modifies a credential, key, certificate, or closely associated principal (e.g. OAuth client ID, JWKS URL) MUST include a corresponding update to [`SECRETS.md`](./SECRETS.md) in the same commit.
+1. **Never commit real credentials** — test fixtures MUST use purpose-generated dev-only values. Production credentials MUST be supplied at runtime via environment variables or a secrets manager.
+
 #### Development
 1. **Code SHOULD be safe & secure** Code should implement secure code practices, e.g. [OWASP](https://owasp.org/www-project-secure-coding-practices-quick-reference-guide/stable-en/02-checklist/05-checklist)
 1. **Systems SHOULD be deterministic and synchronous as far as possible** Non-determistic and asynchronous behavious should be isolated and clearly named and documented
