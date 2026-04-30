@@ -1,5 +1,5 @@
 ---
-verblock: "28 Apr 2026:v0.1: vscode - Initial design; 30 Apr 2026:v0.2: vscode - Record WP-04 decisions (secrets-rs, no _secret convention)"
+verblock: "28 Apr 2026:v0.1: vscode - Initial design; 30 Apr 2026:v0.2: vscode - Record WP-04 decisions (secrets-rs, no _secret convention); 30 Apr 2026:v0.3: vscode - Replace stale WP-05 guard description with actual implementation"
 ---
 
 # ST0008: Design — Inject keys and secrets
@@ -90,30 +90,23 @@ and impossible to accidentally log.
 
 ### File-injection guard
 
-The config loader parses the raw TOML before deserializing and checks that none
-of the keys present match any known `_secret` field names. If a match is found,
-startup fails with a clear error:
+`Secret<T>::Deserialize` only accepts a valid URN string. Any other value — including
+a bare connection string such as `"postgres://user:pass@host/db"` — is rejected at
+TOML parse time with a clear error before it reaches application code. No separate
+pre-parse scan of TOML keys is needed; the type system provides the guard for free.
 
 ```text
-Configuration error: 'db_password_secret' must not appear in a config file;
-inject it via the environment variable UDEX_DB_PASSWORD_SECRET instead.
+TOML parse error at line 17, column 18
+   |
+17 | connection_url = "postgres://user:password@localhost:5432/db"
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+URN must have exactly 4 colon-separated segments (urn:secrets-rs:<source_id>:<name>), got 2
 ```
 
-The set of secret field names is derived from the struct definition — no
-separate allow/deny list to keep in sync.
-
-### Environment variable mapping
-
-Secret fields map to environment variables with a consistent scheme:
-
-```
-{PREFIX}_{FIELD_NAME_UPPER}
-e.g.  db_password_secret   →  UDEX_DB_PASSWORD_SECRET
-      client_secret_secret  →  UDEX_CLIENT_SECRET_SECRET
-```
-
-The `_SECRET` suffix on the env var name makes the intent visible in shell
-scripts and CI config.
+This approach was confirmed and tested in WP-05 with two tests in
+`projects/rust/cli/src/config.rs`:
+- `test_plain_url_rejected_by_deserializer`
+- `test_valid_urn_accepted_by_deserializer`
 
 ---
 
