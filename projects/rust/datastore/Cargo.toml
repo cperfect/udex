@@ -46,5 +46,3 @@ rstest = { workspace = true }
 sqlx-cli = { workspace = true }
 tokio-shared-rt = { workspace = true }
 criterion = { workspace = true }
-secrets-rs = { workspace = true }
-secrets-rs-macros = { workspace = true }
