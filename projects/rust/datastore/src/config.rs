@@ -79,10 +79,15 @@ impl DatastoreConfig {
         Ok(())
     }
 
-    /// Returns the bound connection URL.
+    /// Returns the bound connection URL after running all validation rules.
+    ///
+    /// Calls [`Self::validate`] before returning the URL so callers cannot
+    /// accidentally bypass TLS enforcement or other invariants (e.g. by
+    /// skipping `validate()` and calling this directly).
     ///
     /// Must be called after the secret has been bound via [`secrets_rs::bind_all`].
     pub fn resolved_connection_url(&self) -> Result<String, DatastoreConfigError> {
+        self.validate()?;
         self.connection_url
             .value()
             .map(|s| s.to_string())
