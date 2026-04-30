@@ -11,12 +11,12 @@ ARG RUST_VERSION
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
   && apt-get -y install --no-install-recommends \
   protobuf-compiler libprotobuf-dev \
-  wget apt-transport-https gnupg lsb-release
+  apt-transport-https gnupg lsb-release
 
 ## Install Trivy (security scanner)
 # This installs the latest Trivy package from the official repo (may differ from the version used in CI).
 # Commands match the official Trivy Debian install docs: https://trivy.dev/docs/latest/getting-started/installation/
-RUN wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg > /dev/null \
+RUN curl -fsSL https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg > /dev/null \
   && echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
      | tee -a /etc/apt/sources.list.d/trivy.list \
   && apt-get update \
