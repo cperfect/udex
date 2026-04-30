@@ -1,5 +1,5 @@
 ---
-verblock: "28 Apr 2026:v0.1: vscode - Initial design"
+verblock: "28 Apr 2026:v0.1: vscode - Initial design; 30 Apr 2026:v0.2: vscode - Record WP-04 decisions (secrets-rs, no _secret convention)"
 ---
 
 # ST0008: Design — Inject keys and secrets
@@ -58,41 +58,35 @@ paths are gitignored. Config properties that reference these files (`tls.key_pat
 
 ## Config architecture
 
-### Option: adopt the `config` crate
+### Decision (WP-04): keep current loader + secrets-rs
 
-The [`config`](https://crates.io/crates/config) crate provides layered
-configuration (defaults → file → environment → overrides) and is idiomatic in
-the Rust ecosystem. It would replace the current hand-rolled TOML + struct
-approach in the CLI.
+**Rejected:** adopting the `config` crate. The current TOML/serde stack is
+simple, well-tested, and migration would be churn with no material benefit.
 
-**Pros:**
-- Environment variable injection is first-class
-- Layer ordering is explicit and testable
-- Reduces bespoke deserialization code
+**Adopted:** [`secrets-rs`](https://crates.io/crates/secrets-rs) +
+[`secrets-rs-macros`](https://crates.io/crates/secrets-rs-macros) layered on
+top of the existing loader.
 
-**Cons:**
-- Additional dependency
-- Current config structs are simple and well-tested; migration is churn
-- The secret-in-file guard is still custom code regardless
-
-**Decision (to be confirmed in WP-03):** Evaluate `config` crate during
-implementation. If the migration cost exceeds two days' work, keep the current
-loader and implement secret injection as a thin wrapper on top of the existing
-`serde`/`toml` stack.
+- Secret fields use `Secret<String>` (not a `_secret` naming suffix). The type
+  itself is the signal — no convention to drift.
+- Secrets are identified in TOML config files by URN:
+  `urn:secrets-rs:env:VAR_NAME`. The loader resolves them from env at startup.
+- `Debug`, `Display`, and serde serialisation all emit a masked value; the real
+  value requires an explicit `.value()` call.
+- `#[derive(secrets_rs::Bindable)]` on a config struct generates `bind_secrets()`
+  which calls `bind()` on every `Secret<T>` field, collecting all errors rather
+  than failing on the first.
+- `UdexConfig::load()` runs `bind_all()` immediately after TOML deserialisation.
+  If any env var is absent the server refuses to start with a clear error.
+- `config init` writes a hand-authored template (not a serialised struct) because
+  `Secret<T>` serialises as a masked string that cannot be round-tripped through
+  the deserialiser.
 
 ### Secret naming convention
 
-Config struct fields that carry secret values MUST be named with a `_secret`
-suffix:
-
-```rust
-pub db_password_secret: String,        // good
-pub client_secret_secret: String,      // good
-pub db_password: String,               // bad — rejected at review
-```
-
-The suffix makes secrets grep-able and allows the config loader to enumerate
-them programmatically.
+**Not adopted.** The `_secret` suffix is unnecessary when fields are typed as
+`Secret<String>` — the type system already makes secrets grep-able, auditable,
+and impossible to accidentally log.
 
 ### File-injection guard
 

@@ -1,5 +1,5 @@
 ---
-verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria; 28 Apr 2026:v0.3: vscode - Add WP-09: Fix CI key material generation"
+verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria; 28 Apr 2026:v0.3: vscode - Add WP-09: Fix CI key material generation; 30 Apr 2026:v0.4: vscode - Mark WP-04 done"
 ---
 
 # ST0008: Tasks — Inject keys and secrets
@@ -9,7 +9,7 @@ verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance c
 - [x] WP-01: Gitignore & remove committed secrets
 - [x] WP-02: Developer setup scripts (`gen-env.sh`, `gen-keys-and-certs.sh`)
 - [x] WP-03: Devcontainer post-create integration
-- [ ] WP-04: Config crate evaluation and `_secret` naming convention
+- [x] WP-04: Config crate evaluation and `_secret` naming convention
 - [ ] WP-05: File-injection guard in config loader
 - [ ] WP-06: Remove secrets from CLI arguments
 - [x] WP-07: Inject secrets into Compose and CI via env vars *(completed within WP-01)*
@@ -43,11 +43,15 @@ verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance c
   `secrets.POSTGRES_PASSWORD_SECRET`
 - No hardcoded secret values remain in any committed compose or CI file
 
-### WP-04
-- Decision documented in `design.md`: adopt `config` crate or keep current loader
-- All config struct fields carrying secret values renamed with `_secret` suffix
-- Each `_secret` field maps to a documented `UDEX_*_SECRET` environment variable
-- No `_secret` field has a `serde` default or is `Option` — absence must be a hard error
+### WP-04 ✓
+- [x] Decision documented in `design.md`: keep current TOML/serde loader; add secrets-rs on top
+- [x] `_secret` naming convention rejected — `Secret<String>` type carries the intent instead
+- [x] `DatastoreConfig.connection_url` is `Secret<String>` in both the datastore and CLI crates
+- [x] Config files reference secrets by URN (`urn:secrets-rs:env:VAR_NAME`); real values never appear in TOML
+- [x] `UdexConfig::load()` calls `bind_all()` after deserialisation; startup fails with a clear error if any env var is absent
+- [x] `Secret<String>` masked in `Debug`, `Display`, and serde serialisation — `.value()` required for access
+- [x] `config init` writes a hand-authored template with correct URN format and a comment explaining the secrets-rs pattern
+- [x] `cargo fmt`, `cargo clippy`, and `cargo test --lib` all pass
 
 ### WP-05
 - Config loader parses raw TOML before deserializing and errors if any `_secret`
@@ -85,8 +89,8 @@ WP-01 ✓  (remove secrets from repo)
 
 WP-07 ✓  (compose/CI — completed within WP-01)
 
-WP-04  (decide config approach + naming convention)   ← next
-  └─► WP-05  (implement file-injection guard)
+WP-04 ✓  (secrets-rs; Secret<String> for connection_url)
+  └─► WP-05  (file-injection guard)   ← next
         └─► WP-06  (remove secrets from CLI args)
 
 WP-08  (docs — after all implementation WPs complete)
