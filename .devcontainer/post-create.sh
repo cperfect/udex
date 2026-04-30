@@ -55,11 +55,13 @@ else
   echo ".env already exists — skipping secret generation."
 fi
 
-# need to link the .env into decontainer
-# so docker compose can pick it up
-if [ ! -L ".devcontainer/.env" ]; then
-  ln -s .env .devcontainer/.env
-fi
+# docker-compose.devcontainer.yml declares env_file: ../.env, which is the
+# workspace root. The compose file lives in .devcontainer/, so we symlink
+# .devcontainer/.env → ../.env to keep the relative path working without
+# duplicating the file. rm -f handles both the missing-link and dangling-link
+# cases (dangling link: .env was deleted after a previous post-create run).
+rm -f .devcontainer/.env
+ln -s ../.env .devcontainer/.env
 
 bash scripts/gen-keys-and-certs.sh
 
