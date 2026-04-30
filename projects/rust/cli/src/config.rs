@@ -263,6 +263,16 @@ impl UdexConfig {
     ///
     /// Copies the connection URL URN from this config and binds it against the
     /// environment, returning a fully-bound datastore config ready for use.
+    ///
+    /// # Double-bind note
+    ///
+    /// `Secret<T>` does not implement `Clone`, so we cannot move the already-bound
+    /// value from `load()`. Instead we reconstruct a fresh `Secret` from the URN and
+    /// bind it again, reading `DATABASE_URL` from the environment a second time. This
+    /// also means this method is implicitly coupled to `EnvSource` — if `load()` ever
+    /// gains a non-`env` source, `to_datastore_config()` will fail even though `load()`
+    /// succeeded. Resolve this once `secrets-rs` implements `Clone` on `Secret<T>`: at
+    /// that point, clone `self.datastore.connection_url` directly instead of re-binding.
     pub fn to_datastore_config(&self) -> Result<udex_datastore::config::DatastoreConfig> {
         let urn_str = self.datastore.connection_url.urn().to_string();
         let mut config = udex_datastore::config::DatastoreConfig {
