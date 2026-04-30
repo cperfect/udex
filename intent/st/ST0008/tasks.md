@@ -1,5 +1,5 @@
 ---
-verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria; 28 Apr 2026:v0.3: vscode - Add WP-09: Fix CI key material generation; 30 Apr 2026:v0.4: vscode - Mark WP-04 done"
+verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria; 28 Apr 2026:v0.3: vscode - Add WP-09: Fix CI key material generation; 30 Apr 2026:v0.4: vscode - Mark WP-04 done; 30 Apr 2026:v0.5: vscode - Mark WP-05 done (guard delivered by Secret<T> type system)"
 ---
 
 # ST0008: Tasks — Inject keys and secrets
@@ -10,7 +10,7 @@ verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance c
 - [x] WP-02: Developer setup scripts (`gen-env.sh`, `gen-keys-and-certs.sh`)
 - [x] WP-03: Devcontainer post-create integration
 - [x] WP-04: Config crate evaluation and `_secret` naming convention
-- [ ] WP-05: File-injection guard in config loader
+- [x] WP-05: File-injection guard in config loader
 - [ ] WP-06: Remove secrets from CLI arguments
 - [x] WP-07: Inject secrets into Compose and CI via env vars *(completed within WP-01)*
 - [ ] WP-08: Update CONTRIBUTING.md, SECRETS.md, SECURITY.md
@@ -53,12 +53,14 @@ verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance c
 - [x] `config init` writes a hand-authored template with correct URN format and a comment explaining the secrets-rs pattern
 - [x] `cargo fmt`, `cargo clippy`, and `cargo test --lib` all pass
 
-### WP-05
-- Config loader parses raw TOML before deserializing and errors if any `_secret`
-  key is present in the file
-- Error message names the offending key and the correct env var to use instead
-- Tests cover: valid config file (no secrets) passes; config file containing a
-  secret key is rejected with the expected message
+### WP-05 ✓
+- [x] `Secret<T>::Deserialize` only accepts a bare URN string — any non-URN value
+  (e.g. a raw `postgres://` connection string) is rejected at TOML parse time
+- [x] No additional file-injection guard code is needed; the type system provides
+  this guarantee for free as a consequence of WP-04
+- [x] Tests added to `cli/src/config.rs`:
+  - `test_plain_url_rejected_by_deserializer`: plain URL fails `toml::from_str`
+  - `test_valid_urn_accepted_by_deserializer`: valid URN parses successfully
 
 ### WP-06
 - `--token` / `--client-secret` flags removed from the CLI; env vars only
@@ -90,8 +92,8 @@ WP-01 ✓  (remove secrets from repo)
 WP-07 ✓  (compose/CI — completed within WP-01)
 
 WP-04 ✓  (secrets-rs; Secret<String> for connection_url)
-  └─► WP-05  (file-injection guard)   ← next
-        └─► WP-06  (remove secrets from CLI args)
+  └─► WP-05 ✓  (file-injection guard — delivered by Secret<T> type system)
+        └─► WP-06  (remove secrets from CLI args)   ← next
 
 WP-08  (docs — after all implementation WPs complete)
 

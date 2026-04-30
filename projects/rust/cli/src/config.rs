@@ -400,4 +400,78 @@ mod tests {
         assert!(toml_str.contains("bind_address"));
         assert!(toml_str.contains("max_connections"));
     }
+
+    // WP-05: Verify that Secret<String> deserialization acts as a file-injection guard.
+    // Secret<T>::Deserialize only accepts a bare URN — plain secret values are rejected
+    // at parse time, so a misconfigured TOML file with a raw connection string cannot
+    // reach the application.
+
+    #[test]
+    fn test_plain_url_rejected_by_deserializer() {
+        let toml = r#"
+[server]
+bind_address = "0.0.0.0:50051"
+request_timeout_secs = 30
+max_connections = 1000
+max_message_size_bytes = 4194304
+
+[server.tls]
+cert_path = "certs/server.crt"
+key_path = "certs/server.key"
+
+[server.authz]
+jwt_public_key_path = "certs/jwt_public_key.pem"
+jwt_issuer = "https://auth.example.com"
+jwt_audience = "udex"
+
+[datastore]
+connection_url = "postgres://user:password@localhost:5432/db"
+max_connections = 10
+min_connections = 1
+connection_timeout_secs = 10
+query_timeout_secs = 30
+"#;
+        let result = toml::from_str::<UdexConfig>(toml);
+        assert!(
+            result.is_err(),
+            "plain connection URL must be rejected at deserialization"
+        );
+    }
+
+    #[test]
+    fn test_valid_urn_accepted_by_deserializer() {
+        let toml = r#"
+[server]
+bind_address = "0.0.0.0:50051"
+request_timeout_secs = 30
+max_connections = 1000
+max_message_size_bytes = 4194304
+
+[server.tls]
+cert_path = "certs/server.crt"
+key_path = "certs/server.key"
+
+[server.authz]
+jwt_public_key_path = "certs/jwt_public_key.pem"
+jwt_issuer = "https://auth.example.com"
+jwt_audience = "udex"
+
+[datastore]
+connection_url = "urn:secrets-rs:env:DATABASE_URL"
+max_connections = 10
+min_connections = 1
+connection_timeout_secs = 10
+query_timeout_secs = 30
+"#;
+        let result = toml::from_str::<UdexConfig>(toml);
+        assert!(
+            result.is_ok(),
+            "valid URN must deserialize successfully: {:?}",
+            result.err()
+        );
+        assert_eq!(
+            result.unwrap().datastore.connection_url.urn().to_string(),
+            "urn:secrets-rs:env:DATABASE_URL"
+        );
+    }
 }
