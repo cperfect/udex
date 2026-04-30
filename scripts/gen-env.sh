@@ -33,10 +33,25 @@ fi
 
 echo "Generating secrets..."
 
-# Generate secret values
+# Generate secret values. All three use `openssl rand -hex`, which produces
+# [0-9a-f] only — no $, ', ", or whitespace. This matters because the values
+# are expanded inside an unquoted heredoc below; a character outside that
+# alphabet could cause silent shell expansion or broken output. If you ever
+# change the generator (e.g. to base64 or a passphrase), quote the heredoc
+# delimiter (<<'EOF') and emit the values via printf/envsubst instead.
 POSTGRES_PASSWORD_SECRET_VAL=$(openssl rand -hex 24)
 HYDRA_DB_PASSWORD_SECRET_VAL=$(openssl rand -hex 24)
 HYDRA_SECRETS_SYSTEM_SECRET_VAL=$(openssl rand -hex 32)
+
+# Guard: if openssl is missing or fails, command substitution returns an empty
+# string. set -e won't catch that (it only catches non-zero exits at the
+# statement level). Fail fast here rather than writing a .env full of blanks.
+if [[ -z "${POSTGRES_PASSWORD_SECRET_VAL}" || \
+      -z "${HYDRA_DB_PASSWORD_SECRET_VAL}" || \
+      -z "${HYDRA_SECRETS_SYSTEM_SECRET_VAL}" ]]; then
+  echo "ERROR: secret generation produced an empty value — is openssl installed?" >&2
+  exit 1
+fi
 
 cat > "${ENV_FILE}" <<EOF
 # ============================================================
