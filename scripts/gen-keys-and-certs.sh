@@ -21,9 +21,10 @@ for arg in "$@"; do
   esac
 done
 
-# All files produced by the two sub-scripts. Every file must exist for the guard
-# to pass — a partial state (e.g. interrupted run, manual deletion of one file)
-# triggers full regeneration rather than silently leaving a broken workspace.
+# Files required by the test suite (not every intermediate artifact produced by
+# the sub-scripts — e.g. server.csr and ca.srl are intentionally omitted).
+# Every listed file must exist for the guard to pass; a partial state (e.g.
+# interrupted run or manual deletion) triggers full regeneration.
 JWT_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/jwt"
 TLS_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/certs"
 
