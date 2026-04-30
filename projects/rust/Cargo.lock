@@ -3976,8 +3976,6 @@ dependencies = [
  "reqwest",
  "rstest",
  "rustls",
- "secrets-rs",
- "secrets-rs-macros",
  "serde",
  "serde_json",
  "serde_yaml",
