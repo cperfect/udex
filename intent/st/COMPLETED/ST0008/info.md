@@ -1,10 +1,10 @@
 ---
 verblock: "28 Apr 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: WIP
+status: Completed
 slug: inject-keys-and-secrets
 created: 20260428
-completed:
+completed: 20260430
 ---
 
 # ST0008: Inject keys and secrets
