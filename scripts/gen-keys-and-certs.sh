@@ -21,10 +21,26 @@ for arg in "$@"; do
   esac
 done
 
-JWT_KEY="${WORKSPACE_DIR}/projects/rust/server/tests/jwt/signing_private_key.pem"
-TLS_KEY="${WORKSPACE_DIR}/projects/rust/server/tests/certs/server.key"
+# All files produced by the two sub-scripts. Every file must exist for the guard
+# to pass — a partial state (e.g. interrupted run, manual deletion of one file)
+# triggers full regeneration rather than silently leaving a broken workspace.
+JWT_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/jwt"
+TLS_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/certs"
 
-if [[ -f "${JWT_KEY}" && -f "${TLS_KEY}" && "${FORCE}" == false ]]; then
+ALL_EXIST=true
+for f in \
+  "${JWT_DIR}/signing_private_key.pem" \
+  "${JWT_DIR}/signing_public_key.pem" \
+  "${JWT_DIR}/bad_signing_private_key.pem" \
+  "${JWT_DIR}/bad_signing_public_key.pem" \
+  "${TLS_DIR}/ca.key" \
+  "${TLS_DIR}/ca.crt" \
+  "${TLS_DIR}/server.key" \
+  "${TLS_DIR}/server.crt"; do
+  [[ -f "$f" ]] || { ALL_EXIST=false; break; }
+done
+
+if [[ "${ALL_EXIST}" == true && "${FORCE}" == false ]]; then
   echo "Key material already exists — skipping generation."
   echo "Run with --force to rotate keys and certificates."
   exit 0
