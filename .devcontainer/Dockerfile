@@ -11,7 +11,7 @@ ARG RUST_VERSION
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
   && apt-get -y install --no-install-recommends \
   protobuf-compiler libprotobuf-dev \
-  apt-transport-https gnupg lsb-release
+  apt-transport-https curl gnupg lsb-release
 
 ## Install Trivy (security scanner)
 # This installs the latest Trivy package from the official repo (may differ from the version used in CI).
