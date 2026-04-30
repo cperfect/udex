@@ -122,6 +122,7 @@ fn test_config_validate_fails_when_no_key_source_set() {
     let config_path = dir.path().join("udex.toml");
 
     // Neither jwt_public_key_path nor jwks_url is set — exactly one is required.
+    // connection_url must be a URN (WP-05: plain URLs are rejected at parse time).
     let content = r#"
 [server]
 bind_address = "127.0.0.1:50051"
@@ -138,7 +139,7 @@ jwt_issuer = "https://auth.example.com"
 jwt_audience = "udex"
 
 [datastore]
-connection_url = "postgres://localhost/udex"
+connection_url = "urn:secrets-rs:env:DATABASE_URL"
 max_connections = 10
 min_connections = 1
 connection_timeout_secs = 10

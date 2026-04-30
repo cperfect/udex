@@ -36,7 +36,7 @@ impl ClientConfig {
     pub fn from_cli(cli: &Cli) -> Self {
         ClientConfig {
             server: cli.server.clone(),
-            token: cli.token.clone(),
+            token: std::env::var("UDEX_TOKEN").ok(),
             ca_cert: cli.ca_cert.clone(),
         }
     }

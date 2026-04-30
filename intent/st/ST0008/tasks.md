@@ -1,5 +1,5 @@
 ---
-verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria; 28 Apr 2026:v0.3: vscode - Add WP-09: Fix CI key material generation; 30 Apr 2026:v0.4: vscode - Mark WP-04 done; 30 Apr 2026:v0.5: vscode - Mark WP-05 done (guard delivered by Secret<T> type system)"
+verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria; 28 Apr 2026:v0.3: vscode - Add WP-09: Fix CI key material generation; 30 Apr 2026:v0.4: vscode - Mark WP-04 done; 30 Apr 2026:v0.5: vscode - Mark WP-05 done (guard delivered by Secret<T> type system); 30 Apr 2026:v0.6: vscode - Mark WP-06 done"
 ---
 
 # ST0008: Tasks — Inject keys and secrets
@@ -11,7 +11,7 @@ verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance c
 - [x] WP-03: Devcontainer post-create integration
 - [x] WP-04: Config crate evaluation and `_secret` naming convention
 - [x] WP-05: File-injection guard in config loader
-- [ ] WP-06: Remove secrets from CLI arguments
+- [x] WP-06: Remove secrets from CLI arguments
 - [x] WP-07: Inject secrets into Compose and CI via env vars *(completed within WP-01)*
 - [ ] WP-08: Update CONTRIBUTING.md, SECRETS.md, SECURITY.md
 - [ ] WP-09: Fix CI — generate key material before tests
@@ -62,11 +62,14 @@ verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance c
   - `test_plain_url_rejected_by_deserializer`: plain URL fails `toml::from_str`
   - `test_valid_urn_accepted_by_deserializer`: valid URN parses successfully
 
-### WP-06
-- `--token` / `--client-secret` flags removed from the CLI; env vars only
-- Attempting to pass the value as a flag produces a clear "use env var" error
-- Missing required secret env var produces a clear error naming the variable
-- `cargo clippy` and `cargo test` pass
+### WP-06 ✓
+- [x] `--token` removed from `Cli`; bearer token read from `UDEX_TOKEN` env var in
+  `ClientConfig::from_cli()` — passing `--token` gives clap "unexpected argument" error
+- [x] `--client-secret` removed from `TokenFetchArgs`; `UDEX_CLIENT_SECRET` read in
+  `commands::token::fetch()` with a clear error naming the env var and how to set it
+- [x] `cargo clippy -- -D warnings` and `cargo test -p udex-cli` pass
+- [x] Pre-existing `test_config_validate_fails_when_no_key_source_set` fixture updated
+  to use a URN (was using a plain URL — now correctly rejected at parse time by WP-05)
 
 ### WP-08
 - `CONTRIBUTING.md` includes first-time setup steps (run both gen scripts before
@@ -93,7 +96,7 @@ WP-07 ✓  (compose/CI — completed within WP-01)
 
 WP-04 ✓  (secrets-rs; Secret<String> for connection_url)
   └─► WP-05 ✓  (file-injection guard — delivered by Secret<T> type system)
-        └─► WP-06  (remove secrets from CLI args)   ← next
+        └─► WP-06 ✓  (remove secrets from CLI args)
 
 WP-08  (docs — after all implementation WPs complete)
 
