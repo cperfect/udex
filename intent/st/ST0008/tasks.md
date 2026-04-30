@@ -1,5 +1,5 @@
 ---
-verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria; 28 Apr 2026:v0.3: vscode - Add WP-09: Fix CI key material generation; 30 Apr 2026:v0.4: vscode - Mark WP-04 done; 30 Apr 2026:v0.5: vscode - Mark WP-05 done (guard delivered by Secret<T> type system); 30 Apr 2026:v0.6: vscode - Mark WP-06 done"
+verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria; 28 Apr 2026:v0.3: vscode - Add WP-09: Fix CI key material generation; 30 Apr 2026:v0.4: vscode - Mark WP-04 done; 30 Apr 2026:v0.5: vscode - Mark WP-05 done (guard delivered by Secret<T> type system); 30 Apr 2026:v0.6: vscode - Mark WP-06 done; 30 Apr 2026:v0.7: vscode - Mark WP-09 done"
 ---
 
 # ST0008: Tasks — Inject keys and secrets
@@ -14,7 +14,7 @@ verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance c
 - [x] WP-06: Remove secrets from CLI arguments
 - [x] WP-07: Inject secrets into Compose and CI via env vars *(completed within WP-01)*
 - [ ] WP-08: Update CONTRIBUTING.md, SECRETS.md, SECURITY.md
-- [ ] WP-09: Fix CI — generate key material before tests
+- [x] WP-09: Fix CI — generate key material before tests
 
 ## Acceptance Criteria
 
@@ -79,11 +79,12 @@ verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance c
 - `SECURITY.md` documents the injection model, `_secret` naming convention,
   file-injection guard, and CLI arg restriction
 
-### WP-09
-- `01-Validation.yml` `test` job includes a "Generate key material" step running
-  `scripts/gen-keys-and-certs.sh` before `cargo build`
-- The step runs from the workspace root (not `projects/rust/`)
-- `cargo test` passes end-to-end in CI with no file-not-found errors for certs/keys
+### WP-09 ✓
+- [x] `01-Validation.yml` `test` job: "Generate key material" step added before `cargo build`
+  running `bash scripts/gen-keys-and-certs.sh` with `working-directory: .`
+- [x] Script derives its own `WORKSPACE_DIR` from `${BASH_SOURCE[0]}`, so path resolution
+  is correct regardless of working directory
+- [x] Step runs from workspace root (overrides job-level `working-directory: projects/rust`)
 
 ## Sequencing
 
@@ -100,7 +101,7 @@ WP-04 ✓  (secrets-rs; Secret<String> for connection_url)
 
 WP-08  (docs — after all implementation WPs complete)
 
-WP-09  (CI fix — can run in parallel with WP-04/05/06; depends only on WP-01 ✓)
+WP-09 ✓  (CI fix — generate key material before cargo build)
 ```
 
 ## Dependencies

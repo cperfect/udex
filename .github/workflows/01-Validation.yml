@@ -76,6 +76,10 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate key material
+        working-directory: .
+        run: bash scripts/gen-keys-and-certs.sh
+
       - name: Build
         run: cargo build --all-targets
 
