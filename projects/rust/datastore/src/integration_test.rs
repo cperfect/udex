@@ -214,6 +214,9 @@ pub async fn data(serial: bool) -> Data<'static, MaybeOnceType> {
 async fn cleanup_test_database_internal(db_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("Cleaning up test database: {}", db_name);
 
+    // Read DATABASE_URL directly from the environment here — this is admin-pool
+    // cleanup code, not application code, so bypassing Secret<T> is intentional.
+    // The test fixture uses bound_url_secret() for the datastore under test.
     let base_database_url = std::env::var("DATABASE_URL")?;
 
     // Connect to the base database to drop the test database
