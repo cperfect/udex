@@ -1,5 +1,5 @@
 ---
-verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria; 28 Apr 2026:v0.3: vscode - Add WP-09: Fix CI key material generation; 30 Apr 2026:v0.4: vscode - Mark WP-04 done; 30 Apr 2026:v0.5: vscode - Mark WP-05 done (guard delivered by Secret<T> type system); 30 Apr 2026:v0.6: vscode - Mark WP-06 done; 30 Apr 2026:v0.7: vscode - Mark WP-09 done"
+verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria; 28 Apr 2026:v0.3: vscode - Add WP-09: Fix CI key material generation; 30 Apr 2026:v0.4: vscode - Mark WP-04 done; 30 Apr 2026:v0.5: vscode - Mark WP-05 done (guard delivered by Secret<T> type system); 30 Apr 2026:v0.6: vscode - Mark WP-06 done; 30 Apr 2026:v0.7: vscode - Mark WP-09 done; 30 Apr 2026:v0.8: vscode - Mark WP-08 done"
 ---
 
 # ST0008: Tasks — Inject keys and secrets
@@ -13,7 +13,7 @@ verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance c
 - [x] WP-05: File-injection guard in config loader
 - [x] WP-06: Remove secrets from CLI arguments
 - [x] WP-07: Inject secrets into Compose and CI via env vars *(completed within WP-01)*
-- [ ] WP-08: Update CONTRIBUTING.md, SECRETS.md, SECURITY.md
+- [x] WP-08: Update CONTRIBUTING.md, SECRETS.md, SECURITY.md
 - [x] WP-09: Fix CI — generate key material before tests
 
 ## Acceptance Criteria
@@ -71,13 +71,14 @@ verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance c
 - [x] Pre-existing `test_config_validate_fails_when_no_key_source_set` fixture updated
   to use a URN (was using a plain URL — now correctly rejected at parse time by WP-05)
 
-### WP-08
-- `CONTRIBUTING.md` includes first-time setup steps (run both gen scripts before
-  building or starting the devcontainer)
-- `SECRETS.md` updated: committed-file entries removed; source column reflects
-  env-var injection and gitignored generated files
-- `SECURITY.md` documents the injection model, `_secret` naming convention,
-  file-injection guard, and CLI arg restriction
+### WP-08 ✓
+- [x] `CONTRIBUTING.md`: first-time setup section added (run `gen-env.sh` and
+  `gen-keys-and-certs.sh` before building outside the devcontainer)
+- [x] `SECRETS.md`: stale placeholder-based DB rows removed; all key/cert file sources
+  updated to `scripts/gen-keys-and-certs.sh` → gitignored paths; `UDEX_TOKEN` and
+  `UDEX_CLIENT_SECRET` sources updated to env-var-only; Hydra secrets and gen scripts added
+- [x] `SECURITY.md`: "Secrets Management" section added covering the injection model
+  (URN-based secrets-rs), file-injection guard (Secret<T> serde), and CLI arg restriction
 
 ### WP-09 ✓
 - [x] `01-Validation.yml` `test` job: "Generate key material" step added before `cargo build`
@@ -99,7 +100,7 @@ WP-04 ✓  (secrets-rs; Secret<String> for connection_url)
   └─► WP-05 ✓  (file-injection guard — delivered by Secret<T> type system)
         └─► WP-06 ✓  (remove secrets from CLI args)
 
-WP-08  (docs — after all implementation WPs complete)
+WP-08 ✓  (docs — CONTRIBUTING.md, SECRETS.md, SECURITY.md)
 
 WP-09 ✓  (CI fix — generate key material before cargo build)
 ```
