@@ -17,7 +17,8 @@ pub async fn run(args: ServeArgs) -> Result<()> {
     cfg.validate()?;
 
     let server_config = cfg.to_server_config()?;
-    let datastore_config = cfg.to_datastore_config()?;
+    let datastore_config = cfg.to_datastore_config()
+        .with_context(|| format!("failed to build datastore config from {}", args.config.display()))?;
 
     udex_server::start(server_config, datastore_config)
         .await
