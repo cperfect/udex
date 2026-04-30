@@ -22,8 +22,7 @@ RUN curl -fsSL https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --
   && apt-get update \
   && apt-get -y install --no-install-recommends trivy
 
-# install claude 
-RUN curl -fsSL https://claude.ai/install.sh | bash
+# Claude is installed via the devcontainer feature in devcontainer.json.
 
 # install intent
 # Clone the repository
