@@ -1801,15 +1801,9 @@ async fn test_token_reuse() {
 }
 
 /// Verifies that a Hydra-issued token is accepted twice in a row.
-/// Skipped when HYDRA_ADMIN_URL is not set.
 #[tokio_shared_rt::test]
 async fn test_hydra_token_reuse() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-    if std::env::var("HYDRA_ADMIN_URL").is_err() {
-        println!("Skipping test_hydra_token_reuse: HYDRA_ADMIN_URL not set");
-        return;
-    }
 
     let data = data_using_hydra(false).await;
     let bind_address = data.1.bind_address;
@@ -1877,15 +1871,9 @@ async fn test_hydra_token_reuse() {
 /// confirms the server grants index read but denies entry create — proving the
 /// token carries only the requested subset of scopes.
 ///
-/// Skipped when HYDRA_ADMIN_URL is not set.
 #[tokio_shared_rt::test]
 async fn test_hydra_scope_subset() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-    if std::env::var("HYDRA_ADMIN_URL").is_err() {
-        println!("Skipping test_hydra_scope_subset: HYDRA_ADMIN_URL not set");
-        return;
-    }
 
     let data = data_using_hydra(false).await;
     let bind_address = data.1.bind_address;
@@ -1983,15 +1971,9 @@ async fn test_hydra_scope_subset() {
 /// accepted as a valid JWT but denied by the permission layer because it
 /// contains no `udex:*` scope values.
 ///
-/// Skipped when HYDRA_ADMIN_URL is not set.
 #[tokio_shared_rt::test]
 async fn test_hydra_non_udex_scopes_denied() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-    if std::env::var("HYDRA_ADMIN_URL").is_err() {
-        println!("Skipping test_hydra_non_udex_scopes_denied: HYDRA_ADMIN_URL not set");
-        return;
-    }
 
     let admin_url =
         std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string());
@@ -2066,16 +2048,9 @@ async fn test_hydra_non_udex_scopes_denied() {
 /// Note: the JWT issuer is controlled globally by Hydra's URLS_SELF_ISSUER
 /// and is the same for all clients on the same Hydra instance. Wrong-issuer
 /// behaviour is already covered by the static-PEM test suite.
-///
-/// Skipped when HYDRA_ADMIN_URL is not set.
 #[tokio_shared_rt::test]
 async fn test_hydra_wrong_audience_rejected() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-    if std::env::var("HYDRA_ADMIN_URL").is_err() {
-        println!("Skipping test_hydra_wrong_audience_rejected: HYDRA_ADMIN_URL not set");
-        return;
-    }
 
     let admin_url =
         std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string());
