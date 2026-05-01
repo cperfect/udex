@@ -18,7 +18,7 @@ use udex_server::{config::ServerConfig, logging, server};
 const SERVER_BIND_ADDR: &str = "127.0.0.1:50052"; // different from default to avoid conflicts
 const ID_PREFIX: &str = "server-integration-test";
 
-const SERVER_USING_HYDRA_BIND_ADDR: &str = "127.0.0.1:50053";
+const SERVER_USING_HYDRA_BIND_ADDR: &str = "127.0.0.1:15053";
 const ID_USING_HYDRA_PREFIX: &str = "hydra-integration-test";
 
 // See https://github.com/ufoscout/maybe-once for the MaybeOnceAsync pattern used here.
@@ -197,7 +197,7 @@ async fn init_server_hydra() -> HydraFixtureType {
             .expect("Hydra-backed server failed to start");
     });
 
-    // Extra startup time: AuthnInterceptor fetches the JWKS on startup.
+    // Extra startup time: AuthzInterceptor fetches the JWKS on startup.
     sleep(Duration::from_millis(500)).await;
 
     // One shared Hydra client for all Hydra integration tests.

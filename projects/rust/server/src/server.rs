@@ -104,7 +104,7 @@ where
         .add_service(healthz_service)
         .serve(addr)
         .await
-        .map_err(|e| Error::ServerError(format!("Server error: {}", e)))?;
+        .map_err(|e| Error::ServerError(format!("Server error: {e:?}")))?;
 
     Ok(())
 }
