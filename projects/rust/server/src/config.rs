@@ -48,6 +48,18 @@ pub struct AuthzConfig {
     /// local development environments (e.g. Hydra without TLS).
     #[serde(default)]
     pub danger_allow_non_tls: bool,
+    /// Name of the JWT claim that carries the OAuth 2.0 scope list.
+    ///
+    /// RFC 8693 §4.2 defines this as `"scope"` (a space-delimited string).
+    /// Some identity providers use a different name — for example, Hydra uses
+    /// `"scp"` with an array value. Set this field to match your IdP.
+    ///
+    /// The claim value may be a space-delimited string or a JSON array of
+    /// strings; both forms are accepted regardless of which name is used.
+    ///
+    /// Defaults to `"scope"` when not set.
+    #[serde(default)]
+    pub scope_claim_name: Option<String>,
 }
 
 impl Default for ServerConfig {
@@ -213,6 +225,7 @@ mod tests {
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         }
     }
 
@@ -223,6 +236,7 @@ mod tests {
             jwt_issuer: Some("https://hydra:4444".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         }
     }
 
@@ -366,6 +380,7 @@ mod tests {
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -382,6 +397,7 @@ mod tests {
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -398,6 +414,7 @@ mod tests {
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -414,6 +431,7 @@ mod tests {
             jwt_issuer: Some("udex".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         };
         assert!(cfg.validate().is_err());
     }
@@ -426,6 +444,7 @@ mod tests {
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -442,6 +461,7 @@ mod tests {
             jwt_issuer: Some("http://localhost:4444/".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -458,6 +478,7 @@ mod tests {
             jwt_issuer: Some("http://localhost:4444/".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: true,
+            scope_claim_name: None,
         };
         assert!(cfg.validate().is_ok());
     }
@@ -470,6 +491,7 @@ mod tests {
             jwt_issuer: Some("http://hydra:4444/".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: true,
+            scope_claim_name: None,
         };
         assert!(cfg.validate().is_ok());
     }

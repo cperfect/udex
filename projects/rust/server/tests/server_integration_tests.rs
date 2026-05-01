@@ -73,6 +73,7 @@ async fn init_server() -> MaybeOnceType {
             jwt_issuer: Some(format!("{}-issuer", ID_PREFIX)),
             jwt_audience: Some(format!("{}-audience", ID_PREFIX)),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         },
         ..ServerConfig::default()
     };
@@ -181,7 +182,10 @@ async fn init_server_hydra() -> HydraFixtureType {
             jwt_public_key_path: None,
             jwt_issuer: Some(issuer),
             jwt_audience: Some(audience.clone()),
-            danger_allow_non_tls: false,
+            // Local Hydra runs over plain HTTP; allow it in test-only config.
+            danger_allow_non_tls: true,
+            // Hydra uses "scp" (array) instead of the RFC 8693 default "scope".
+            scope_claim_name: Some("scp".to_string()),
         },
         ..ServerConfig::default()
     };

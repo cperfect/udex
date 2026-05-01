@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::time::Duration;
 
 use jsonwebtoken::jwk::JwkSet;
@@ -15,7 +16,8 @@ use crate::Error;
 #[derive(Clone)]
 enum KeySource {
     Static(DecodingKey),
-    Jwks(HashMap<String, DecodingKey>),
+    /// Each entry stores the decoding key and the algorithm declared in the JWK's `alg` field.
+    Jwks(HashMap<String, (DecodingKey, Algorithm)>),
 }
 
 #[derive(Clone)]
@@ -23,6 +25,7 @@ pub struct AuthzInterceptor {
     key_source: KeySource,
     expected_issuer: String,
     expected_audience: String,
+    scope_claim_name: String,
 }
 
 impl AuthzInterceptor {
@@ -67,10 +70,20 @@ impl AuthzInterceptor {
                                 "JWKS at '{url_for_err}' contains duplicate kid '{kid}'"
                             )));
                         }
+                        let alg = jwk
+                            .common
+                            .key_algorithm
+                            .as_ref()
+                            .and_then(|ka| Algorithm::from_str(&ka.to_string()).ok())
+                            .ok_or_else(|| {
+                                Error::ConfigValidation(format!(
+                                    "JWK (kid='{kid}') at '{url_for_err}' has no recognised 'alg'"
+                                ))
+                            })?;
                         let decoding_key = DecodingKey::from_jwk(jwk).map_err(|e| {
                             Error::ConfigValidation(format!("Invalid JWK (kid='{kid}'): {e}"))
                         })?;
-                        key_map.insert(kid.clone(), decoding_key);
+                        key_map.insert(kid.clone(), (decoding_key, alg));
                     }
                 }
 
@@ -103,11 +116,15 @@ impl AuthzInterceptor {
         // config.validate() above guarantees both fields are Some and non-empty.
         let expected_issuer = config.jwt_issuer.expect("validated");
         let expected_audience = config.jwt_audience.expect("validated");
+        let scope_claim_name = config
+            .scope_claim_name
+            .unwrap_or_else(|| "scope".to_string());
 
         Ok(Self {
             key_source,
             expected_issuer,
             expected_audience,
+            scope_claim_name,
         })
     }
 
@@ -122,16 +139,16 @@ impl AuthzInterceptor {
     }
 
     #[allow(clippy::result_large_err)]
-    fn decoding_key_for<'a>(&'a self, token: &str) -> Result<&'a DecodingKey, Status> {
+    fn decoding_key_for<'a>(&'a self, token: &str) -> Result<(&'a DecodingKey, Algorithm), Status> {
         match &self.key_source {
-            KeySource::Static(key) => Ok(key),
+            KeySource::Static(key) => Ok((key, Algorithm::ES256)),
             KeySource::Jwks(map) => {
                 let header = decode_header(token)
                     .map_err(|_| Status::unauthenticated("Invalid JWT header"))?;
                 let kid = header
                     .kid
                     .ok_or_else(|| Status::unauthenticated("JWT missing kid claim"))?;
-                map.get(&kid).ok_or_else(|| {
+                map.get(&kid).map(|(key, alg)| (key, *alg)).ok_or_else(|| {
                     tracing::warn!(kid = %kid, "JWT kid not found in JWKS");
                     Status::unauthenticated("Unknown JWT kid")
                 })
@@ -141,19 +158,41 @@ impl AuthzInterceptor {
 
     #[allow(clippy::result_large_err)]
     fn validate_jwt(&self, token: &str) -> Result<Claims, Status> {
-        let key = self.decoding_key_for(token)?;
+        let (key, alg) = self.decoding_key_for(token)?;
 
-        let mut validation = Validation::new(Algorithm::ES256);
+        let mut validation = Validation::new(alg);
         validation.set_issuer(&[&self.expected_issuer]);
         validation.set_audience(&[&self.expected_audience]);
 
-        let claims = match decode::<Claims>(token, key, &validation) {
-            Ok(token_data) => Ok(token_data.claims),
-            Err(err) => {
+        // Decode as a raw JSON map so we can extract scope from the configured
+        // claim name without being coupled to a fixed field name in Claims.
+        // Signature, exp, iss, and aud are all validated by jsonwebtoken before
+        // the payload is deserialised.
+        let payload: serde_json::Map<String, serde_json::Value> = decode(token, key, &validation)
+            .map_err(|err| {
                 tracing::warn!(error = ?err, "JWT validation error");
-                Err(Status::unauthenticated("Invalid JWT token"))
-            }
-        }?;
+                Status::unauthenticated("Invalid JWT token")
+            })?
+            .claims;
+
+        // Extract scope from the configured claim; accept a space-delimited
+        // string (RFC 8693) or a JSON array (e.g. Hydra's "scp" claim).
+        let scope = match payload.get(&self.scope_claim_name) {
+            Some(serde_json::Value::String(s)) => s.clone(),
+            Some(serde_json::Value::Array(arr)) => arr
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(" "),
+            _ => String::new(),
+        };
+
+        let mut claims: Claims = serde_json::from_value(serde_json::Value::Object(payload))
+            .map_err(|err| {
+                tracing::warn!(error = ?err, "JWT claims deserialisation error");
+                Status::unauthenticated("Invalid JWT claims")
+            })?;
+        claims.scope = scope;
 
         claims
             .custom_validate_public()
@@ -201,6 +240,7 @@ mod tests {
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         })
         .expect("Failed to create test AuthzInterceptor")
     }
@@ -213,6 +253,7 @@ mod tests {
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         }) else {
             panic!("expected ConfigValidation error for both key sources");
         };
@@ -230,6 +271,7 @@ mod tests {
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         }) else {
             panic!("expected ConfigValidation error for no key source");
         };

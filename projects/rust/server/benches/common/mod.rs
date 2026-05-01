@@ -209,6 +209,7 @@ async fn start_server_and_connect() -> (
             jwt_issuer: Some(format!("{}-issuer", ID_PREFIX)),
             jwt_audience: Some(format!("{}-audience", ID_PREFIX)),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         },
         ..ServerConfig::default()
     };

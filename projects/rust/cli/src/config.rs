@@ -48,6 +48,10 @@ pub struct AuthzConfig {
     /// local development environments (e.g. Hydra without TLS).
     #[serde(default)]
     pub danger_allow_non_tls: bool,
+    /// Name of the JWT claim that carries the OAuth 2.0 scope list.
+    /// RFC 8693 §4.2 default is `"scope"`. Set to e.g. `"scp"` for Hydra.
+    #[serde(default)]
+    pub scope_claim_name: Option<String>,
 }
 
 /// PostgreSQL datastore configuration.
@@ -93,6 +97,7 @@ impl Default for UdexConfig {
                     jwt_issuer: Some("https://auth.example.com".to_string()),
                     jwt_audience: Some("udex".to_string()),
                     danger_allow_non_tls: false,
+                    scope_claim_name: None,
                 },
             },
             datastore: DatastoreConfig {
@@ -254,6 +259,7 @@ impl UdexConfig {
                 jwt_issuer: self.server.authz.jwt_issuer.clone(),
                 jwt_audience: self.server.authz.jwt_audience.clone(),
                 danger_allow_non_tls: self.server.authz.danger_allow_non_tls,
+                scope_claim_name: self.server.authz.scope_claim_name.clone(),
             },
             init_indexes: vec![],
         })

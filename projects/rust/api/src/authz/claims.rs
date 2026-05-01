@@ -1,14 +1,48 @@
 use crate::authz::Error;
 use serde::{Deserialize, Serialize};
 
+/// RFC 7519 §4.1.3: `aud` may be a single string or an array of strings.
+/// We deserialise both forms and store the first (or only) value internally.
+fn deserialize_aud<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{self, Visitor};
+
+    struct AudVisitor;
+
+    impl<'de> Visitor<'de> for AudVisitor {
+        type Value = String;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("a string or a non-empty array of strings")
+        }
+
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<String, E> {
+            Ok(v.to_owned())
+        }
+
+        fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<String, A::Error> {
+            seq.next_element::<String>()?
+                .ok_or_else(|| de::Error::custom("audience array must not be empty"))
+        }
+    }
+
+    deserializer.deserialize_any(AudVisitor)
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
     sub: String, // Subject - typically the user ID - registered claim
     iss: String, // Issuer - registered claim
-    aud: String, // Audience - registered claim
+    #[serde(deserialize_with = "deserialize_aud")]
+    aud: String, // Audience - RFC 7519 §4.1.3: string or array of strings
     exp: usize,  // Expiration - registered claim
     iat: usize,  // Issued at - registered claim
     /// RFC 8693 §4.2 scope claim — space-delimited list of scope values.
+    /// The actual JWT field name (and its string-vs-array form) is handled by
+    /// `AuthzInterceptor` using the configured `scope_claim_name`; this field
+    /// is always set by the interceptor after JWT validation.
     /// Unknown (non-`udex:`) scopes are silently ignored during permission extraction.
     #[serde(default)]
     pub scope: String,
@@ -120,6 +154,33 @@ mod tests {
         });
         let claims: Claims = serde_json::from_value(json).expect("deserialize");
         assert_eq!(claims.scope, "");
+    }
+
+    #[test]
+    fn test_deserialize_aud_as_array() {
+        // RFC 7519 §4.1.3: aud may be a JSON array — Hydra uses this form.
+        let json = json!({
+            "sub": "test-user",
+            "iss": "test-issuer",
+            "aud": ["test-audience"],
+            "exp": 9999999999usize,
+            "iat": 1000000000usize
+        });
+        let claims: Claims = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(claims.aud, "test-audience");
+    }
+
+    #[test]
+    fn test_deserialize_aud_as_string() {
+        let json = json!({
+            "sub": "test-user",
+            "iss": "test-issuer",
+            "aud": "test-audience",
+            "exp": 9999999999usize,
+            "iat": 1000000000usize
+        });
+        let claims: Claims = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(claims.aud, "test-audience");
     }
 
     #[test]
