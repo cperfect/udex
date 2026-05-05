@@ -43,17 +43,33 @@ Once a fix is available and released, the vulnerability will be disclosed via a 
 ### Injection model
 
 Secret values are never stored in committed files. Instead, config files reference secrets
-by URN and the server resolves them from environment variables at startup:
+by URN and the server resolves them at startup via the
+[`secrets-rs`](https://crates.io/crates/secrets-rs) crate.
+
+**Environment variable source** — used for string secrets such as database URLs:
 
 ```toml
 [datastore]
 connection_url = "urn:secrets-rs:env:DATABASE_URL"
 ```
 
-The `urn:secrets-rs:env:<VAR_NAME>` format is interpreted by the
-[`secrets-rs`](https://crates.io/crates/secrets-rs) crate. `UdexConfig::load()` calls
-`bind_all()` after deserialisation; startup fails with a clear error if the named
-environment variable is absent.
+`UdexConfig::load()` calls `bind_all()` after deserialisation; startup fails with a clear
+error if the named environment variable is absent.
+
+**File source** — used for multi-line PEM material (TLS certificate, TLS private key, JWT
+public key). Paths are resolved relative to the config file's directory:
+
+```toml
+[server.tls]
+cert = "urn:secrets-rs:file:certs/server.crt"
+key  = "urn:secrets-rs:file:certs/server.key"
+
+[server.authz]
+jwt_public_key = "urn:secrets-rs:file:certs/jwt_public_key.pem"
+```
+
+Both URN types produce a `Secret<String>` whose value is masked in all `Debug`/`Display`
+output, preventing accidental logging of key material.
 
 For development, run `scripts/gen-env.sh` to generate `.env` with all required values.
 The devcontainer runs this automatically on first start.

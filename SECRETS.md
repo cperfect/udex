@@ -34,7 +34,7 @@ Public artefacts (certificates, public keys, client IDs, endpoint URLs) are mark
 | `signing_public_key.pem` | ECDSA P-256 JWT public key (PEM) | Server unit & integration tests — verifying JWT signatures | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/jwt/` (gitignored) |
 | `bad_signing_private_key.pem` | ECDSA P-256 JWT private key — wrong key pair | Server tests — invalid signature rejection | Dev | No | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/jwt/` (gitignored) |
 | `bad_signing_public_key.pem` | ECDSA P-256 JWT public key — wrong key pair | Server tests — invalid signature rejection | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/jwt/` (gitignored) |
-| `jwt_public_key_path` | Path to JWT public key (config property) | Rust server/CLI — static key source | Both | Yes | Config property (`projects/rust/server/src/config.rs`; `projects/rust/cli/src/config.rs`) |
+| `authz.jwt_public_key` | `Secret<String>` holding a `urn:secrets-rs:file:` URN; resolved to PEM at startup | Rust server/CLI — static-key authentication mode | Both | Yes | Config property; see `projects/rust/server/src/config.rs` |
 
 ## TLS Certificates & Keys
 
@@ -45,8 +45,8 @@ Public artefacts (certificates, public keys, client IDs, endpoint URLs) are mark
 | `server.key` | RSA-4096 TLS server private key | gRPC server TLS | Dev | No | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/certs/` (gitignored) |
 | `server.crt` | TLS server certificate (signed by test CA) | gRPC server TLS | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/certs/` (gitignored) |
 | `server.csr` | TLS server certificate signing request | Intermediate artefact — cert generation only | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/certs/` (gitignored) |
-| `tls.cert_path` | Path to TLS certificate (config property) | Rust server/CLI — TLS configuration | Both | Yes | Config property (`projects/rust/server/src/config.rs`; `projects/rust/cli/src/config.rs`) |
-| `tls.key_path` | Path to TLS private key (config property) | Rust server/CLI — TLS configuration | Both | No | Config property (`projects/rust/server/src/config.rs`; `projects/rust/cli/src/config.rs`) |
+| `tls.cert` | `Secret<String>` holding a `urn:secrets-rs:file:` URN; resolved to PEM certificate at startup | Rust server/CLI — TLS configuration | Both | Yes | Config property; see `projects/rust/server/src/config.rs` |
+| `tls.key` | `Secret<String>` holding a `urn:secrets-rs:file:` URN; resolved to PEM private key at startup | Rust server/CLI — TLS configuration | Both | No | Config property; see `projects/rust/server/src/config.rs` |
 
 ## Key Generation Scripts
 
