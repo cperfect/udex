@@ -1,9 +1,28 @@
 use crate::{config::DatastoreConfig, postgres::PostgresDatastore, Datastore, Migrator};
 /// This file contains helpers for integration tests
 use maybe_once::tokio::{Data, MaybeOnceAsync};
+use secrets_rs::{Secret, SourceError, SourceRegistry};
 use sqlx::postgres::PgPoolOptions;
 use std::sync::{Arc, Mutex, OnceLock};
 use uuid::Uuid;
+
+/// Single-value source used in test fixtures to bind a known URL without env vars.
+struct StaticSource(String);
+impl secrets_rs::Source for StaticSource {
+    fn get(&self, _name: &str) -> Result<Vec<u8>, SourceError> {
+        Ok(self.0.as_bytes().to_vec())
+    }
+}
+
+fn bound_url_secret(url: &str) -> Secret<String> {
+    let mut secret = Secret::new("urn:secrets-rs:test:url").unwrap();
+    let mut registry = SourceRegistry::new();
+    registry
+        .register("test", StaticSource(url.to_string()))
+        .unwrap();
+    secret.bind(&registry).unwrap();
+    secret
+}
 
 // See https://github.com/ufoscout/maybe-once for the MaybeOnceAsync pattern used here.
 pub type MaybeOnceType = (
@@ -119,7 +138,7 @@ pub async fn init_postgres() -> MaybeOnceType {
     // - test_concurrent_operations spawns 10 additional tasks
     // - Extra buffer for overhead
     let cfg = DatastoreConfig {
-        connection_url: test_database_url.clone(),
+        connection_url: bound_url_secret(&test_database_url),
         max_connections: 25, // Increased to support concurrent tests
         min_connections: 1,
         connection_timeout: std::time::Duration::from_secs(30), // Long timeout for concurrent tests
@@ -197,6 +216,9 @@ pub async fn data(serial: bool) -> Data<'static, MaybeOnceType> {
 async fn cleanup_test_database_internal(db_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("Cleaning up test database: {}", db_name);
 
+    // Read DATABASE_URL directly from the environment here — this is admin-pool
+    // cleanup code, not application code, so bypassing Secret<T> is intentional.
+    // The test fixture uses bound_url_secret() for the datastore under test.
     let base_database_url = std::env::var("DATABASE_URL")?;
 
     // Connect to the base database to drop the test database

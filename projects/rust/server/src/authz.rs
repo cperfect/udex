@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::time::Duration;
 
 use jsonwebtoken::jwk::JwkSet;
@@ -12,10 +13,28 @@ use udex_api::authz::claims::Claims;
 use crate::config::AuthzConfig;
 use crate::Error;
 
+/// Derives a signing algorithm from a JWK's key type and curve when the
+/// optional `alg` field is absent. Only EC keys with a known named curve have
+/// an unambiguous default; RSA and OKP require an explicit `alg`.
+fn infer_algorithm_from_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> Option<Algorithm> {
+    use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve};
+    match &jwk.algorithm {
+        AlgorithmParameters::EllipticCurve(ec) => match ec.curve {
+            EllipticCurve::P256 => Some(Algorithm::ES256),
+            EllipticCurve::P384 => Some(Algorithm::ES384),
+            // P-521 / ES512 is not supported by this jsonwebtoken version.
+            EllipticCurve::P521 => None,
+            EllipticCurve::Ed25519 => Some(Algorithm::EdDSA),
+        },
+        _ => None,
+    }
+}
+
 #[derive(Clone)]
 enum KeySource {
     Static(DecodingKey),
-    Jwks(HashMap<String, DecodingKey>),
+    /// Each entry stores the decoding key and the algorithm for each `kid`.
+    Jwks(HashMap<String, (DecodingKey, Algorithm)>),
 }
 
 #[derive(Clone)]
@@ -23,13 +42,14 @@ pub struct AuthzInterceptor {
     key_source: KeySource,
     expected_issuer: String,
     expected_audience: String,
+    scope_claim_name: String,
 }
 
 impl AuthzInterceptor {
     pub fn new(config: AuthzConfig) -> Result<Self, Error> {
         config.validate()?;
         // TODO If the identity provider rotates signing keys, a server restart would be required to pick up the new JWKS. This is acceptable for test/demo purposes (which is the case for now) but for production use, consider implementing periodic JWKS refresh (e.g., background task with configurable interval, or refresh on kid miss with rate limiting).
-        let key_source = match (config.jwks_url, config.jwt_public_key_path) {
+        let key_source = match (config.jwks_url, config.jwt_public_key) {
             (Some(url), None) => {
                 let url_for_err = url.clone();
                 let jwks_text = std::thread::spawn(move || -> Result<String, String> {
@@ -67,10 +87,26 @@ impl AuthzInterceptor {
                                 "JWKS at '{url_for_err}' contains duplicate kid '{kid}'"
                             )));
                         }
+                        // RFC 7517 §4.4: `alg` is OPTIONAL. Many providers (AWS Cognito,
+                        // Azure AD, Keycloak) omit it. Fall back to deriving the algorithm
+                        // from kty/crv when absent; error only when neither is available.
+                        let alg = jwk
+                            .common
+                            .key_algorithm
+                            .as_ref()
+                            .and_then(|ka| Algorithm::from_str(&ka.to_string()).ok())
+                            .or_else(|| infer_algorithm_from_jwk(jwk))
+                            .ok_or_else(|| {
+                                Error::ConfigValidation(format!(
+                                    "JWK (kid='{kid}') at '{url_for_err}' has no 'alg' field \
+                                     and the key type does not have an unambiguous default \
+                                     (EC keys with a known curve are inferred automatically)"
+                                ))
+                            })?;
                         let decoding_key = DecodingKey::from_jwk(jwk).map_err(|e| {
                             Error::ConfigValidation(format!("Invalid JWK (kid='{kid}'): {e}"))
                         })?;
-                        key_map.insert(kid.clone(), decoding_key);
+                        key_map.insert(kid.clone(), (decoding_key, alg));
                     }
                 }
 
@@ -82,15 +118,13 @@ impl AuthzInterceptor {
 
                 KeySource::Jwks(key_map)
             }
-            (None, Some(path)) => {
-                let pem = std::fs::read_to_string(&path).map_err(|e| {
-                    Error::ConfigValidation(format!(
-                        "Failed to read jwt_public_key_path '{path}': {e}"
-                    ))
+            (None, Some(pem_secret)) => {
+                let pem = pem_secret.value().map_err(|_| {
+                    Error::ConfigValidation("jwt_public_key is not bound".to_string())
                 })?;
                 let key = DecodingKey::from_ec_pem(pem.as_bytes()).map_err(|e| {
                     Error::ConfigValidation(format!(
-                        "Failed to create decoding key from '{path}': {e}"
+                        "Failed to create decoding key from jwt_public_key: {e}"
                     ))
                 })?;
                 KeySource::Static(key)
@@ -103,11 +137,15 @@ impl AuthzInterceptor {
         // config.validate() above guarantees both fields are Some and non-empty.
         let expected_issuer = config.jwt_issuer.expect("validated");
         let expected_audience = config.jwt_audience.expect("validated");
+        let scope_claim_name = config
+            .scope_claim_name
+            .unwrap_or_else(|| "scope".to_string());
 
         Ok(Self {
             key_source,
             expected_issuer,
             expected_audience,
+            scope_claim_name,
         })
     }
 
@@ -122,16 +160,16 @@ impl AuthzInterceptor {
     }
 
     #[allow(clippy::result_large_err)]
-    fn decoding_key_for<'a>(&'a self, token: &str) -> Result<&'a DecodingKey, Status> {
+    fn decoding_key_for<'a>(&'a self, token: &str) -> Result<(&'a DecodingKey, Algorithm), Status> {
         match &self.key_source {
-            KeySource::Static(key) => Ok(key),
+            KeySource::Static(key) => Ok((key, Algorithm::ES256)),
             KeySource::Jwks(map) => {
                 let header = decode_header(token)
                     .map_err(|_| Status::unauthenticated("Invalid JWT header"))?;
                 let kid = header
                     .kid
                     .ok_or_else(|| Status::unauthenticated("JWT missing kid claim"))?;
-                map.get(&kid).ok_or_else(|| {
+                map.get(&kid).map(|(key, alg)| (key, *alg)).ok_or_else(|| {
                     tracing::warn!(kid = %kid, "JWT kid not found in JWKS");
                     Status::unauthenticated("Unknown JWT kid")
                 })
@@ -141,19 +179,41 @@ impl AuthzInterceptor {
 
     #[allow(clippy::result_large_err)]
     fn validate_jwt(&self, token: &str) -> Result<Claims, Status> {
-        let key = self.decoding_key_for(token)?;
+        let (key, alg) = self.decoding_key_for(token)?;
 
-        let mut validation = Validation::new(Algorithm::ES256);
+        let mut validation = Validation::new(alg);
         validation.set_issuer(&[&self.expected_issuer]);
         validation.set_audience(&[&self.expected_audience]);
 
-        let claims = match decode::<Claims>(token, key, &validation) {
-            Ok(token_data) => Ok(token_data.claims),
-            Err(err) => {
+        // Decode as a raw JSON map so we can extract scope from the configured
+        // claim name without being coupled to a fixed field name in Claims.
+        // Signature, exp, iss, and aud are all validated by jsonwebtoken before
+        // the payload is deserialised.
+        let payload: serde_json::Map<String, serde_json::Value> = decode(token, key, &validation)
+            .map_err(|err| {
                 tracing::warn!(error = ?err, "JWT validation error");
-                Err(Status::unauthenticated("Invalid JWT token"))
-            }
-        }?;
+                Status::unauthenticated("Invalid JWT token")
+            })?
+            .claims;
+
+        // Extract scope from the configured claim; accept a space-delimited
+        // string (RFC 8693) or a JSON array (e.g. Hydra's "scp" claim).
+        let scope = match payload.get(&self.scope_claim_name) {
+            Some(serde_json::Value::String(s)) => s.clone(),
+            Some(serde_json::Value::Array(arr)) => arr
+                .iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(" "),
+            _ => String::new(),
+        };
+
+        let mut claims: Claims = serde_json::from_value(serde_json::Value::Object(payload))
+            .map_err(|err| {
+                tracing::warn!(error = ?err, "JWT claims deserialisation error");
+                Status::unauthenticated("Invalid JWT claims")
+            })?;
+        claims.scope = scope;
 
         claims
             .custom_validate_public()
@@ -194,13 +254,24 @@ mod tests {
     use crate::config::AuthzConfig;
     use tracing_test::traced_test;
 
+    fn bound_pem_secret(path: &str) -> secrets_rs::Secret<String> {
+        let mut s = secrets_rs::Secret::new(&format!("urn:secrets-rs:file:{path}"))
+            .expect("valid file URN");
+        let mut reg = secrets_rs::SourceRegistry::new();
+        reg.register("file", secrets_rs::sources::file::FileSource::new())
+            .unwrap();
+        s.bind(&reg).unwrap();
+        s
+    }
+
     fn test_interceptor() -> AuthzInterceptor {
         AuthzInterceptor::new(AuthzConfig {
             jwks_url: None,
-            jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
+            jwt_public_key: Some(bound_pem_secret("tests/jwt/signing_public_key.pem")),
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         })
         .expect("Failed to create test AuthzInterceptor")
     }
@@ -209,10 +280,11 @@ mod tests {
     fn test_new_rejects_both_key_sources() {
         let Err(err) = AuthzInterceptor::new(AuthzConfig {
             jwks_url: Some("http://localhost:4444/.well-known/jwks.json".to_string()),
-            jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
+            jwt_public_key: Some(bound_pem_secret("tests/jwt/signing_public_key.pem")),
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         }) else {
             panic!("expected ConfigValidation error for both key sources");
         };
@@ -226,10 +298,11 @@ mod tests {
     fn test_new_rejects_no_key_source() {
         let Err(err) = AuthzInterceptor::new(AuthzConfig {
             jwks_url: None,
-            jwt_public_key_path: None,
+            jwt_public_key: None,
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         }) else {
             panic!("expected ConfigValidation error for no key source");
         };

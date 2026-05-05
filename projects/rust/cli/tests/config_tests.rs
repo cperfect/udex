@@ -12,6 +12,55 @@ fn udex() -> Command {
     Command::cargo_bin("udex").expect("udex binary not found")
 }
 
+/// Returns an absolute `urn:secrets-rs:file:` URI for a path relative to the
+/// server crate's test fixtures directory.
+fn server_fixture_urn(relative: &str) -> String {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR"); // .../cli
+    let path = std::path::Path::new(manifest_dir)
+        .parent()
+        .unwrap() // .../rust
+        .join("server")
+        .join(relative);
+    format!("urn:secrets-rs:file:{}", path.display())
+}
+
+/// Write a minimal valid TOML config that can be fully loaded (all secrets resolve).
+///
+/// Uses absolute file URNs for TLS and JWT secrets (so `load()` can bind them),
+/// and a dummy DATABASE_URL URN. Call `Command::env("DATABASE_URL", ...)` before
+/// asserting so the env source can resolve the datastore secret.
+fn write_valid_config(path: &std::path::Path) {
+    let cert = server_fixture_urn("tests/certs/server.crt");
+    let key = server_fixture_urn("tests/certs/server.key");
+    let jwt_key = server_fixture_urn("tests/jwt/signing_public_key.pem");
+
+    let content = format!(
+        r#"[server]
+bind_address = "127.0.0.1:50051"
+request_timeout_secs = 30
+max_connections = 1000
+max_message_size_bytes = 4194304
+
+[server.tls]
+cert = "{cert}"
+key = "{key}"
+
+[server.authz]
+jwt_public_key = "{jwt_key}"
+jwt_issuer = "https://auth.example.com"
+jwt_audience = "udex"
+
+[datastore]
+connection_url = "urn:secrets-rs:env:DATABASE_URL"
+max_connections = 10
+min_connections = 1
+connection_timeout_secs = 10
+query_timeout_secs = 30
+"#
+    );
+    std::fs::write(path, content).unwrap();
+}
+
 // --- config init ---
 
 #[test]
@@ -36,7 +85,7 @@ fn test_config_init_creates_file() {
         "config should contain datastore fields"
     );
     assert!(
-        content.contains("jwt_public_key_path"),
+        content.contains("jwt_public_key"),
         "config should contain authz fields"
     );
 }
@@ -70,14 +119,10 @@ fn test_config_init_default_path_is_udex_toml() {
 fn test_config_validate_accepts_valid_config() {
     let dir = TempDir::new().unwrap();
     let config_path = dir.path().join("udex.toml");
-
-    // Generate a valid config first
-    udex()
-        .args(["config", "init", "--path", config_path.to_str().unwrap()])
-        .assert()
-        .success();
+    write_valid_config(&config_path);
 
     udex()
+        .env("DATABASE_URL", "postgres://localhost/test")
         .args([
             "config",
             "validate",
@@ -121,32 +166,38 @@ fn test_config_validate_fails_when_no_key_source_set() {
     let dir = TempDir::new().unwrap();
     let config_path = dir.path().join("udex.toml");
 
-    // Neither jwt_public_key_path nor jwks_url is set — exactly one is required.
-    let content = r#"
-[server]
+    // Neither jwt_public_key nor jwks_url is set — exactly one is required.
+    // Use absolute cert URNs so load() can bind TLS secrets.
+    let cert = server_fixture_urn("tests/certs/server.crt");
+    let key = server_fixture_urn("tests/certs/server.key");
+
+    let content = format!(
+        r#"[server]
 bind_address = "127.0.0.1:50051"
 request_timeout_secs = 30
 max_connections = 1000
 max_message_size_bytes = 4194304
 
 [server.tls]
-cert_path = "certs/server.crt"
-key_path = "certs/server.key"
+cert = "{cert}"
+key = "{key}"
 
 [server.authz]
 jwt_issuer = "https://auth.example.com"
 jwt_audience = "udex"
 
 [datastore]
-connection_url = "postgres://localhost/udex"
+connection_url = "urn:secrets-rs:env:DATABASE_URL"
 max_connections = 10
 min_connections = 1
 connection_timeout_secs = 10
 query_timeout_secs = 30
-"#;
+"#
+    );
     std::fs::write(&config_path, content).unwrap();
 
     udex()
+        .env("DATABASE_URL", "postgres://localhost/test")
         .args([
             "config",
             "validate",
@@ -156,6 +207,6 @@ query_timeout_secs = 30
         .assert()
         .failure()
         .stderr(predicate::str::contains(
-            "one of jwks_url or jwt_public_key_path must be set",
+            "one of jwks_url or jwt_public_key must be set",
         ));
 }

@@ -38,6 +38,65 @@ Response times are best efforts only.
 
 Once a fix is available and released, the vulnerability will be disclosed via a GitHub Security Advisory. Credit will be given to the reporter unless they prefer to remain anonymous.
 
+## Secrets Management
+
+### Injection model
+
+Secret values are never stored in committed files. Instead, config files reference secrets
+by URN and the server resolves them at startup via the
+[`secrets-rs`](https://crates.io/crates/secrets-rs) crate.
+
+**Environment variable source** — used for string secrets such as database URLs:
+
+```toml
+[datastore]
+connection_url = "urn:secrets-rs:env:DATABASE_URL"
+```
+
+`UdexConfig::load()` calls `bind_all()` after deserialisation; startup fails with a clear
+error if the named environment variable is absent.
+
+**File source** — used for multi-line PEM material (TLS certificate, TLS private key, JWT
+public key). Paths are resolved relative to the config file's directory:
+
+```toml
+[server.tls]
+cert = "urn:secrets-rs:file:certs/server.crt"
+key  = "urn:secrets-rs:file:certs/server.key"
+
+[server.authz]
+jwt_public_key = "urn:secrets-rs:file:certs/jwt_public_key.pem"
+```
+
+Both URN types produce a `Secret<String>` whose value is masked in all `Debug`/`Display`
+output, preventing accidental logging of key material.
+
+For development, run `scripts/gen-env.sh` to generate `.env` with all required values.
+The devcontainer runs this automatically on first start.
+
+### File-injection guard
+
+`Secret<T>` from `secrets-rs` enforces the URN contract at the serde layer:
+`Secret<T>::Deserialize` only accepts a valid URN string. A config file containing a
+raw secret value (e.g. `connection_url = "postgres://user:pass@host/db"`) is rejected
+at TOML parse time with a clear error — it never reaches application code.
+
+### CLI argument restriction
+
+Bearer tokens and OAuth2 client secrets are accepted from environment variables only.
+The corresponding CLI flags (`--token`, `--client-secret`) do not exist, so secret
+values cannot appear in process listings or shell history.
+
+| Secret | Environment variable |
+|--------|----------------------|
+| Bearer token for gRPC calls | `UDEX_TOKEN` |
+| OAuth2 client secret (`token fetch`) | `UDEX_CLIENT_SECRET` |
+
+### Secret inventory
+
+See [`SECRETS.md`](./SECRETS.md) for the full inventory of credentials, keys,
+certificates, and their sources.
+
 ## Scope
 
 The following are **in scope**:

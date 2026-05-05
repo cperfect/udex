@@ -26,6 +26,9 @@ serde = { workspace = true }
 time = { workspace = true }
 serde_yaml = { workspace = true }
 
+secrets-rs = { workspace = true }
+secrets-rs-macros = { workspace = true }
+
 # Used for integration test fixtures (shared database setup)
 maybe-once = { workspace = true }
 ctor = "0.2"  # For reliable test database cleanup on exit

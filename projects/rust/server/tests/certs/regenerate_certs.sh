@@ -55,32 +55,10 @@ EOF
 chmod 600 *.key
 chmod 644 *.crt *.csr
 
-# Add CA to system trusted certificates (requires sudo)
-echo "6. Adding CA to system trusted certificates..."
-if [ -f "/etc/ca-certificates.conf" ] && [ -d "/usr/local/share/ca-certificates" ]; then
-    # Debian/Ubuntu system
-    CA_FILE="/usr/local/share/ca-certificates/udex-test-ca.crt"
-    if sudo cp ca.crt "$CA_FILE" 2>/dev/null; then
-        sudo update-ca-certificates
-        echo "   ✓ CA added to system trust store (Debian/Ubuntu)"
-    else
-        echo "   ⚠ Failed to add CA to system trust store (insufficient permissions or not Debian/Ubuntu)"
-        echo "   Manual command: sudo cp ca.crt /usr/local/share/ca-certificates/udex-test-ca.crt && sudo update-ca-certificates"
-    fi
-elif [ -f "/etc/pki/tls/certs/ca-bundle.crt" ]; then
-    # RHEL/CentOS system
-    CA_FILE="/etc/pki/ca-trust/source/anchors/udex-test-ca.crt"
-    if sudo cp ca.crt "$CA_FILE" 2>/dev/null; then
-        sudo update-ca-trust
-        echo "   ✓ CA added to system trust store (RHEL/CentOS)"
-    else
-        echo "   ⚠ Failed to add CA to system trust store (insufficient permissions or not RHEL/CentOS)"
-        echo "   Manual command: sudo cp ca.crt /etc/pki/ca-trust/source/anchors/udex-test-ca.crt && sudo update-ca-trust"
-    fi
-else
-    echo "   ⚠ Unknown Linux distribution - could not automatically add CA to system trust store"
-    echo "   You may need to manually add ca.crt to your system's trusted certificates"
-fi
+# Note: we do NOT install ca.crt into the system trust store. The Rust test suite
+# loads it explicitly via tonic's ClientTlsConfig::ca_certificate, so system-level
+# trust is never needed and running sudo on every CI job / devcontainer rebuild is
+# unnecessary noise.
 
 echo ""
 echo "Certificate generation complete!"
@@ -93,10 +71,5 @@ echo "  server.crt  - Server certificate (signed by CA)"
 echo ""
 echo "Testing commands:"
 echo "  curl --cacert ca.crt https://localhost:port/    # Using explicit CA cert"
-echo "  curl https://localhost:port/                     # Using system trust store (if CA was installed)"
-echo ""
-echo "To remove the CA from system trust store:"
-echo "  sudo rm /usr/local/share/ca-certificates/udex-test-ca.crt && sudo update-ca-certificates  # Debian/Ubuntu"
-echo "  sudo rm /etc/pki/ca-trust/source/anchors/udex-test-ca.crt && sudo update-ca-trust         # RHEL/CentOS"
 echo ""
 echo "Note: These certificates are for testing only and should not be used in production!"

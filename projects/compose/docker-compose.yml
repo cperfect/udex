@@ -4,7 +4,8 @@ services:
   postgres:
     image: "postgres:16"
     environment:
-      - POSTGRES_PASSWORD=admin
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD_SECRET}
+      - HYDRA_DB_PASSWORD_SECRET=${HYDRA_DB_PASSWORD_SECRET}
     ports:
       - "5432:5432"
     deploy:
@@ -26,7 +27,7 @@ services:
   hydra-migrate:
     image: oryd/hydra:v26.2.0
     environment:
-      - DSN=postgres://hydra:secret@postgres:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+      - DSN=postgres://hydra:${HYDRA_DB_PASSWORD_SECRET}@postgres:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
     command: migrate sql up -e --yes
     pull_policy: missing
     restart: on-failure
@@ -44,8 +45,8 @@ services:
     command: serve all --dev --sqa-opt-out
     pull_policy: missing
     environment:
-      - DSN=postgres://hydra:secret@postgres:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
-      - SECRETS_SYSTEM=8e44de99ad1e3c6bdad9aa238b6e2d502b21df35becdd3e9cbd74fd8969c8e07
+      - DSN=postgres://hydra:${HYDRA_DB_PASSWORD_SECRET}@postgres:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+      - SECRETS_SYSTEM=${HYDRA_SECRETS_SYSTEM_SECRET}
       - URLS_SELF_ISSUER=http://localhost:4444/
       # OIDC is ignored if these aren't requested by clients
       - URLS_LOGIN=http://localhost:3000/login

@@ -44,6 +44,11 @@ cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 ```
 
+> **Hydra integration tests** — Tests prefixed with `test_hydra_` require a live
+> Hydra instance. In the devcontainer `HYDRA_PUBLIC_URL` and `HYDRA_ADMIN_URL`
+> are set automatically (the devcontainer compose file points them at the `hydra`
+> service). Just run `cargo test` — no prefix needed.
+
 ### Pre-commit Checklist
 
 Run these before every commit and fix any issues found:

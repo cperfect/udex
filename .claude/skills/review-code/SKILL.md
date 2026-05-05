@@ -16,3 +16,11 @@ Resolve the scope as follows:
 - A branch name → diff of that branch vs `main`
 - A commit SHA or ref → that specific commit
 - A file path or glob → restrict the default scope to matching files only
+
+Summarize the findings and then offer to work through them one by one.
+
+When working through a finding recommend a fix and give me three options a) Apply the fix, b) Think again (I will provide more input) or c) leave but add appropriate comments (e.g. TODO) and move on.  
+
+Fixes should include appropriate comments.
+
+After each finding has been worked through offer to create a commit.

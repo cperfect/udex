@@ -44,27 +44,36 @@ jobs:
       run:
         working-directory: projects/rust
 
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      # Postgres — password comes from a CI secret; URL uses localhost because
+      # docker compose publishes ports to the runner host.
+      DATABASE_URL: postgres://postgres:${{ secrets.VALIDATE_POSTGRES_PASSWORD_SECRET }}@localhost:5432/postgres
+      # Hydra — HYDRA_DB_PASSWORD_SECRET and HYDRA_SECRETS_SYSTEM_SECRET are
+      # dev-only fixed values (CI test infra, not production secrets). They only
+      # need to match between the compose services; they are never exposed to the
+      # public internet and carry no real secret material.
+      HYDRA_PUBLIC_URL: http://localhost:4444
+      HYDRA_ADMIN_URL: http://localhost:4445
+      HYDRA_ISSUER: http://localhost:4444/
       RUST_LOG: info
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Start services (postgres + hydra)
+        working-directory: projects/compose
+        env:
+          POSTGRES_PASSWORD_SECRET: ${{ secrets.VALIDATE_POSTGRES_PASSWORD_SECRET }}
+          HYDRA_DB_PASSWORD_SECRET: ${{ secrets.VALIDATE_HYDRA_DB_PASSWORD_SECRET }}
+          HYDRA_SECRETS_SYSTEM_SECRET: ${{ secrets.VALIDATE_HYDRA_SECRETS_SYSTEM_SECRET }}
+        run: |
+          docker compose up -d
+          echo "Waiting for Hydra admin API..."
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4445/health/ready && { echo "Hydra ready."; break; }
+            echo "  attempt $i/30…"; sleep 3
+          done
+          curl -sf http://localhost:4445/health/ready || { echo "Hydra did not become ready."; exit 1; }
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -75,6 +84,10 @@ jobs:
       - uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate key material
+        working-directory: .
+        run: bash scripts/gen-keys-and-certs.sh
 
       - name: Build
         run: cargo build --all-targets

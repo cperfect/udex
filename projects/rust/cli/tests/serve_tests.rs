@@ -14,6 +14,50 @@ fn udex() -> Command {
     Command::cargo_bin("udex").expect("udex binary not found")
 }
 
+/// Absolute `urn:secrets-rs:file:` URI for a path relative to the server test fixtures.
+fn server_fixture_urn(relative: &str) -> String {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    let path = std::path::Path::new(manifest_dir)
+        .parent()
+        .unwrap()
+        .join("server")
+        .join(relative);
+    format!("urn:secrets-rs:file:{}", path.display())
+}
+
+/// Write a valid config with the given bind_address (using absolute cert URNs).
+fn write_config_with_bind_address(path: &std::path::Path, bind_address: &str) {
+    let cert = server_fixture_urn("tests/certs/server.crt");
+    let key = server_fixture_urn("tests/certs/server.key");
+    let jwt_key = server_fixture_urn("tests/jwt/signing_public_key.pem");
+
+    let content = format!(
+        r#"[server]
+bind_address = "{bind_address}"
+request_timeout_secs = 30
+max_connections = 1000
+max_message_size_bytes = 4194304
+
+[server.tls]
+cert = "{cert}"
+key = "{key}"
+
+[server.authz]
+jwt_public_key = "{jwt_key}"
+jwt_issuer = "https://auth.example.com"
+jwt_audience = "udex"
+
+[datastore]
+connection_url = "urn:secrets-rs:env:DATABASE_URL"
+max_connections = 10
+min_connections = 1
+connection_timeout_secs = 10
+query_timeout_secs = 30
+"#
+    );
+    std::fs::write(path, content).unwrap();
+}
+
 #[test]
 fn test_serve_fails_with_missing_config() {
     udex()
@@ -40,22 +84,10 @@ fn test_serve_fails_with_invalid_config() {
 fn test_serve_fails_with_invalid_bind_address() {
     let dir = TempDir::new().unwrap();
     let config_path = dir.path().join("udex.toml");
-
-    // Generate a valid config then patch the bind address
-    Command::cargo_bin("udex")
-        .unwrap()
-        .args(["config", "init", "--path", config_path.to_str().unwrap()])
-        .assert()
-        .success();
-
-    let content = std::fs::read_to_string(&config_path).unwrap();
-    let patched = content.replace(
-        r#"bind_address = "127.0.0.1:50051""#,
-        r#"bind_address = "not-an-address""#,
-    );
-    std::fs::write(&config_path, patched).unwrap();
+    write_config_with_bind_address(&config_path, "not-an-address");
 
     udex()
+        .env("DATABASE_URL", "postgres://localhost/test")
         .args(["serve", "--config", config_path.to_str().unwrap()])
         .assert()
         .failure()

@@ -2,7 +2,9 @@
 // Provides Hydra client registration and client_credentials token exchange.
 // Not compiled into the server binary.
 
-use oauth2::{basic::BasicClient, AuthUrl, ClientId, ClientSecret, Scope, TokenResponse, TokenUrl};
+use oauth2::{
+    basic::BasicClient, AuthType, AuthUrl, ClientId, ClientSecret, Scope, TokenResponse, TokenUrl,
+};
 use ory_hydra_client::apis::{configuration::Configuration, o_auth2_api};
 use ory_hydra_client::models::o_auth2_client::OAuth2Client as HydraClient;
 
@@ -24,7 +26,11 @@ fn hydra_admin_config(admin_url: &str) -> Configuration {
     }
 }
 
-/// Register an OAuth2 client in Hydra via the admin API.
+/// Register (or update) an OAuth2 client in Hydra via the admin API.
+///
+/// Tries POST (create) first. On 409 Conflict (client already exists from a
+/// previous run), falls back to PUT (replace). This makes the call idempotent
+/// across both fresh Hydra instances (CI) and persistent ones (devcontainer).
 ///
 /// `admin_url` — base URL of the Hydra admin endpoint (e.g. `http://hydra:4445`).
 pub async fn create_oauth2_client(
@@ -32,6 +38,7 @@ pub async fn create_oauth2_client(
     client: OAuthClientConfig,
 ) -> anyhow::Result<()> {
     let config = hydra_admin_config(admin_url);
+    let client_id = client.id.clone();
 
     let mut body = HydraClient::new();
     body.access_token_strategy = Some("jwt".to_string());
@@ -43,19 +50,32 @@ pub async fn create_oauth2_client(
     body.scope = Some(client.scopes.join(" "));
     body.token_endpoint_auth_method = Some("client_secret_post".to_string());
 
-    // 409 Conflict means the client already exists from a previous run — treat as success
-    // so test setup is idempotent. All other errors are propagated.
-    match o_auth2_api::create_o_auth2_client(&config, body).await {
-        Ok(_) => {}
-        Err(ory_hydra_client::apis::Error::ResponseError(ref rc))
-            if rc.status == reqwest::StatusCode::CONFLICT => {}
+    match o_auth2_api::create_o_auth2_client(&config, body.clone()).await {
+        Ok(_) => return Ok(()),
+        Err(e) if is_conflict(&e) => {}
         Err(e) => return Err(anyhow::anyhow!("Hydra create_client failed: {e}")),
     }
 
-    Ok(())
+    o_auth2_api::set_o_auth2_client(&config, &client_id, body)
+        .await
+        .map(|_| ())
+        .map_err(|e| anyhow::anyhow!("Hydra set_client failed: {e}"))
+}
+
+fn is_conflict<E>(e: &ory_hydra_client::apis::Error<E>) -> bool {
+    matches!(
+        e,
+        ory_hydra_client::apis::Error::ResponseError(r) if r.status.as_u16() == 409
+    )
 }
 
 /// Exchange client credentials for a JWT access token.
+///
+/// Uses `client_secret_post` (credentials in request body) to match the
+/// `token_endpoint_auth_method` set during client registration.
+///
+/// Passes `audience` explicitly so Hydra includes it in the `aud` claim of the
+/// issued JWT; Hydra does not populate `aud` automatically for client_credentials.
 ///
 /// `public_url` — base URL of the Hydra public endpoint (e.g. `http://hydra:4444`).
 /// `scopes`     — subset of the client's registered scopes to request.
@@ -72,13 +92,16 @@ pub async fn authenticate(
     let auth_client = BasicClient::new(ClientId::new(client.id))
         .set_client_secret(ClientSecret::new(client.secret))
         .set_auth_uri(AuthUrl::new(auth_url)?)
-        .set_token_uri(TokenUrl::new(token_url)?);
+        .set_token_uri(TokenUrl::new(token_url)?)
+        .set_auth_type(AuthType::RequestBody);
 
     let http_client = oauth2::reqwest::ClientBuilder::new()
         .redirect(oauth2::reqwest::redirect::Policy::none())
         .build()?;
 
-    let mut token_request = auth_client.exchange_client_credentials();
+    let mut token_request = auth_client
+        .exchange_client_credentials()
+        .add_extra_param("audience", client.audience);
     for scope in scopes {
         token_request = token_request.add_scope(Scope::new(scope));
     }

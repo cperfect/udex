@@ -4,6 +4,7 @@ mod auth_server;
 use jsonwebtoken::{encode, EncodingKey, Header};
 // we don't test all the services exhaustively here as they will be tested via the client & end-to-end tests
 use maybe_once::tokio::{Data, MaybeOnceAsync};
+use secrets_rs::{sources::file::FileSource, Secret, SourceRegistry};
 use std::net::SocketAddr;
 use std::sync::OnceLock;
 use time::OffsetDateTime;
@@ -12,24 +13,35 @@ use tonic::transport::{Channel, ClientTlsConfig};
 use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzRequest};
 use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
-use udex_server::config::AuthzConfig;
 use udex_server::{config::ServerConfig, logging, server};
 
 const SERVER_BIND_ADDR: &str = "127.0.0.1:50052"; // different from default to avoid conflicts
 const ID_PREFIX: &str = "server-integration-test";
 
-const SERVER_USING_HYDRA_BIND_ADDR: &str = "127.0.0.1:50053";
+const SERVER_USING_HYDRA_BIND_ADDR: &str = "127.0.0.1:15053";
 const ID_USING_HYDRA_PREFIX: &str = "hydra-integration-test";
 
 // See https://github.com/ufoscout/maybe-once for the MaybeOnceAsync pattern used here.
 type MaybeOnceType = (
-    String,                      // index name
-    ServerConfig,                // so we can find out the server bind address etc.
-    EncodingKey,                 // jwt signing key for generating valid tokens
-    EncodingKey,                 // bad signing key for testing invalid signatures
-    tokio::task::JoinHandle<()>, // server task handle so the server doesn't get dropped
-    String, // database name for cleanup (kept in scope for automatic cleanup via ctor)
+    String,                      // 0: index name
+    SocketAddr,                  // 1: bind address
+    EncodingKey,                 // 2: jwt signing key for generating valid tokens
+    EncodingKey,                 // 3: bad signing key for testing invalid signatures
+    tokio::task::JoinHandle<()>, // 4: server task handle so the server doesn't get dropped
+    String,                      // 5: database name for cleanup
+    String,                      // 6: jwt_issuer
+    String,                      // 7: jwt_audience
 );
+
+/// Binds a file-sourced `Secret<String>` using a CWD-relative path.
+fn bind_file_secret(path: &str) -> Secret<String> {
+    let mut s = Secret::new(&format!("urn:secrets-rs:file:{path}")).expect("valid file URN");
+    let mut reg = SourceRegistry::new();
+    reg.register("file", FileSource::new())
+        .expect("register file source");
+    s.bind(&reg).expect("bind file secret");
+    s
+}
 
 /// Initializer function.
 /// Starts a Postgres container shared between all tests.
@@ -47,40 +59,42 @@ async fn init_server() -> MaybeOnceType {
     let db_name = datastore_fixtures.2;
 
     let index_name = format!("{}-index", ID_PREFIX);
-
     let bind_address: SocketAddr = SERVER_BIND_ADDR.parse().expect("Invalid bind address");
+    let jwt_issuer = format!("{ID_PREFIX}-issuer");
+    let jwt_audience = format!("{ID_PREFIX}-audience");
 
     let server_config = ServerConfig {
         bind_address,
+        request_timeout: std::time::Duration::from_secs(30),
+        max_connections: 1000,
+        max_message_size: 4 * 1024 * 1024,
         tls: udex_server::config::TlsConfig {
-            cert_path: "tests/certs/server.crt".to_string(),
-            key_path: "tests/certs/server.key".to_string(),
+            cert: bind_file_secret("tests/certs/server.crt"),
+            key: bind_file_secret("tests/certs/server.key"),
         },
         init_indexes: vec![UpdateIndexRequest {
-            name: index_name.clone(), // Use consistent name for test_init_indexes
+            name: index_name.clone(),
             update: Some(IndexUpdate {
                 description: Some(index_name.clone()),
                 max_bulk_operations: Some(100),
                 max_key_length: Some(256),
                 max_value_length: Some(1024),
                 max_kv_pairs_per_context: Some(50),
-                hash_algorithm: Some(HashAlgorithm::Xxh3 as i32), // Use Xxh3 for test consistency
+                hash_algorithm: Some(HashAlgorithm::Xxh3 as i32),
             }),
         }],
         authz: udex_server::config::AuthzConfig {
             jwks_url: None,
-            jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
-            jwt_issuer: Some(format!("{}-issuer", ID_PREFIX)),
-            jwt_audience: Some(format!("{}-audience", ID_PREFIX)),
+            jwt_public_key: Some(bind_file_secret("tests/jwt/signing_public_key.pem")),
+            jwt_issuer: Some(jwt_issuer.clone()),
+            jwt_audience: Some(jwt_audience.clone()),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         },
-        ..ServerConfig::default()
     };
 
-    // Start server in background task using the convenience method
-    let server_config_clone = server_config.clone();
     let server_handle = tokio::spawn(async move {
-        server::serve(server_config_clone, datastore)
+        server::serve(server_config, datastore)
             .await
             .expect("Server failed to start");
     });
@@ -88,14 +102,12 @@ async fn init_server() -> MaybeOnceType {
     // Give server time to start
     sleep(Duration::from_millis(200)).await;
 
-    //load the jwt private signing key for generating valid test tokens
     let jwt_private_key = tokio::fs::read_to_string("tests/jwt/signing_private_key.pem")
         .await
         .expect("Failed to read JWT private signing key");
     let jwt_signing_key = EncodingKey::from_ec_pem(jwt_private_key.as_bytes())
         .expect("Failed to create EncodingKey from private key");
 
-    //load the bad private key for testing invalid signatures
     let bad_private_key = tokio::fs::read_to_string("tests/jwt/bad_signing_private_key.pem")
         .await
         .expect("Failed to read bad private key");
@@ -104,11 +116,13 @@ async fn init_server() -> MaybeOnceType {
 
     (
         index_name,
-        server_config,
+        bind_address,
         jwt_signing_key,
         bad_signing_key,
         server_handle,
         db_name,
+        jwt_issuer,
+        jwt_audience,
     )
 }
 
@@ -128,12 +142,12 @@ pub async fn data(serial: bool) -> Data<'static, MaybeOnceType> {
 // are absent.
 
 type HydraFixtureType = (
-    String,                         // index name
-    ServerConfig,                   // server config (bind address etc.)
-    auth_server::OAuthClientConfig, // Hydra client credentials for test token requests
-    String,                         // Hydra public base URL
-    tokio::task::JoinHandle<()>,    // server task handle (keeps server alive)
-    String,                         // database name (kept for automatic cleanup)
+    String,                         // 0: index name
+    SocketAddr,                     // 1: bind address
+    auth_server::OAuthClientConfig, // 2: Hydra client credentials for test token requests
+    String,                         // 3: Hydra public base URL
+    tokio::task::JoinHandle<()>,    // 4: server task handle (keeps server alive)
+    String,                         // 5: database name (kept for automatic cleanup)
 );
 
 async fn init_server_hydra() -> HydraFixtureType {
@@ -161,9 +175,12 @@ async fn init_server_hydra() -> HydraFixtureType {
 
     let server_config = ServerConfig {
         bind_address,
+        request_timeout: std::time::Duration::from_secs(30),
+        max_connections: 1000,
+        max_message_size: 4 * 1024 * 1024,
         tls: udex_server::config::TlsConfig {
-            cert_path: "tests/certs/server.crt".to_string(),
-            key_path: "tests/certs/server.key".to_string(),
+            cert: bind_file_secret("tests/certs/server.crt"),
+            key: bind_file_secret("tests/certs/server.key"),
         },
         init_indexes: vec![UpdateIndexRequest {
             name: index_name.clone(),
@@ -176,24 +193,25 @@ async fn init_server_hydra() -> HydraFixtureType {
                 hash_algorithm: Some(HashAlgorithm::Xxh3 as i32),
             }),
         }],
-        authz: AuthzConfig {
+        authz: udex_server::config::AuthzConfig {
             jwks_url: Some(jwks_url),
-            jwt_public_key_path: None,
+            jwt_public_key: None,
             jwt_issuer: Some(issuer),
             jwt_audience: Some(audience.clone()),
-            danger_allow_non_tls: false,
+            // Local Hydra runs over plain HTTP; allow it in test-only config.
+            danger_allow_non_tls: true,
+            // Hydra uses "scp" (array) instead of the RFC 8693 default "scope".
+            scope_claim_name: Some("scp".to_string()),
         },
-        ..ServerConfig::default()
     };
 
-    let server_config_clone = server_config.clone();
     let server_handle = tokio::spawn(async move {
-        server::serve(server_config_clone, datastore)
+        server::serve(server_config, datastore)
             .await
             .expect("Hydra-backed server failed to start");
     });
 
-    // Extra startup time: AuthnInterceptor fetches the JWKS on startup.
+    // Extra startup time: AuthzInterceptor fetches the JWKS on startup.
     sleep(Duration::from_millis(500)).await;
 
     // One shared Hydra client for all Hydra integration tests.
@@ -215,7 +233,7 @@ async fn init_server_hydra() -> HydraFixtureType {
 
     (
         index_name,
-        server_config,
+        bind_address,
         client_config,
         public_url,
         server_handle,
@@ -240,10 +258,14 @@ struct OverrideClaims {
     scope: Option<String>,
 }
 
-/// Generates claims for testing JWT authentication
+/// Generates claims for testing JWT authentication.
+///
+/// `issuer` and `audience` are the expected values from the server config.
+/// `override_claims` allows individual fields to be overridden for error-path tests.
 fn generate_test_claims(
     sub: &str,
-    authz_config: &AuthzConfig,
+    issuer: &str,
+    audience: &str,
     override_claims: Option<OverrideClaims>,
 ) -> udex_api::authz::claims::Claims {
     let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
@@ -255,26 +277,16 @@ fn generate_test_claims(
         override_claims
             .as_ref()
             .and_then(|c| c.issuer.clone())
-            .unwrap_or_else(|| {
-                authz_config
-                    .jwt_issuer
-                    .clone()
-                    .unwrap_or_else(|| "udex-test".to_string())
-            }),
+            .unwrap_or_else(|| issuer.to_string()),
         override_claims
             .as_ref()
             .and_then(|c| c.audience.clone())
-            .unwrap_or_else(|| {
-                authz_config
-                    .jwt_audience
-                    .clone()
-                    .unwrap_or_else(|| "udex-api".to_string())
-            }),
+            .unwrap_or_else(|| audience.to_string()),
         override_claims
             .as_ref()
             .and_then(|c| c.exp)
-            .unwrap_or_else(|| now + 3600), // expires in 1 hour
-        override_claims.as_ref().and_then(|c| c.iat).unwrap_or(now), // issued now
+            .unwrap_or_else(|| now + 3600),
+        override_claims.as_ref().and_then(|c| c.iat).unwrap_or(now),
     );
     if let Some(override_claims) = override_claims {
         if let Some(scope) = override_claims.scope {
@@ -302,7 +314,7 @@ async fn test_healthz_service() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let data = data(false).await;
-    let bind_address = data.1.bind_address;
+    let bind_address = data.1;
 
     // Load CA certificate for TLS verification
     let ca_cert = tokio::fs::read_to_string("tests/certs/ca.crt")
@@ -386,9 +398,8 @@ async fn test_init_indexes() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let data = data(false).await;
-    let bind_address = data.1.bind_address;
+    let bind_address = data.1;
     let index_name = &data.0;
-    let server_config = &data.1;
     let jwt_signing_key = &data.2;
 
     // Load CA certificate for TLS verification
@@ -420,7 +431,8 @@ async fn test_init_indexes() {
     // Generate JWT token for authentication
     let claims = generate_test_claims(
         "test-user",
-        &server_config.authz,
+        &data.6,
+        &data.7,
         Some(OverrideClaims {
             scope: Some(format!("udex:index:v1:{}:read", index_name)),
             sub: None,
@@ -488,9 +500,8 @@ async fn test_authz() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let data = data(false).await;
-    let bind_address = data.1.bind_address;
+    let bind_address = data.1;
     let index_name = &data.0;
-    let server_config = &data.1;
     let jwt_signing_key = &data.2;
     let bad_signing_key = &data.3;
 
@@ -605,7 +616,8 @@ async fn test_authz() {
         // Generate JWT token for authentication with proper permissions
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 scope: Some(format!("udex:index:v1:{}:read", index_name)),
                 sub: None,
@@ -657,7 +669,8 @@ async fn test_authz() {
         // Generate JWT token for authentication with proper permissions
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 scope: Some(format!("udex:entry:v1:{}:create", index_name)),
                 sub: None,
@@ -694,7 +707,7 @@ async fn test_authz() {
         });
 
         // Generate invalid JWT token using bad signing key
-        let claims = generate_test_claims("test-user", &server_config.authz, None);
+        let claims = generate_test_claims("test-user", &data.6, &data.7, None);
         let invalid_jwt_token = generate_test_jwt(&claims, bad_signing_key);
         let bearer_token = format!("Bearer {}", invalid_jwt_token);
         describe_request.metadata_mut().insert(
@@ -742,7 +755,7 @@ async fn test_authz() {
         });
 
         // Add malformed authorization header (missing "Bearer" prefix)
-        let claims = generate_test_claims("test-user", &server_config.authz, None);
+        let claims = generate_test_claims("test-user", &data.6, &data.7, None);
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
         create_request.metadata_mut().insert(
             "authorization",
@@ -779,25 +792,14 @@ async fn test_authz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
-                sub: Some("".to_string()), // Invalid: empty subject
-                issuer: Some(
-                    server_config
-                        .authz
-                        .jwt_issuer
-                        .clone()
-                        .unwrap_or_else(|| "server_integration_test-issuer".to_string()),
-                ), // Valid
-                audience: Some(
-                    server_config
-                        .authz
-                        .jwt_audience
-                        .clone()
-                        .unwrap_or_else(|| "server_integration_test-audience".to_string()),
-                ), // Valid
-                exp: Some(now + 3600),     // Valid: expires in 1 hour
-                iat: Some(now),            // Valid: issued now
+                sub: Some("".to_string()),      // Invalid: empty subject
+                issuer: Some(data.6.clone()),   // Valid
+                audience: Some(data.7.clone()), // Valid
+                exp: Some(now + 3600),          // Valid: expires in 1 hour
+                iat: Some(now),                 // Valid: issued now
                 scope: Some(format!("udex:index:v1:{}:read", index_name)),
             }),
         );
@@ -851,17 +853,12 @@ async fn test_authz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 sub: Some("test-user".to_string()), // Valid
                 issuer: Some("".to_string()),       // Invalid: empty issuer
-                audience: Some(
-                    server_config
-                        .authz
-                        .jwt_audience
-                        .clone()
-                        .unwrap_or_else(|| "server_integration_test-audience".to_string()),
-                ), // Valid
+                audience: Some(data.7.clone()),     // Valid
                 exp: Some(now + 3600),              // Valid: expires in 1 hour
                 iat: Some(now),                     // Valid: issued now
                 scope: Some(format!("udex:entry:v1:{}:create", index_name)),
@@ -904,16 +901,11 @@ async fn test_authz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 sub: Some("test-user".to_string()), // Valid
-                issuer: Some(
-                    server_config
-                        .authz
-                        .jwt_issuer
-                        .clone()
-                        .unwrap_or_else(|| "server_integration_test-issuer".to_string()),
-                ), // Valid
+                issuer: Some(data.6.clone()),       // Valid
                 audience: Some("".to_string()),     // Invalid: empty audience
                 exp: Some(now + 3600),              // Valid: expires in 1 hour
                 iat: Some(now),                     // Valid: issued now
@@ -970,23 +962,12 @@ async fn test_authz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 sub: Some("test-user".to_string()), // Valid
-                issuer: Some(
-                    server_config
-                        .authz
-                        .jwt_issuer
-                        .clone()
-                        .unwrap_or_else(|| "server_integration_test-issuer".to_string()),
-                ), // Valid
-                audience: Some(
-                    server_config
-                        .authz
-                        .jwt_audience
-                        .clone()
-                        .unwrap_or_else(|| "server_integration_test-audience".to_string()),
-                ), // Valid
+                issuer: Some(data.6.clone()),       // Valid
+                audience: Some(data.7.clone()),     // Valid
                 exp: Some(0),                       // Invalid: zero expiration
                 iat: Some(now),                     // Valid: issued now
                 scope: Some(format!("udex:entry:v1:{}:create", index_name)),
@@ -1029,23 +1010,12 @@ async fn test_authz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 sub: Some("test-user".to_string()), // Valid
-                issuer: Some(
-                    server_config
-                        .authz
-                        .jwt_issuer
-                        .clone()
-                        .unwrap_or_else(|| "server_integration_test-issuer".to_string()),
-                ), // Valid
-                audience: Some(
-                    server_config
-                        .authz
-                        .jwt_audience
-                        .clone()
-                        .unwrap_or_else(|| "server_integration_test-audience".to_string()),
-                ), // Valid
+                issuer: Some(data.6.clone()),       // Valid
+                audience: Some(data.7.clone()),     // Valid
                 exp: Some(now + 3600),              // Valid: expires in 1 hour
                 iat: Some(0),                       // Invalid: zero issued at
                 scope: Some(format!("udex:index:v1:{}:read", index_name)),
@@ -1088,23 +1058,12 @@ async fn test_authz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 sub: Some("test-user".to_string()), // Valid
-                issuer: Some(
-                    server_config
-                        .authz
-                        .jwt_issuer
-                        .clone()
-                        .unwrap_or_else(|| "server_integration_test-issuer".to_string()),
-                ), // Valid
-                audience: Some(
-                    server_config
-                        .authz
-                        .jwt_audience
-                        .clone()
-                        .unwrap_or_else(|| "server_integration_test-audience".to_string()),
-                ), // Valid
+                issuer: Some(data.6.clone()),       // Valid
+                audience: Some(data.7.clone()),     // Valid
                 exp: Some(now - 3600),              // Invalid: expired 1 hour ago
                 iat: Some(now - 7200),              // Valid: issued 2 hours ago (before expiration)
                 scope: Some(format!("udex:index:v1:{}:read", index_name)),
@@ -1160,7 +1119,8 @@ async fn test_authz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 sub: None,
                 issuer: None,
@@ -1199,23 +1159,12 @@ async fn test_authz() {
         let now = OffsetDateTime::now_utc().unix_timestamp() as usize;
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 sub: Some("test-user".to_string()), // Valid
-                issuer: Some(
-                    server_config
-                        .authz
-                        .jwt_issuer
-                        .clone()
-                        .unwrap_or_else(|| "server_integration_test-issuer".to_string()),
-                ), // Valid
-                audience: Some(
-                    server_config
-                        .authz
-                        .jwt_audience
-                        .clone()
-                        .unwrap_or_else(|| "server_integration_test-audience".to_string()),
-                ), // Valid
+                issuer: Some(data.6.clone()),       // Valid
+                audience: Some(data.7.clone()),     // Valid
                 exp: Some(now - 1800),              // Invalid: expires 30 minutes ago (in past)
                 iat: Some(now - 900), // Invalid: issued 15 minutes ago (after expiration) - creates impossible timeline
                 scope: Some(format!("udex:index:v1:{}:read", index_name)),
@@ -1258,7 +1207,8 @@ async fn test_authz() {
         // Generate JWT token with wrong permission (entry permission for index service)
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 scope: Some("udex:entry:v1:read".to_string()),
                 sub: None,
@@ -1317,7 +1267,8 @@ async fn test_authz() {
         // Generate JWT token with wrong permission (index permission for entry service)
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 scope: Some("udex:index:v1:read".to_string()),
                 sub: None,
@@ -1361,7 +1312,7 @@ async fn test_authz() {
         });
 
         // Generate JWT token without permissions field
-        let claims = generate_test_claims("test-user", &server_config.authz, None);
+        let claims = generate_test_claims("test-user", &data.6, &data.7, None);
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
         let bearer_token = format!("Bearer {}", jwt_token);
         describe_request.metadata_mut().insert(
@@ -1411,7 +1362,8 @@ async fn test_authz() {
         // Non-udex: scope values are silently discarded → no permissions granted → denied
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 scope: Some("openid profile email".to_string()),
                 sub: None,
@@ -1470,7 +1422,8 @@ async fn test_authz() {
         // Mixed scope: non-udex values are silently discarded; the udex: value grants access
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 scope: Some(format!(
                     "openid profile email udex:entry:v1:{}:create",
@@ -1514,7 +1467,8 @@ async fn test_authz() {
         // Empty scope claim → no permissions granted → denied
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 scope: Some("".to_string()),
                 sub: None,
@@ -1571,7 +1525,7 @@ async fn test_authz() {
         });
 
         // No scope claim → no permissions → denied
-        let claims = generate_test_claims("test-user", &server_config.authz, None);
+        let claims = generate_test_claims("test-user", &data.6, &data.7, None);
         let jwt_token = generate_test_jwt(&claims, jwt_signing_key);
         let bearer_token = format!("Bearer {}", jwt_token);
         create_request.metadata_mut().insert(
@@ -1608,7 +1562,8 @@ async fn test_authz() {
         // Generate JWT token with multiple permissions including the required one for describe
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 scope: Some(format!(
                     "udex:index:v1:{0}:read udex:index:v1:{0}:write udex:entry:v1:{0}:create",
@@ -1652,7 +1607,8 @@ async fn test_authz() {
         // Generate JWT token with permissions but not the required one for describe
         let claims = generate_test_claims(
             "test-user",
-            &server_config.authz,
+            &data.6,
+            &data.7,
             Some(OverrideClaims {
                 // Missing the required udex:index:v1:{name}:read permission
                 scope: Some("udex:index:v1:write udex:entry:v1:read".to_string()),
@@ -1699,7 +1655,7 @@ async fn test_tls_wrong_ca_rejected() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let data = data(false).await;
-    let bind_address = data.1.bind_address;
+    let bind_address = data.1;
 
     // Deliberately supply the server's leaf cert as the trusted CA — this is wrong.
     let wrong_ca = tokio::fs::read_to_string("tests/certs/server.crt")
@@ -1733,9 +1689,8 @@ async fn test_token_reuse() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let data = data(false).await;
-    let bind_address = data.1.bind_address;
+    let bind_address = data.1;
     let index_name = &data.0;
-    let server_config = &data.1;
     let jwt_signing_key = &data.2;
 
     let ca_cert = tokio::fs::read_to_string("tests/certs/ca.crt")
@@ -1751,7 +1706,8 @@ async fn test_token_reuse() {
 
     let claims = generate_test_claims(
         "test-user",
-        &server_config.authz,
+        &data.6,
+        &data.7,
         Some(OverrideClaims {
             scope: Some(format!("udex:index:v1:{index_name}:read")),
             sub: None,
@@ -1797,18 +1753,12 @@ async fn test_token_reuse() {
 }
 
 /// Verifies that a Hydra-issued token is accepted twice in a row.
-/// Skipped when HYDRA_ADMIN_URL is not set.
 #[tokio_shared_rt::test]
 async fn test_hydra_token_reuse() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-    if std::env::var("HYDRA_ADMIN_URL").is_err() {
-        println!("Skipping test_hydra_token_reuse: HYDRA_ADMIN_URL not set");
-        return;
-    }
-
     let data = data_using_hydra(false).await;
-    let bind_address = data.1.bind_address;
+    let bind_address = data.1;
     let index_name = &data.0;
     let client_config = data.2.clone();
     let public_url = &data.3;
@@ -1873,18 +1823,12 @@ async fn test_hydra_token_reuse() {
 /// confirms the server grants index read but denies entry create — proving the
 /// token carries only the requested subset of scopes.
 ///
-/// Skipped when HYDRA_ADMIN_URL is not set.
 #[tokio_shared_rt::test]
 async fn test_hydra_scope_subset() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-    if std::env::var("HYDRA_ADMIN_URL").is_err() {
-        println!("Skipping test_hydra_scope_subset: HYDRA_ADMIN_URL not set");
-        return;
-    }
-
     let data = data_using_hydra(false).await;
-    let bind_address = data.1.bind_address;
+    let bind_address = data.1;
     let index_name = &data.0;
     let client_config = data.2.clone();
     let public_url = &data.3;
@@ -1979,21 +1923,15 @@ async fn test_hydra_scope_subset() {
 /// accepted as a valid JWT but denied by the permission layer because it
 /// contains no `udex:*` scope values.
 ///
-/// Skipped when HYDRA_ADMIN_URL is not set.
 #[tokio_shared_rt::test]
 async fn test_hydra_non_udex_scopes_denied() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-    if std::env::var("HYDRA_ADMIN_URL").is_err() {
-        println!("Skipping test_hydra_non_udex_scopes_denied: HYDRA_ADMIN_URL not set");
-        return;
-    }
 
     let admin_url =
         std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string());
 
     let data = data_using_hydra(false).await;
-    let bind_address = data.1.bind_address;
+    let bind_address = data.1;
     let public_url = &data.3;
 
     // A client registered with a non-udex scope only.
@@ -2062,22 +2000,15 @@ async fn test_hydra_non_udex_scopes_denied() {
 /// Note: the JWT issuer is controlled globally by Hydra's URLS_SELF_ISSUER
 /// and is the same for all clients on the same Hydra instance. Wrong-issuer
 /// behaviour is already covered by the static-PEM test suite.
-///
-/// Skipped when HYDRA_ADMIN_URL is not set.
 #[tokio_shared_rt::test]
 async fn test_hydra_wrong_audience_rejected() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-    if std::env::var("HYDRA_ADMIN_URL").is_err() {
-        println!("Skipping test_hydra_wrong_audience_rejected: HYDRA_ADMIN_URL not set");
-        return;
-    }
 
     let admin_url =
         std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string());
 
     let data = data_using_hydra(false).await;
-    let bind_address = data.1.bind_address;
+    let bind_address = data.1;
     let index_name = &data.0;
     let public_url = &data.3;
 
@@ -2151,7 +2082,7 @@ async fn test_tls_untrusted_ca_rejected() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let data = data(false).await;
-    let bind_address = data.1.bind_address;
+    let bind_address = data.1;
 
     // No explicit CA — falls back to the system trust store, which does not
     // contain the self-signed test CA.

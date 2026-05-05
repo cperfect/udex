@@ -8,17 +8,21 @@ rustup component add rustfmt
 rustup show
 
 # install claude code
-npm install -g @anthropic-ai/claude-code
+# npm install -g @anthropic-ai/claude-code
+# curl -fsSL https://claude.ai/install.sh | bash
+# verify claude
 claude --version
 
 # intent setup
 # Verify installation
 intent --version
 cd /workspace
-# Install Claude Code subagent 
-intent claude subagents install intent
-# Install CLaude Code skills
-intent claude skills install in-essentials
+
+# moved to last as it seems flakey?
+# # Install Claude Code subagent 
+# intent claude subagents install intent
+# # Install CLaude Code skills
+# intent claude skills install in-essentials
 
 # install hydra CLI (pinned release, checksum-verified)
 HYDRA_VERSION="v26.2.0"
@@ -37,3 +41,37 @@ curl -fsSL "${HYDRA_RELEASE_URL}/checksums.txt"    -o "${hydra_tmp}/checksums.tx
 tar -xzf "${hydra_tmp}/${HYDRA_TARBALL}" -C "${hydra_tmp}" hydra
 sudo mv "${hydra_tmp}/hydra" /usr/local/bin/
 hydra help
+
+# ── Developer secret & key setup ──────────────────────────────────────────────
+# gen-env.sh prompts when .env exists, so guard it externally and pass --force.
+# gen-keys-and-certs.sh skips silently when key material exists; --force rotates.
+
+cd /workspace
+
+# In the devcontainer, Hydra is reachable via the Docker service name rather
+# than localhost. Export these so gen-env.sh writes the correct URLs into .env.
+export HYDRA_PUBLIC_URL=http://hydra:4444
+export HYDRA_ADMIN_URL=http://hydra:4445
+
+if [[ ! -f .env ]]; then
+  echo "No .env found — generating dev secrets..."
+  bash scripts/gen-env.sh --force
+else
+  echo ".env already exists — skipping secret generation."
+fi
+
+# docker-compose.devcontainer.yml declares env_file: ../.env, which is the
+# workspace root. The compose file lives in .devcontainer/, so we symlink
+# .devcontainer/.env → ../.env to keep the relative path working without
+# duplicating the file. rm -f handles both the missing-link and dangling-link
+# cases (dangling link: .env was deleted after a previous post-create run).
+rm -f .devcontainer/.env
+ln -s ../.env .devcontainer/.env
+
+bash scripts/gen-keys-and-certs.sh
+
+# see comment above
+# Install Claude Code subagent 
+intent claude subagents install intent
+# Install CLaude Code skills
+intent claude skills install in-essentials

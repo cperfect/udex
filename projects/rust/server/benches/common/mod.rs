@@ -6,6 +6,7 @@
 //! and provides a connected, authenticated channel for use in benchmarks.
 
 use jsonwebtoken::{encode, EncodingKey, Header};
+use secrets_rs::{sources::file::FileSource, Secret, SourceRegistry};
 use std::net::SocketAddr;
 use std::sync::OnceLock;
 use time::OffsetDateTime;
@@ -185,12 +186,27 @@ async fn start_server_and_connect() -> (
     let index_name = format!("{}-index", ID_PREFIX);
     let bind_address: SocketAddr = BENCH_BIND_ADDR.parse().expect("valid bench bind address");
 
+    let mut file_registry = SourceRegistry::new();
+    file_registry
+        .register("file", FileSource::new())
+        .expect("register file source");
+
+    let mut cert =
+        Secret::new("urn:secrets-rs:file:tests/certs/server.crt").expect("valid file URN");
+    let mut key =
+        Secret::new("urn:secrets-rs:file:tests/certs/server.key").expect("valid file URN");
+    let mut jwt_public_key = Secret::new("urn:secrets-rs:file:tests/jwt/signing_public_key.pem")
+        .expect("valid file URN");
+    cert.bind(&file_registry).expect("bind cert");
+    key.bind(&file_registry).expect("bind key");
+    jwt_public_key.bind(&file_registry).expect("bind jwt key");
+
     let server_config = ServerConfig {
         bind_address,
-        tls: udex_server::config::TlsConfig {
-            cert_path: "tests/certs/server.crt".to_string(),
-            key_path: "tests/certs/server.key".to_string(),
-        },
+        request_timeout: std::time::Duration::from_secs(30),
+        max_connections: 1000,
+        max_message_size: 4 * 1024 * 1024,
+        tls: udex_server::config::TlsConfig { cert, key },
         init_indexes: vec![UpdateIndexRequest {
             name: index_name.clone(),
             update: Some(IndexUpdate {
@@ -205,17 +221,16 @@ async fn start_server_and_connect() -> (
         }],
         authz: udex_server::config::AuthzConfig {
             jwks_url: None,
-            jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
+            jwt_public_key: Some(jwt_public_key),
             jwt_issuer: Some(format!("{}-issuer", ID_PREFIX)),
             jwt_audience: Some(format!("{}-audience", ID_PREFIX)),
             danger_allow_non_tls: false,
+            scope_claim_name: None,
         },
-        ..ServerConfig::default()
     };
 
-    let server_config_clone = server_config.clone();
     let server_handle = tokio::spawn(async move {
-        server::serve(server_config_clone, datastore)
+        server::serve(server_config, datastore)
             .await
             .expect("bench server failed to start");
     });

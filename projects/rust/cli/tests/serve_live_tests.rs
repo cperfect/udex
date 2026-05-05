@@ -53,7 +53,10 @@ fn replace_db_name(url: &str, db_name: &str) -> String {
     }
 }
 
-fn make_config(db_url: &str) -> String {
+/// Environment variable used to pass the test database URL to the spawned server process.
+const TEST_DB_URL_VAR: &str = "SERVE_TEST_DATABASE_URL";
+
+fn make_config() -> String {
     format!(
         r#"[server]
 bind_address = "{BIND_ADDR}"
@@ -62,16 +65,16 @@ max_connections = 100
 max_message_size_bytes = 4194304
 
 [server.tls]
-cert_path = "{SERVER_CERT}"
-key_path = "{SERVER_KEY}"
+cert = "urn:secrets-rs:file:{SERVER_CERT}"
+key = "urn:secrets-rs:file:{SERVER_KEY}"
 
 [server.authz]
-jwt_public_key_path = "{JWT_PUBLIC_KEY}"
+jwt_public_key = "urn:secrets-rs:file:{JWT_PUBLIC_KEY}"
 jwt_issuer = "https://cli-serve-test-issuer.example.com"
 jwt_audience = "udex-cli-serve-test"
 
 [datastore]
-connection_url = "{db_url}"
+connection_url = "urn:secrets-rs:env:{TEST_DB_URL_VAR}"
 max_connections = 5
 min_connections = 1
 connection_timeout_secs = 10
@@ -124,11 +127,14 @@ async fn test_serve_healthz_over_tls() {
     // Write a udex.toml that exercises the full CLI config path.
     let dir = tempfile::tempdir().expect("tempdir");
     let config_path = dir.path().join("udex.toml");
-    std::fs::write(&config_path, make_config(&db_url)).expect("write config");
+    std::fs::write(&config_path, make_config()).expect("write config");
 
     // Spawn the real binary — this exercises config loading and the serve handler.
+    // The DB URL is passed via env var so the config can use a URN reference
+    // (Secret<T>::Deserialize rejects plain postgres:// URLs).
     let child = Command::new(UDEX_BIN)
         .args(["serve", "--config", config_path.to_str().unwrap()])
+        .env(TEST_DB_URL_VAR, &db_url)
         .spawn()
         .expect("failed to spawn udex serve");
     let _server = ServerProcess(child);

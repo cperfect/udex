@@ -26,10 +26,6 @@ pub struct Cli {
     )]
     pub server: String,
 
-    /// Bearer token for authentication [env: UDEX_TOKEN]
-    #[arg(long, env = "UDEX_TOKEN", global = true)]
-    pub token: Option<String>,
-
     /// Path to CA certificate for TLS verification [env: UDEX_CA_CERT]
     #[arg(long, env = "UDEX_CA_CERT", global = true)]
     pub ca_cert: Option<PathBuf>,
@@ -262,9 +258,6 @@ pub struct TokenFetchArgs {
     /// OAuth2 client ID [env: UDEX_CLIENT_ID]
     #[arg(long, env = "UDEX_CLIENT_ID")]
     pub client_id: String,
-    /// OAuth2 client secret [env: UDEX_CLIENT_SECRET]
-    #[arg(long, env = "UDEX_CLIENT_SECRET")]
-    pub client_secret: String,
     /// Full token endpoint URL (e.g. http://localhost:4444/oauth2/token) [env: UDEX_TOKEN_URL]
     #[arg(long, env = "UDEX_TOKEN_URL")]
     pub url: String,

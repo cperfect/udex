@@ -19,9 +19,6 @@ use tonic::{Request, Status};
 use crate::cli::Cli;
 
 /// Connection parameters extracted from the global CLI flags.
-// Fields and methods are read by WP-06/07 command implementations; suppress
-// dead_code until those work packages land.
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct ClientConfig {
     /// gRPC server URL (e.g. `https://localhost:50051`)
@@ -36,12 +33,11 @@ impl ClientConfig {
     pub fn from_cli(cli: &Cli) -> Self {
         ClientConfig {
             server: cli.server.clone(),
-            token: cli.token.clone(),
+            token: std::env::var("UDEX_TOKEN").ok(),
             ca_cert: cli.ca_cert.clone(),
         }
     }
 
-    #[allow(dead_code)]
     /// Build a `tonic::Channel` to `self.server`.
     ///
     /// If `ca_cert` is set, the given PEM is used as the trust anchor.
@@ -66,7 +62,6 @@ impl ClientConfig {
             .with_context(|| format!("failed to connect to {}", self.server))
     }
 
-    #[allow(dead_code)]
     #[allow(clippy::result_large_err)] // tonic::Status is large; interceptor signature is fixed by tonic
     /// Returns an interceptor that injects `Authorization: Bearer <token>` when a token is set.
     pub fn interceptor(

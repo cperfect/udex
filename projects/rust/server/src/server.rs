@@ -75,20 +75,21 @@ where
 
     tracing::info!(addr = %addr, "Starting Udex server with TLS");
 
-    // Load TLS certificates etc.
-    let cert = tokio::fs::read_to_string(config.tls.cert_path)
-        .await
-        .map_err(|e| Error::ServerError(format!("Failed to read server cert: {}", e)))?;
+    let cert_pem = config
+        .tls
+        .cert
+        .value()
+        .map_err(|_| Error::ConfigValidation("tls.cert is not bound".to_string()))?
+        .clone();
+    let key_pem = config
+        .tls
+        .key
+        .value()
+        .map_err(|_| Error::ConfigValidation("tls.key is not bound".to_string()))?
+        .clone();
+    let identity = Identity::from_pem(cert_pem, key_pem);
 
-    let key = tokio::fs::read_to_string(config.tls.key_path)
-        .await
-        .map_err(|e| Error::ServerError(format!("Failed to read private key: {}", e)))?;
-
-    // construct the tls identity
-    // using the cert and key read from the config paths
-    let identity = Identity::from_pem(cert, key);
-
-    let auth_interceptor = AuthzInterceptor::new(config.authz.clone())?;
+    let auth_interceptor = AuthzInterceptor::new(config.authz)?;
 
     let entry_server = EntryServiceServer::new(entry_service);
     let index_server = IndexServiceServer::new(index_service);
@@ -104,7 +105,7 @@ where
         .add_service(healthz_service)
         .serve(addr)
         .await
-        .map_err(|e| Error::ServerError(format!("Server error: {}", e)))?;
+        .map_err(|e| Error::ServerError(format!("Server error: {e:?}")))?;
 
     Ok(())
 }

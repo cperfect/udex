@@ -70,6 +70,9 @@ mockall = "0.13.1"
 rustls = { version = "0.23", features = ["aws_lc_rs"] }
 sqlx-cli = "0.8.6"
 
+secrets-rs = "1.0.0"
+secrets-rs-macros = "1.0.0"
+
 # Note: Profile-specific features are not supported in Cargo.toml
 # The integration_test feature is enabled in udex-datastore's dev-dependencies instead
 

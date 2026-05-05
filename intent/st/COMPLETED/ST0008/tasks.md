@@ -1,0 +1,112 @@
+---
+verblock: "28 Apr 2026:v0.2: vscode - Mark WP-01/02/03/07 done; add acceptance criteria; 28 Apr 2026:v0.3: vscode - Add WP-09: Fix CI key material generation; 30 Apr 2026:v0.4: vscode - Mark WP-04 done; 30 Apr 2026:v0.5: vscode - Mark WP-05 done (guard delivered by Secret<T> type system); 30 Apr 2026:v0.6: vscode - Mark WP-06 done; 30 Apr 2026:v0.7: vscode - Mark WP-09 done; 30 Apr 2026:v0.8: vscode - Mark WP-08 done"
+---
+
+# ST0008: Tasks — Inject keys and secrets
+
+## Work Packages
+
+- [x] WP-01: Gitignore & remove committed secrets
+- [x] WP-02: Developer setup scripts (`gen-env.sh`, `gen-keys-and-certs.sh`)
+- [x] WP-03: Devcontainer post-create integration
+- [x] WP-04: Config crate evaluation and `_secret` naming convention
+- [x] WP-05: File-injection guard in config loader
+- [x] WP-06: Remove secrets from CLI arguments
+- [x] WP-07: Inject secrets into Compose and CI via env vars *(completed within WP-01)*
+- [x] WP-08: Update CONTRIBUTING.md, SECRETS.md, SECURITY.md
+- [x] WP-09: Fix CI — generate key material before tests
+
+## Acceptance Criteria
+
+### WP-01 ✓
+- `git ls-files` shows no private keys or generated cert material
+- `.env` and all `tests/certs/*.{key,crt,csr,srl}` and `tests/jwt/*.pem` are gitignored
+- `docker-compose.yml` and CI workflow contain no hardcoded secret values
+- Postgres init script fails fast with a clear error if `HYDRA_DB_PASSWORD_SECRET` is unset
+
+### WP-02 ✓
+- `scripts/gen-env.sh --force` creates `.env` with `POSTGRES_PASSWORD_SECRET`,
+  `HYDRA_DB_PASSWORD_SECRET`, `HYDRA_SECRETS_SYSTEM_SECRET`, and derived `DATABASE_URL`
+- `scripts/gen-keys-and-certs.sh` produces all TLS and JWT key material in gitignored
+  paths with correct permissions (600 for private keys)
+- Both scripts are idempotent: re-running does not break a working setup
+- All generated files absent from `git status`
+
+### WP-03 ✓
+- Fresh devcontainer (no `.env`, no keys) auto-runs both scripts during post-create
+- Rebuild with existing workspace volume skips generation and logs "already exists"
+
+### WP-07 ✓
+- `docker-compose.yml`: `POSTGRES_PASSWORD`, Hydra DSN password, `SECRETS_SYSTEM`
+  all use `${..._SECRET}` env var references
+- `01-Validation.yml`: postgres service and `DATABASE_URL` reference
+  `secrets.POSTGRES_PASSWORD_SECRET`
+- No hardcoded secret values remain in any committed compose or CI file
+
+### WP-04 ✓
+- [x] Decision documented in `design.md`: keep current TOML/serde loader; add secrets-rs on top
+- [x] `_secret` naming convention rejected — `Secret<String>` type carries the intent instead
+- [x] `DatastoreConfig.connection_url` is `Secret<String>` in both the datastore and CLI crates
+- [x] Config files reference secrets by URN (`urn:secrets-rs:env:VAR_NAME`); real values never appear in TOML
+- [x] `UdexConfig::load()` calls `bind_all()` after deserialisation; startup fails with a clear error if any env var is absent
+- [x] `Secret<String>` masked in `Debug`, `Display`, and serde serialisation — `.value()` required for access
+- [x] `config init` writes a hand-authored template with correct URN format and a comment explaining the secrets-rs pattern
+- [x] `cargo fmt`, `cargo clippy`, and `cargo test --lib` all pass
+
+### WP-05 ✓
+- [x] `Secret<T>::Deserialize` only accepts a bare URN string — any non-URN value
+  (e.g. a raw `postgres://` connection string) is rejected at TOML parse time
+- [x] No additional file-injection guard code is needed; the type system provides
+  this guarantee for free as a consequence of WP-04
+- [x] Tests added to `cli/src/config.rs`:
+  - `test_plain_url_rejected_by_deserializer`: plain URL fails `toml::from_str`
+  - `test_valid_urn_accepted_by_deserializer`: valid URN parses successfully
+
+### WP-06 ✓
+- [x] `--token` removed from `Cli`; bearer token read from `UDEX_TOKEN` env var in
+  `ClientConfig::from_cli()` — passing `--token` gives clap "unexpected argument" error
+- [x] `--client-secret` removed from `TokenFetchArgs`; `UDEX_CLIENT_SECRET` read in
+  `commands::token::fetch()` with a clear error naming the env var and how to set it
+- [x] `cargo clippy -- -D warnings` and `cargo test -p udex-cli` pass
+- [x] Pre-existing `test_config_validate_fails_when_no_key_source_set` fixture updated
+  to use a URN (was using a plain URL — now correctly rejected at parse time by WP-05)
+
+### WP-08 ✓
+- [x] `CONTRIBUTING.md`: first-time setup section added (run `gen-env.sh` and
+  `gen-keys-and-certs.sh` before building outside the devcontainer)
+- [x] `SECRETS.md`: stale placeholder-based DB rows removed; all key/cert file sources
+  updated to `scripts/gen-keys-and-certs.sh` → gitignored paths; `UDEX_TOKEN` and
+  `UDEX_CLIENT_SECRET` sources updated to env-var-only; Hydra secrets and gen scripts added
+- [x] `SECURITY.md`: "Secrets Management" section added covering the injection model
+  (URN-based secrets-rs), file-injection guard (Secret<T> serde), and CLI arg restriction
+
+### WP-09 ✓
+- [x] `01-Validation.yml` `test` job: "Generate key material" step added before `cargo build`
+  running `bash scripts/gen-keys-and-certs.sh` with `working-directory: .`
+- [x] Script derives its own `WORKSPACE_DIR` from `${BASH_SOURCE[0]}`, so path resolution
+  is correct regardless of working directory
+- [x] Step runs from workspace root (overrides job-level `working-directory: projects/rust`)
+
+## Sequencing
+
+```
+WP-01 ✓  (remove secrets from repo)
+  └─► WP-02 ✓  (gen scripts replace what was removed)
+        └─► WP-03 ✓  (devcontainer runs gen scripts)
+
+WP-07 ✓  (compose/CI — completed within WP-01)
+
+WP-04 ✓  (secrets-rs; Secret<String> for connection_url)
+  └─► WP-05 ✓  (file-injection guard — delivered by Secret<T> type system)
+        └─► WP-06 ✓  (remove secrets from CLI args)
+
+WP-08 ✓  (docs — CONTRIBUTING.md, SECRETS.md, SECURITY.md)
+
+WP-09 ✓  (CI fix — generate key material before cargo build)
+```
+
+## Dependencies
+
+- WP-05 depends on WP-04 (naming convention must be decided before guard can be coded)
+- WP-06 depends on WP-05 (CLI uses the same config loading path)
+- WP-08 depends on all other WPs
