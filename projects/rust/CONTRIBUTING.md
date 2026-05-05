@@ -44,6 +44,16 @@ cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 ```
 
+> **Hydra integration tests** — Tests prefixed with `test_hydra_` require a live
+> Hydra instance. In the dev container Hydra is reachable at `hydra:444x`, not
+> `localhost` — override the defaults when running these tests:
+>
+> ```bash
+> HYDRA_ADMIN_URL=http://hydra:4445 \
+> HYDRA_PUBLIC_URL=http://hydra:4444 \
+> cargo test -p udex-server --test server_integration_tests -- test_hydra
+> ```
+
 ### Pre-commit Checklist
 
 Run these before every commit and fix any issues found:

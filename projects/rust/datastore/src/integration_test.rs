@@ -17,7 +17,9 @@ impl secrets_rs::Source for StaticSource {
 fn bound_url_secret(url: &str) -> Secret<String> {
     let mut secret = Secret::new("urn:secrets-rs:test:url").unwrap();
     let mut registry = SourceRegistry::new();
-    registry.register("test", StaticSource(url.to_string()));
+    registry
+        .register("test", StaticSource(url.to_string()))
+        .unwrap();
     secret.bind(&registry).unwrap();
     secret
 }

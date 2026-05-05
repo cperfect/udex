@@ -146,7 +146,9 @@ mod tests {
             dangerous_allow_non_tls: false,
         };
         let mut registry = SourceRegistry::new();
-        registry.register("test", MapSource::with("url", url));
+        registry
+            .register("test", MapSource::with("url", url))
+            .unwrap();
         cfg.connection_url.bind(&registry).unwrap();
         cfg
     }

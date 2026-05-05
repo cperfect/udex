@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use secrets_rs::{bind_all, EnvSource, Secret, SourceRegistry};
+use secrets_rs::{bind_all, sources::file::FileSource, Secret, SourceRegistry};
 use serde::{Deserialize, Serialize};
 
 /// Top-level Udex configuration, covering the server and datastore.
@@ -25,21 +25,28 @@ pub struct ServerConfig {
 }
 
 /// TLS certificate configuration.
+///
+/// `cert` and `key` are [`Secret<String>`] values referenced by `urn:secrets-rs:file:...`
+/// URNs and resolved from the filesystem by [`UdexConfig::load`].
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TlsConfig {
-    /// Path to the server TLS certificate (PEM)
-    pub cert_path: String,
-    /// Path to the server TLS private key (PEM)
-    pub key_path: String,
+    /// URN pointing to the PEM-encoded server TLS certificate file.
+    /// Example: `urn:secrets-rs:file:certs/server.crt`
+    pub cert: Secret<String>,
+    /// URN pointing to the PEM-encoded server TLS private key file.
+    /// Example: `urn:secrets-rs:file:certs/server.key`
+    pub key: Secret<String>,
 }
 
 /// Authentication and authorisation configuration.
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct AuthzConfig {
-    /// JWKS endpoint for token validation — either this or jwt_public_key_path must be set
+    /// JWKS endpoint for token validation — either this or jwt_public_key must be set
     pub jwks_url: Option<String>,
-    /// Path to the JWT public key for token validation (ECDSA PEM)
-    pub jwt_public_key_path: Option<String>,
+    /// URN pointing to the ECDSA PEM public key file for JWT validation.
+    /// Example: `urn:secrets-rs:file:certs/jwt_public_key.pem`
+    /// Either this or jwks_url must be set.
+    pub jwt_public_key: Option<Secret<String>>,
     /// Expected JWT issuer claim
     pub jwt_issuer: Option<String>,
     /// Expected JWT audience claim
@@ -88,12 +95,17 @@ impl Default for UdexConfig {
                 max_connections: 1000,
                 max_message_size_bytes: 4 * 1024 * 1024,
                 tls: TlsConfig {
-                    cert_path: "certs/server.crt".to_string(),
-                    key_path: "certs/server.key".to_string(),
+                    cert: Secret::new("urn:secrets-rs:file:certs/server.crt")
+                        .expect("hardcoded URN is always valid"),
+                    key: Secret::new("urn:secrets-rs:file:certs/server.key")
+                        .expect("hardcoded URN is always valid"),
                 },
                 authz: AuthzConfig {
                     jwks_url: None,
-                    jwt_public_key_path: Some("certs/jwt_public_key.pem".to_string()),
+                    jwt_public_key: Some(
+                        Secret::new("urn:secrets-rs:file:certs/jwt_public_key.pem")
+                            .expect("hardcoded URN is always valid"),
+                    ),
                     jwt_issuer: Some("https://auth.example.com".to_string()),
                     jwt_audience: Some("udex".to_string()),
                     danger_allow_non_tls: false,
@@ -126,8 +138,38 @@ impl UdexConfig {
         let mut cfg: Self = toml::from_str(&content)
             .with_context(|| format!("failed to parse config file: {}", path.display()))?;
 
+        // EnvSource is pre-registered under "env" by SourceRegistry::new().
+        // File URNs are resolved relative to the config file's directory so that
+        // cert and key paths in the config are portable alongside the config file.
+        let config_dir = path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .to_path_buf();
         let mut registry = SourceRegistry::new();
-        registry.register("env", EnvSource);
+        registry
+            .register("file", FileSource::with_base(config_dir))
+            .context("failed to register file source")?;
+
+        // Bind TLS secrets from file URNs.
+        cfg.server
+            .tls
+            .cert
+            .bind(&registry)
+            .context("failed to bind server.tls.cert")?;
+        cfg.server
+            .tls
+            .key
+            .bind(&registry)
+            .context("failed to bind server.tls.key")?;
+
+        // Bind the JWT public key if using static key mode (not JWKS).
+        if let Some(ref mut jwt_key) = cfg.server.authz.jwt_public_key {
+            jwt_key
+                .bind(&registry)
+                .context("failed to bind server.authz.jwt_public_key")?;
+        }
+
+        // Bind datastore secrets from env URNs.
         bind_all(&mut cfg.datastore, &registry).map_err(|errs| {
             anyhow::anyhow!(
                 "failed to bind config secrets: {}",
@@ -177,22 +219,23 @@ impl UdexConfig {
             );
         }
 
-        // authz: exactly one of jwks_url or jwt_public_key_path must be set
-        let has_pem = self.server.authz.jwt_public_key_path.is_some();
+        // authz: exactly one of jwks_url or jwt_public_key must be set
+        let has_pem = self.server.authz.jwt_public_key.is_some();
         let has_jwks = self.server.authz.jwks_url.is_some();
         match (has_pem, has_jwks) {
             (true, true) => errors.push(
-                "server.authz: only one of jwt_public_key_path or jwks_url may be set".to_string(),
+                "server.authz: only one of jwt_public_key or jwks_url may be set".to_string(),
             ),
-            (false, false) => errors.push(
-                "server.authz: one of jwks_url or jwt_public_key_path must be set".to_string(),
-            ),
+            (false, false) => errors
+                .push("server.authz: one of jwks_url or jwt_public_key must be set".to_string()),
             _ => {}
         }
 
-        if let Some(path) = &self.server.authz.jwt_public_key_path {
-            if path.trim().is_empty() {
-                errors.push("server.authz.jwt_public_key_path cannot be empty".to_string());
+        if let Some(key) = &self.server.authz.jwt_public_key {
+            if let Ok(pem) = key.value() {
+                if pem.trim().is_empty() {
+                    errors.push("server.authz.jwt_public_key must not be empty".to_string());
+                }
             }
         }
         if let Some(url) = &self.server.authz.jwks_url {
@@ -237,6 +280,8 @@ impl UdexConfig {
     }
 
     /// Convert to the server's [`udex_server::config::ServerConfig`].
+    ///
+    /// Requires that secrets have already been bound via [`UdexConfig::load`].
     pub fn to_server_config(&self) -> Result<udex_server::config::ServerConfig> {
         let bind_address = self
             .server
@@ -244,18 +289,42 @@ impl UdexConfig {
             .parse()
             .with_context(|| format!("invalid bind_address: {}", self.server.bind_address))?;
 
+        let cert_pem = self
+            .server
+            .tls
+            .cert
+            .value()
+            .context("server.tls.cert is not bound (call load() first)")?
+            .clone();
+        let key_pem = self
+            .server
+            .tls
+            .key
+            .value()
+            .context("server.tls.key is not bound (call load() first)")?
+            .clone();
+
+        let jwt_public_key_pem = self
+            .server
+            .authz
+            .jwt_public_key
+            .as_ref()
+            .map(|s| {
+                s.value()
+                    .context("server.authz.jwt_public_key is not bound (call load() first)")
+                    .cloned()
+            })
+            .transpose()?;
+
         Ok(udex_server::config::ServerConfig {
             bind_address,
             request_timeout: std::time::Duration::from_secs(self.server.request_timeout_secs),
             max_connections: self.server.max_connections,
             max_message_size: self.server.max_message_size_bytes,
-            tls: udex_server::config::TlsConfig {
-                cert_path: self.server.tls.cert_path.clone(),
-                key_path: self.server.tls.key_path.clone(),
-            },
+            tls: udex_server::config::TlsConfig { cert_pem, key_pem },
             authz: udex_server::config::AuthzConfig {
                 jwks_url: self.server.authz.jwks_url.clone(),
-                jwt_public_key_path: self.server.authz.jwt_public_key_path.clone(),
+                jwt_public_key_pem,
                 jwt_issuer: self.server.authz.jwt_issuer.clone(),
                 jwt_audience: self.server.authz.jwt_audience.clone(),
                 danger_allow_non_tls: self.server.authz.danger_allow_non_tls,
@@ -270,15 +339,12 @@ impl UdexConfig {
     /// Copies the connection URL URN from this config and binds it against the
     /// environment, returning a fully-bound datastore config ready for use.
     ///
-    /// # Double-bind note
+    /// # URN copy pattern
     ///
-    /// `Secret<T>` does not implement `Clone`, so we cannot move the already-bound
-    /// value from `load()`. Instead we reconstruct a fresh `Secret` from the URN and
-    /// bind it again, reading `DATABASE_URL` from the environment a second time. This
-    /// also means this method is implicitly coupled to `EnvSource` — if `load()` ever
-    /// gains a non-`env` source, `to_datastore_config()` will fail even though `load()`
-    /// succeeded. Resolve this once `secrets-rs` implements `Clone` on `Secret<T>`: at
-    /// that point, clone `self.datastore.connection_url` directly instead of re-binding.
+    /// `Secret<T>` does not implement `Clone`. The URN copy pattern (formalized in
+    /// secrets-rs 1.0.0) reconstructs a fresh unbound `Secret` from the URN string
+    /// and binds it independently, reading `DATABASE_URL` from the environment a
+    /// second time. See `Secret::urn()` for details.
     pub fn to_datastore_config(&self) -> Result<udex_datastore::config::DatastoreConfig> {
         let urn_str = self.datastore.connection_url.urn().to_string();
         let mut config = udex_datastore::config::DatastoreConfig {
@@ -293,8 +359,8 @@ impl UdexConfig {
             dangerous_allow_non_tls: self.datastore.dangerous_allow_non_tls,
         };
 
-        let mut registry = SourceRegistry::new();
-        registry.register("env", EnvSource);
+        // EnvSource is pre-registered by SourceRegistry::new() in secrets-rs 1.0.0.
+        let registry = SourceRegistry::new();
         bind_all(&mut config, &registry).map_err(|errs| {
             anyhow::anyhow!(
                 "failed to bind datastore secrets: {}",
@@ -339,7 +405,10 @@ mod tests {
     /// Bind `cfg.datastore.connection_url` to `url` using an in-memory source.
     fn bind_url(cfg: &mut UdexConfig, url: &str) {
         let mut registry = SourceRegistry::new();
-        registry.register("env", MapSource::with("DATABASE_URL", url));
+        // Replace the default EnvSource with an in-memory source for isolation.
+        registry
+            .register("env", MapSource::with("DATABASE_URL", url))
+            .unwrap();
         bind_all(&mut cfg.datastore, &registry).unwrap();
     }
 
@@ -377,7 +446,7 @@ mod tests {
     #[test]
     fn test_jwks_url_only_is_valid() {
         let mut cfg = UdexConfig::default();
-        cfg.server.authz.jwt_public_key_path = None;
+        cfg.server.authz.jwt_public_key = None;
         cfg.server.authz.jwks_url = Some("http://localhost:4444/.well-known/jwks.json".to_string());
         assert!(cfg.validate().is_ok());
     }
@@ -392,7 +461,7 @@ mod tests {
     #[test]
     fn test_no_key_source_is_invalid() {
         let mut cfg = UdexConfig::default();
-        cfg.server.authz.jwt_public_key_path = None;
+        cfg.server.authz.jwt_public_key = None;
         cfg.server.authz.jwks_url = None;
         assert!(cfg.validate().is_err());
     }
@@ -432,11 +501,11 @@ max_connections = 1000
 max_message_size_bytes = 4194304
 
 [server.tls]
-cert_path = "certs/server.crt"
-key_path = "certs/server.key"
+cert = "urn:secrets-rs:file:certs/server.crt"
+key = "urn:secrets-rs:file:certs/server.key"
 
 [server.authz]
-jwt_public_key_path = "certs/jwt_public_key.pem"
+jwt_public_key = "urn:secrets-rs:file:certs/jwt_public_key.pem"
 jwt_issuer = "https://auth.example.com"
 jwt_audience = "udex"
 
@@ -464,11 +533,11 @@ max_connections = 1000
 max_message_size_bytes = 4194304
 
 [server.tls]
-cert_path = "certs/server.crt"
-key_path = "certs/server.key"
+cert = "urn:secrets-rs:file:certs/server.crt"
+key = "urn:secrets-rs:file:certs/server.key"
 
 [server.authz]
-jwt_public_key_path = "certs/jwt_public_key.pem"
+jwt_public_key = "urn:secrets-rs:file:certs/jwt_public_key.pem"
 jwt_issuer = "https://auth.example.com"
 jwt_audience = "udex"
 

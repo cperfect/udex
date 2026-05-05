@@ -185,12 +185,16 @@ async fn start_server_and_connect() -> (
     let index_name = format!("{}-index", ID_PREFIX);
     let bind_address: SocketAddr = BENCH_BIND_ADDR.parse().expect("valid bench bind address");
 
+    let cert_pem =
+        std::fs::read_to_string("tests/certs/server.crt").expect("Failed to read server cert");
+    let key_pem =
+        std::fs::read_to_string("tests/certs/server.key").expect("Failed to read server key");
+    let jwt_public_key_pem = std::fs::read_to_string("tests/jwt/signing_public_key.pem")
+        .expect("Failed to read JWT public key");
+
     let server_config = ServerConfig {
         bind_address,
-        tls: udex_server::config::TlsConfig {
-            cert_path: "tests/certs/server.crt".to_string(),
-            key_path: "tests/certs/server.key".to_string(),
-        },
+        tls: udex_server::config::TlsConfig { cert_pem, key_pem },
         init_indexes: vec![UpdateIndexRequest {
             name: index_name.clone(),
             update: Some(IndexUpdate {
@@ -205,7 +209,7 @@ async fn start_server_and_connect() -> (
         }],
         authz: udex_server::config::AuthzConfig {
             jwks_url: None,
-            jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
+            jwt_public_key_pem: Some(jwt_public_key_pem),
             jwt_issuer: Some(format!("{}-issuer", ID_PREFIX)),
             jwt_audience: Some(format!("{}-audience", ID_PREFIX)),
             danger_allow_non_tls: false,

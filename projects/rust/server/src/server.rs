@@ -75,18 +75,7 @@ where
 
     tracing::info!(addr = %addr, "Starting Udex server with TLS");
 
-    // Load TLS certificates etc.
-    let cert = tokio::fs::read_to_string(config.tls.cert_path)
-        .await
-        .map_err(|e| Error::ServerError(format!("Failed to read server cert: {}", e)))?;
-
-    let key = tokio::fs::read_to_string(config.tls.key_path)
-        .await
-        .map_err(|e| Error::ServerError(format!("Failed to read private key: {}", e)))?;
-
-    // construct the tls identity
-    // using the cert and key read from the config paths
-    let identity = Identity::from_pem(cert, key);
+    let identity = Identity::from_pem(config.tls.cert_pem, config.tls.key_pem);
 
     let auth_interceptor = AuthzInterceptor::new(config.authz.clone())?;
 

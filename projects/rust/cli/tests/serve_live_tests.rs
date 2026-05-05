@@ -65,11 +65,11 @@ max_connections = 100
 max_message_size_bytes = 4194304
 
 [server.tls]
-cert_path = "{SERVER_CERT}"
-key_path = "{SERVER_KEY}"
+cert = "urn:secrets-rs:file:{SERVER_CERT}"
+key = "urn:secrets-rs:file:{SERVER_KEY}"
 
 [server.authz]
-jwt_public_key_path = "{JWT_PUBLIC_KEY}"
+jwt_public_key = "urn:secrets-rs:file:{JWT_PUBLIC_KEY}"
 jwt_issuer = "https://cli-serve-test-issuer.example.com"
 jwt_audience = "udex-cli-serve-test"
 

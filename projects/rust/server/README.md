@@ -62,13 +62,13 @@ by the integration test suite or `cargo test`).
 
 ```toml
 [server.authz]
-jwt_public_key_path = "certs/signing_public_key.pem"  # EC P-256 public key, PEM format
-jwt_issuer          = "https://auth.example.com"
-jwt_audience        = "udex"
+jwt_public_key = "urn:secrets-rs:file:certs/signing_public_key.pem"  # EC P-256 public key, PEM format
+jwt_issuer     = "https://auth.example.com"
+jwt_audience   = "udex"
 ```
 
-The key is read from disk once at startup. To rotate the key the server must be
-restarted.
+The key is loaded once at startup (resolved relative to the config file directory).
+To rotate the key the server must be restarted.
 
 ### Key source: JWKS endpoint
 
@@ -84,8 +84,8 @@ jwt_issuer   = "http://localhost:4444/"   # must match Hydra's URLS_SELF_ISSUER
 jwt_audience = "udex"
 ```
 
-Exactly one of `jwt_public_key_path` and `jwks_url` must be set; providing
-neither or both is a configuration error caught at startup.
+Exactly one of `jwt_public_key` and `jwks_url` must be set; providing neither
+or both is a configuration error caught at startup.
 
 ### Development with Hydra
 
@@ -95,8 +95,9 @@ stack and is the reference OAuth2 server for development. To obtain a token:
 ```bash
 # 1. Register an OAuth2 client (once per Hydra instance)
 #    Scopes must match the permissions required by your requests.
+#    In the devcontainer Hydra is reachable at hydra:4445 (admin) / hydra:4444 (public).
 hydra create client \
-  --endpoint http://localhost:4445 \
+  --endpoint http://hydra:4445 \
   --id my-client \
   --secret my-secret \
   --grant-type client_credentials \
@@ -108,7 +109,7 @@ hydra create client \
 udex token fetch \
   --client-id my-client \
   --client-secret my-secret \
-  --url http://localhost:4444/oauth2/token \
+  --url http://hydra:4444/oauth2/token \
   --scope udex:index:v1:my-index:read
 
 # 3. Use the token (or set UDEX_TOKEN in your shell)
@@ -123,8 +124,8 @@ header and claims, making it easy to verify the token contents before use.
 `ServerConfig` is loaded from a TOML file by the CLI. Key fields:
 
 - `bind_address` — socket address (e.g. `127.0.0.1:50051`)
-- `tls.cert_path` / `tls.key_path` — TLS certificate and private key paths
-- `authz.jwt_public_key_path` or `authz.jwks_url` — JWT key source; see [Authorization](#authorization) above
+- `tls.cert` / `tls.key` — `urn:secrets-rs:file:` URNs for the TLS certificate and private key (resolved relative to the config file directory)
+- `authz.jwt_public_key` or `authz.jwks_url` — JWT key source; see [Authorization](#authorization) above
 - `authz.jwt_issuer` / `authz.jwt_audience` — expected `iss` and `aud` claims
 - `init_indexes` — list of indexes to ensure exist on startup
 
@@ -137,3 +138,19 @@ cargo test -p udex-server
 ```
 
 Integration tests use `RUST_LOG` filtering and run with a real PostgreSQL instance — no mocks.
+
+### Hydra integration tests
+
+Tests prefixed with `test_hydra_` require a live Hydra instance. In the dev
+container Hydra runs at `hydra:4444` (public) and `hydra:4445` (admin) — these
+differ from the test defaults (`localhost:444x`). Override them when running
+locally:
+
+```bash
+HYDRA_ADMIN_URL=http://hydra:4445 \
+HYDRA_PUBLIC_URL=http://hydra:4444 \
+cargo test -p udex-server --test server_integration_tests -- test_hydra
+```
+
+Outside the devcontainer (or in CI), leave the env vars unset if Hydra really is
+on `localhost`.

@@ -2769,9 +2769,9 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "secrets-rs"
-version = "0.1.2"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0e7f588deed7c942c5825cfe8ea97b86ac7de559e910fe093ebba2b9703ebdd"
+checksum = "c2068d3ec6574eafaa5e446a7f04f88e86d3a1178d289ad3b9d9344a3b4a2bd4"
 dependencies = [
  "secrets-rs-macros",
  "serde",
@@ -2781,9 +2781,9 @@ dependencies = [
 
 [[package]]
 name = "secrets-rs-macros"
-version = "0.1.2"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c894513b1302ca4a07177642721932f09c76a7ae97d9619106ec729fd05f2b40"
+checksum = "e273ba30a87f9e5168884715e95d375d7efbf7a7ede24640601df4faf7c09eb4"
 dependencies = [
  "proc-macro2",
  "quote",

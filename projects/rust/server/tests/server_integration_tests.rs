@@ -50,12 +50,19 @@ async fn init_server() -> MaybeOnceType {
 
     let bind_address: SocketAddr = SERVER_BIND_ADDR.parse().expect("Invalid bind address");
 
+    let cert_pem = tokio::fs::read_to_string("tests/certs/server.crt")
+        .await
+        .expect("Failed to read server cert");
+    let key_pem = tokio::fs::read_to_string("tests/certs/server.key")
+        .await
+        .expect("Failed to read server key");
+    let jwt_public_key_pem = tokio::fs::read_to_string("tests/jwt/signing_public_key.pem")
+        .await
+        .expect("Failed to read JWT public key");
+
     let server_config = ServerConfig {
         bind_address,
-        tls: udex_server::config::TlsConfig {
-            cert_path: "tests/certs/server.crt".to_string(),
-            key_path: "tests/certs/server.key".to_string(),
-        },
+        tls: udex_server::config::TlsConfig { cert_pem, key_pem },
         init_indexes: vec![UpdateIndexRequest {
             name: index_name.clone(), // Use consistent name for test_init_indexes
             update: Some(IndexUpdate {
@@ -69,7 +76,7 @@ async fn init_server() -> MaybeOnceType {
         }],
         authz: udex_server::config::AuthzConfig {
             jwks_url: None,
-            jwt_public_key_path: Some("tests/jwt/signing_public_key.pem".to_string()),
+            jwt_public_key_pem: Some(jwt_public_key_pem),
             jwt_issuer: Some(format!("{}-issuer", ID_PREFIX)),
             jwt_audience: Some(format!("{}-audience", ID_PREFIX)),
             danger_allow_non_tls: false,
@@ -160,12 +167,16 @@ async fn init_server_hydra() -> HydraFixtureType {
         .parse()
         .expect("Invalid bind address");
 
+    let cert_pem = tokio::fs::read_to_string("tests/certs/server.crt")
+        .await
+        .expect("Failed to read server cert");
+    let key_pem = tokio::fs::read_to_string("tests/certs/server.key")
+        .await
+        .expect("Failed to read server key");
+
     let server_config = ServerConfig {
         bind_address,
-        tls: udex_server::config::TlsConfig {
-            cert_path: "tests/certs/server.crt".to_string(),
-            key_path: "tests/certs/server.key".to_string(),
-        },
+        tls: udex_server::config::TlsConfig { cert_pem, key_pem },
         init_indexes: vec![UpdateIndexRequest {
             name: index_name.clone(),
             update: Some(IndexUpdate {
@@ -179,7 +190,7 @@ async fn init_server_hydra() -> HydraFixtureType {
         }],
         authz: AuthzConfig {
             jwks_url: Some(jwks_url),
-            jwt_public_key_path: None,
+            jwt_public_key_pem: None,
             jwt_issuer: Some(issuer),
             jwt_audience: Some(audience.clone()),
             // Local Hydra runs over plain HTTP; allow it in test-only config.
