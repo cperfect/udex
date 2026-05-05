@@ -13,10 +13,27 @@ use udex_api::authz::claims::Claims;
 use crate::config::AuthzConfig;
 use crate::Error;
 
+/// Derives a signing algorithm from a JWK's key type and curve when the
+/// optional `alg` field is absent. Only EC keys with a known named curve have
+/// an unambiguous default; RSA and OKP require an explicit `alg`.
+fn infer_algorithm_from_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> Option<Algorithm> {
+    use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve};
+    match &jwk.algorithm {
+        AlgorithmParameters::EllipticCurve(ec) => match ec.curve {
+            EllipticCurve::P256 => Some(Algorithm::ES256),
+            EllipticCurve::P384 => Some(Algorithm::ES384),
+            // P-521 / ES512 is not supported by this jsonwebtoken version.
+            EllipticCurve::P521 => None,
+            EllipticCurve::Ed25519 => Some(Algorithm::EdDSA),
+        },
+        _ => None,
+    }
+}
+
 #[derive(Clone)]
 enum KeySource {
     Static(DecodingKey),
-    /// Each entry stores the decoding key and the algorithm declared in the JWK's `alg` field.
+    /// Each entry stores the decoding key and the algorithm for each `kid`.
     Jwks(HashMap<String, (DecodingKey, Algorithm)>),
 }
 
@@ -70,14 +87,20 @@ impl AuthzInterceptor {
                                 "JWKS at '{url_for_err}' contains duplicate kid '{kid}'"
                             )));
                         }
+                        // RFC 7517 §4.4: `alg` is OPTIONAL. Many providers (AWS Cognito,
+                        // Azure AD, Keycloak) omit it. Fall back to deriving the algorithm
+                        // from kty/crv when absent; error only when neither is available.
                         let alg = jwk
                             .common
                             .key_algorithm
                             .as_ref()
                             .and_then(|ka| Algorithm::from_str(&ka.to_string()).ok())
+                            .or_else(|| infer_algorithm_from_jwk(jwk))
                             .ok_or_else(|| {
                                 Error::ConfigValidation(format!(
-                                    "JWK (kid='{kid}') at '{url_for_err}' has no recognised 'alg'"
+                                    "JWK (kid='{kid}') at '{url_for_err}' has no 'alg' field \
+                                     and the key type does not have an unambiguous default \
+                                     (EC keys with a known curve are inferred automatically)"
                                 ))
                             })?;
                         let decoding_key = DecodingKey::from_jwk(jwk).map_err(|e| {
