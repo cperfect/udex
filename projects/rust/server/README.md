@@ -141,16 +141,12 @@ Integration tests use `RUST_LOG` filtering and run with a real PostgreSQL instan
 
 ### Hydra integration tests
 
-Tests prefixed with `test_hydra_` require a live Hydra instance. In the dev
-container Hydra runs at `hydra:4444` (public) and `hydra:4445` (admin) — these
-differ from the test defaults (`localhost:444x`). Override them when running
-locally:
+Tests prefixed with `test_hydra_` require a live Hydra instance.
 
-```bash
-HYDRA_ADMIN_URL=http://hydra:4445 \
-HYDRA_PUBLIC_URL=http://hydra:4444 \
-cargo test -p udex-server --test server_integration_tests -- test_hydra
-```
+In the devcontainer `HYDRA_PUBLIC_URL` and `HYDRA_ADMIN_URL` are set
+automatically by the devcontainer compose file (pointing at the `hydra` Docker
+service). Just run `cargo test` — no prefix needed.
 
-Outside the devcontainer (or in CI), leave the env vars unset if Hydra really is
-on `localhost`.
+Outside the devcontainer the variables default to `localhost:444x`, which is
+correct if you are running Hydra locally or in CI (where Docker publishes the
+Hydra ports to the host).

@@ -53,6 +53,12 @@ if [[ -z "${POSTGRES_PASSWORD_SECRET_VAL}" || \
   exit 1
 fi
 
+# Hydra URLs: callers may export these before invoking this script to override
+# the defaults. The devcontainer post-create does this so that the .env it
+# generates uses the Docker service name rather than localhost.
+HYDRA_PUBLIC_URL="${HYDRA_PUBLIC_URL:-http://localhost:4444}"
+HYDRA_ADMIN_URL="${HYDRA_ADMIN_URL:-http://localhost:4445}"
+
 cat > "${ENV_FILE}" <<EOF
 # ============================================================
 # Udex development environment — DO NOT COMMIT
@@ -76,9 +82,9 @@ DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD_SECRET_VAL}@localhost:5432/
 # ------------------------------------------------------------
 # Hydra (OAuth2 server)
 # ------------------------------------------------------------
-# Public config
-HYDRA_PUBLIC_URL=http://localhost:4444
-HYDRA_ADMIN_URL=http://localhost:4445
+# Public config — override before calling gen-env.sh to change these values.
+HYDRA_PUBLIC_URL=${HYDRA_PUBLIC_URL}
+HYDRA_ADMIN_URL=${HYDRA_ADMIN_URL}
 HYDRA_ISSUER=http://localhost:4444/
 
 # Secrets

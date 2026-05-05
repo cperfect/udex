@@ -48,6 +48,11 @@ hydra help
 
 cd /workspace
 
+# In the devcontainer, Hydra is reachable via the Docker service name rather
+# than localhost. Export these so gen-env.sh writes the correct URLs into .env.
+export HYDRA_PUBLIC_URL=http://hydra:4444
+export HYDRA_ADMIN_URL=http://hydra:4445
+
 if [[ ! -f .env ]]; then
   echo "No .env found — generating dev secrets..."
   bash scripts/gen-env.sh --force
