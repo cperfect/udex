@@ -75,9 +75,21 @@ where
 
     tracing::info!(addr = %addr, "Starting Udex server with TLS");
 
-    let identity = Identity::from_pem(config.tls.cert_pem, config.tls.key_pem);
+    let cert_pem = config
+        .tls
+        .cert
+        .value()
+        .map_err(|_| Error::ConfigValidation("tls.cert is not bound".to_string()))?
+        .clone();
+    let key_pem = config
+        .tls
+        .key
+        .value()
+        .map_err(|_| Error::ConfigValidation("tls.key is not bound".to_string()))?
+        .clone();
+    let identity = Identity::from_pem(cert_pem, key_pem);
 
-    let auth_interceptor = AuthzInterceptor::new(config.authz.clone())?;
+    let auth_interceptor = AuthzInterceptor::new(config.authz)?;
 
     let entry_server = EntryServiceServer::new(entry_service);
     let index_server = IndexServiceServer::new(index_service);

@@ -32,7 +32,7 @@ impl AuthzInterceptor {
     pub fn new(config: AuthzConfig) -> Result<Self, Error> {
         config.validate()?;
         // TODO If the identity provider rotates signing keys, a server restart would be required to pick up the new JWKS. This is acceptable for test/demo purposes (which is the case for now) but for production use, consider implementing periodic JWKS refresh (e.g., background task with configurable interval, or refresh on kid miss with rate limiting).
-        let key_source = match (config.jwks_url, config.jwt_public_key_pem) {
+        let key_source = match (config.jwks_url, config.jwt_public_key) {
             (Some(url), None) => {
                 let url_for_err = url.clone();
                 let jwks_text = std::thread::spawn(move || -> Result<String, String> {
@@ -95,7 +95,10 @@ impl AuthzInterceptor {
 
                 KeySource::Jwks(key_map)
             }
-            (None, Some(pem)) => {
+            (None, Some(pem_secret)) => {
+                let pem = pem_secret.value().map_err(|_| {
+                    Error::ConfigValidation("jwt_public_key is not bound".to_string())
+                })?;
                 let key = DecodingKey::from_ec_pem(pem.as_bytes()).map_err(|e| {
                     Error::ConfigValidation(format!(
                         "Failed to create decoding key from jwt_public_key: {e}"
@@ -228,12 +231,20 @@ mod tests {
     use crate::config::AuthzConfig;
     use tracing_test::traced_test;
 
+    fn bound_pem_secret(path: &str) -> secrets_rs::Secret<String> {
+        let mut s = secrets_rs::Secret::new(&format!("urn:secrets-rs:file:{path}"))
+            .expect("valid file URN");
+        let mut reg = secrets_rs::SourceRegistry::new();
+        reg.register("file", secrets_rs::sources::file::FileSource::new())
+            .unwrap();
+        s.bind(&reg).unwrap();
+        s
+    }
+
     fn test_interceptor() -> AuthzInterceptor {
-        let pem = std::fs::read_to_string("tests/jwt/signing_public_key.pem")
-            .expect("Failed to read signing public key");
         AuthzInterceptor::new(AuthzConfig {
             jwks_url: None,
-            jwt_public_key_pem: Some(pem),
+            jwt_public_key: Some(bound_pem_secret("tests/jwt/signing_public_key.pem")),
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
             danger_allow_non_tls: false,
@@ -244,11 +255,9 @@ mod tests {
 
     #[test]
     fn test_new_rejects_both_key_sources() {
-        let pem = std::fs::read_to_string("tests/jwt/signing_public_key.pem")
-            .expect("Failed to read signing public key");
         let Err(err) = AuthzInterceptor::new(AuthzConfig {
             jwks_url: Some("http://localhost:4444/.well-known/jwks.json".to_string()),
-            jwt_public_key_pem: Some(pem),
+            jwt_public_key: Some(bound_pem_secret("tests/jwt/signing_public_key.pem")),
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
             danger_allow_non_tls: false,
@@ -266,7 +275,7 @@ mod tests {
     fn test_new_rejects_no_key_source() {
         let Err(err) = AuthzInterceptor::new(AuthzConfig {
             jwks_url: None,
-            jwt_public_key_pem: None,
+            jwt_public_key: None,
             jwt_issuer: Some("test-issuer".to_string()),
             jwt_audience: Some("test-audience".to_string()),
             danger_allow_non_tls: false,

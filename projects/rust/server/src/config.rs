@@ -1,9 +1,10 @@
+use secrets_rs::Secret;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::time::Duration;
 
 /// Server-related configuration for gRPC.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ServerConfig {
     /// Address to bind the gRPC server
     pub bind_address: SocketAddr,
@@ -23,22 +24,29 @@ pub struct ServerConfig {
 
 /// TLS configuration for the gRPC server.
 ///
-/// Holds PEM-encoded content directly. Callers (e.g. the CLI) are responsible
-/// for loading file contents before constructing this struct.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// Both fields are [`Secret<String>`] holding PEM-encoded content. The CLI
+/// loads them from `urn:secrets-rs:file:` URNs before constructing this struct;
+/// integration tests bind them via `FileSource`. Neither field is cloneable —
+/// the secrets are moved into the server at startup.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TlsConfig {
-    /// PEM-encoded server certificate
-    pub cert_pem: String,
-    /// PEM-encoded server private key
-    pub key_pem: String,
+    /// PEM-encoded server certificate (bound `Secret<String>`)
+    pub cert: Secret<String>,
+    /// PEM-encoded server private key (bound `Secret<String>`)
+    pub key: Secret<String>,
 }
 
-// Authentication and Authorization configuration.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// Authentication and authorization configuration.
+///
+/// Exactly one of `jwt_public_key` or `jwks_url` must be set. All fields are
+/// validated by [`AuthzConfig::validate`] before the server accepts requests.
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct AuthzConfig {
-    /// PEM-encoded ECDSA public key for JWT validation — either this or jwks_url must be provided
-    pub jwt_public_key_pem: Option<String>,
-    /// JWKS endpoint for public key for token validation — either this or jwt_public_key_pem must be provided
+    /// PEM-encoded ECDSA public key for JWT validation (bound `Secret<String>`).
+    /// Either this or `jwks_url` must be provided, not both.
+    pub jwt_public_key: Option<Secret<String>>,
+    /// JWKS endpoint for public key discovery.
+    /// Either this or `jwt_public_key` must be provided, not both.
     pub jwks_url: Option<String>,
     /// JWT issuer for token validation
     pub jwt_issuer: Option<String>,
@@ -62,22 +70,6 @@ pub struct AuthzConfig {
     pub scope_claim_name: Option<String>,
 }
 
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            bind_address: "127.0.0.1:50051"
-                .parse()
-                .expect("hardcoded default bind address is always valid"),
-            request_timeout: Duration::from_secs(30),
-            max_connections: 1000,
-            max_message_size: 4 * 1024 * 1024, // 4MB
-            tls: TlsConfig::default(),
-            init_indexes: Vec::new(),
-            authz: AuthzConfig::default(),
-        }
-    }
-}
-
 impl ServerConfig {
     /// Validate the server configuration.
     pub fn validate(&self) -> Result<(), crate::Error> {
@@ -89,12 +81,20 @@ impl ServerConfig {
 
 impl TlsConfig {
     pub fn validate(&self) -> Result<(), crate::Error> {
-        if self.cert_pem.trim().is_empty() {
+        let cert = self
+            .cert
+            .value()
+            .map_err(|_| crate::Error::ConfigValidation("tls.cert is not bound".to_string()))?;
+        if cert.trim().is_empty() {
             return Err(crate::Error::ConfigValidation(
                 "tls.cert must not be empty".to_string(),
             ));
         }
-        if self.key_pem.trim().is_empty() {
+        let key = self
+            .key
+            .value()
+            .map_err(|_| crate::Error::ConfigValidation("tls.key is not bound".to_string()))?;
+        if key.trim().is_empty() {
             return Err(crate::Error::ConfigValidation(
                 "tls.key must not be empty".to_string(),
             ));
@@ -105,26 +105,27 @@ impl TlsConfig {
 
 impl AuthzConfig {
     pub fn validate(&self) -> Result<(), crate::Error> {
-        match (&self.jwks_url, &self.jwt_public_key_pem) {
+        match (&self.jwks_url, &self.jwt_public_key) {
             (Some(_), Some(_)) => {
                 return Err(crate::Error::ConfigValidation(
-                    "Exactly one of jwks_url or jwt_public_key_pem must be set, not both"
-                        .to_string(),
+                    "Exactly one of jwks_url or jwt_public_key must be set, not both".to_string(),
                 ));
             }
             (None, None) => {
                 return Err(crate::Error::ConfigValidation(
-                    "One of jwks_url or jwt_public_key_pem must be set".to_string(),
+                    "One of jwks_url or jwt_public_key must be set".to_string(),
                 ));
             }
             _ => {}
         }
 
-        if let Some(pem) = &self.jwt_public_key_pem {
-            if pem.trim().is_empty() {
-                return Err(crate::Error::ConfigValidation(
-                    "jwt_public_key must not be empty".to_string(),
-                ));
+        if let Some(pem_secret) = &self.jwt_public_key {
+            if let Ok(pem) = pem_secret.value() {
+                if pem.trim().is_empty() {
+                    return Err(crate::Error::ConfigValidation(
+                        "jwt_public_key must not be empty".to_string(),
+                    ));
+                }
             }
         }
 
@@ -135,7 +136,6 @@ impl AuthzConfig {
                     "jwks_url cannot be empty".to_string(),
                 ));
             }
-            // Require HTTPS unless danger_allow_non_tls is explicitly set.
             if !self.danger_allow_non_tls && !u.starts_with("https://") {
                 return Err(crate::Error::ConfigValidation(format!(
                     "jwks_url '{u}' must use HTTPS; set danger_allow_non_tls = true \
@@ -190,13 +190,39 @@ impl AuthzConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use secrets_rs::{Source, SourceError, SourceRegistry};
+
+    /// Creates a bound `Secret<String>` from a literal value, using an in-memory
+    /// source so tests don't touch the filesystem.
+    fn bound_secret(value: &str) -> Secret<String> {
+        struct FixedSource(String);
+        impl Source for FixedSource {
+            fn get(&self, _name: &str) -> Result<Vec<u8>, SourceError> {
+                Ok(self.0.as_bytes().to_vec())
+            }
+        }
+        let mut s = Secret::new("urn:secrets-rs:fixed:_").expect("valid URN");
+        let mut registry = SourceRegistry::new();
+        registry
+            .register("fixed", FixedSource(value.to_string()))
+            .unwrap();
+        s.bind(&registry).unwrap();
+        s
+    }
+
+    fn valid_tls() -> TlsConfig {
+        TlsConfig {
+            cert: bound_secret("-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----"),
+            key: bound_secret("-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----"),
+        }
+    }
 
     fn valid_authz() -> AuthzConfig {
         AuthzConfig {
             jwks_url: None,
-            jwt_public_key_pem: Some(
-                "-----BEGIN PUBLIC KEY-----\nfake\n-----END PUBLIC KEY-----".to_string(),
-            ),
+            jwt_public_key: Some(bound_secret(
+                "-----BEGIN PUBLIC KEY-----\nfake\n-----END PUBLIC KEY-----",
+            )),
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
@@ -207,7 +233,7 @@ mod tests {
     fn valid_authz_jwks() -> AuthzConfig {
         AuthzConfig {
             jwks_url: Some("https://hydra:4444/.well-known/jwks.json".to_string()),
-            jwt_public_key_pem: None,
+            jwt_public_key: None,
             jwt_issuer: Some("https://hydra:4444".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
@@ -217,20 +243,14 @@ mod tests {
 
     #[test]
     fn tls_validate_ok() {
-        let cfg = TlsConfig {
-            cert_pem: "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----".to_string(),
-            key_pem: "-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----"
-                .to_string(),
-        };
-        assert!(cfg.validate().is_ok());
+        assert!(valid_tls().validate().is_ok());
     }
 
     #[test]
     fn tls_validate_empty_cert() {
         let cfg = TlsConfig {
-            cert_pem: String::new(),
-            key_pem: "-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----"
-                .to_string(),
+            cert: bound_secret("   "),
+            key: bound_secret("-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----"),
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(err.contains("cert"), "expected cert in error: {err}");
@@ -239,22 +259,39 @@ mod tests {
     #[test]
     fn tls_validate_empty_key() {
         let cfg = TlsConfig {
-            cert_pem: "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----".to_string(),
-            key_pem: String::new(),
+            cert: bound_secret("-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----"),
+            key: bound_secret(""),
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(err.contains("key"), "expected key in error: {err}");
     }
 
     #[test]
+    fn tls_validate_unbound_cert_is_err() {
+        let cfg = TlsConfig {
+            cert: Secret::new("urn:secrets-rs:file:nonexistent").expect("valid URN"),
+            key: bound_secret("-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----"),
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("not bound"),
+            "expected not bound in error: {err}"
+        );
+    }
+
+    #[test]
     fn server_config_validate_calls_tls_validate() {
         let cfg = ServerConfig {
+            bind_address: "127.0.0.1:50051".parse().unwrap(),
+            request_timeout: std::time::Duration::from_secs(30),
+            max_connections: 1000,
+            max_message_size: 4 * 1024 * 1024,
             tls: TlsConfig {
-                cert_pem: String::new(),
-                key_pem: String::new(),
+                cert: Secret::new("urn:secrets-rs:file:nonexistent").expect("valid URN"),
+                key: Secret::new("urn:secrets-rs:file:nonexistent").expect("valid URN"),
             },
             authz: valid_authz(),
-            ..ServerConfig::default()
+            init_indexes: vec![],
         };
         assert!(cfg.validate().is_err());
     }
@@ -273,9 +310,9 @@ mod tests {
     fn authz_validate_both_key_sources_is_err() {
         let cfg = AuthzConfig {
             jwks_url: Some("https://hydra:4444/.well-known/jwks.json".to_string()),
-            jwt_public_key_pem: Some(
-                "-----BEGIN PUBLIC KEY-----\nfake\n-----END PUBLIC KEY-----".to_string(),
-            ),
+            jwt_public_key: Some(bound_secret(
+                "-----BEGIN PUBLIC KEY-----\nfake\n-----END PUBLIC KEY-----",
+            )),
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
@@ -292,7 +329,7 @@ mod tests {
     fn authz_validate_no_key_source_is_err() {
         let cfg = AuthzConfig {
             jwks_url: None,
-            jwt_public_key_pem: None,
+            jwt_public_key: None,
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
@@ -309,7 +346,7 @@ mod tests {
     fn authz_validate_empty_jwks_url_is_err() {
         let cfg = AuthzConfig {
             jwks_url: Some("   ".to_string()),
-            jwt_public_key_pem: None,
+            jwt_public_key: None,
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
@@ -326,7 +363,7 @@ mod tests {
     fn authz_validate_issuer_equals_audience_is_err() {
         let cfg = AuthzConfig {
             jwks_url: Some("https://hydra:4444/.well-known/jwks.json".to_string()),
-            jwt_public_key_pem: None,
+            jwt_public_key: None,
             jwt_issuer: Some("udex".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
@@ -339,7 +376,7 @@ mod tests {
     fn authz_validate_jwks_http_non_localhost_is_err() {
         let cfg = AuthzConfig {
             jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
-            jwt_public_key_pem: None,
+            jwt_public_key: None,
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
@@ -356,7 +393,7 @@ mod tests {
     fn authz_validate_jwks_localhost_http_is_err_without_flag() {
         let cfg = AuthzConfig {
             jwks_url: Some("http://localhost:4444/.well-known/jwks.json".to_string()),
-            jwt_public_key_pem: None,
+            jwt_public_key: None,
             jwt_issuer: Some("http://localhost:4444/".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
@@ -373,7 +410,7 @@ mod tests {
     fn authz_validate_jwks_localhost_http_ok_with_flag() {
         let cfg = AuthzConfig {
             jwks_url: Some("http://localhost:4444/.well-known/jwks.json".to_string()),
-            jwt_public_key_pem: None,
+            jwt_public_key: None,
             jwt_issuer: Some("http://localhost:4444/".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: true,
@@ -386,7 +423,7 @@ mod tests {
     fn authz_validate_jwks_danger_allow_non_tls_ok() {
         let cfg = AuthzConfig {
             jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
-            jwt_public_key_pem: None,
+            jwt_public_key: None,
             jwt_issuer: Some("http://hydra:4444/".to_string()),
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: true,

@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use secrets_rs::{bind_all, sources::file::FileSource, Secret, SourceRegistry};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
+use udex_server::config::{AuthzConfig, TlsConfig};
 
 /// Top-level Udex configuration, covering the server and datastore.
 #[derive(Debug, Serialize, Deserialize)]
@@ -10,6 +12,9 @@ pub struct UdexConfig {
 }
 
 /// gRPC server configuration.
+///
+/// `tls` and `authz` reuse the server crate's types directly — no field
+/// duplication between the CLI config and the types passed to the server.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServerConfig {
     /// Address and port to bind the gRPC server (e.g. "0.0.0.0:50051")
@@ -22,43 +27,6 @@ pub struct ServerConfig {
     pub max_message_size_bytes: usize,
     pub tls: TlsConfig,
     pub authz: AuthzConfig,
-}
-
-/// TLS certificate configuration.
-///
-/// `cert` and `key` are [`Secret<String>`] values referenced by `urn:secrets-rs:file:...`
-/// URNs and resolved from the filesystem by [`UdexConfig::load`].
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TlsConfig {
-    /// URN pointing to the PEM-encoded server TLS certificate file.
-    /// Example: `urn:secrets-rs:file:certs/server.crt`
-    pub cert: Secret<String>,
-    /// URN pointing to the PEM-encoded server TLS private key file.
-    /// Example: `urn:secrets-rs:file:certs/server.key`
-    pub key: Secret<String>,
-}
-
-/// Authentication and authorisation configuration.
-#[derive(Debug, Serialize, Deserialize, Default)]
-pub struct AuthzConfig {
-    /// JWKS endpoint for token validation — either this or jwt_public_key must be set
-    pub jwks_url: Option<String>,
-    /// URN pointing to the ECDSA PEM public key file for JWT validation.
-    /// Example: `urn:secrets-rs:file:certs/jwt_public_key.pem`
-    /// Either this or jwks_url must be set.
-    pub jwt_public_key: Option<Secret<String>>,
-    /// Expected JWT issuer claim
-    pub jwt_issuer: Option<String>,
-    /// Expected JWT audience claim
-    pub jwt_audience: Option<String>,
-    /// Allow plain HTTP for jwks_url. MUST NOT be set in production; intended for
-    /// local development environments (e.g. Hydra without TLS).
-    #[serde(default)]
-    pub danger_allow_non_tls: bool,
-    /// Name of the JWT claim that carries the OAuth 2.0 scope list.
-    /// RFC 8693 §4.2 default is `"scope"`. Set to e.g. `"scp"` for Hydra.
-    #[serde(default)]
-    pub scope_claim_name: Option<String>,
 }
 
 /// PostgreSQL datastore configuration.
@@ -127,7 +95,7 @@ impl Default for UdexConfig {
 
 impl UdexConfig {
     /// Load a [`UdexConfig`] from a TOML file and bind all secrets from
-    /// environment variables.
+    /// their declared sources.
     ///
     /// Returns an error if the file cannot be read, the TOML is malformed, or
     /// any secret URN cannot be resolved from its declared source (e.g.
@@ -183,7 +151,7 @@ impl UdexConfig {
         Ok(cfg)
     }
 
-    /// Validate the configuration, returning a list of human-readable errors.
+    /// Validate the configuration, returning a human-readable error if invalid.
     ///
     /// The `connection_url` check is skipped when the secret is not yet bound
     /// (binding failures are caught by [`UdexConfig::load`]). All other checks
@@ -279,89 +247,52 @@ impl UdexConfig {
         }
     }
 
-    /// Convert to the server's [`udex_server::config::ServerConfig`].
+    /// Convert into the server's [`udex_server::config::ServerConfig`] and the
+    /// datastore's [`udex_datastore::config::DatastoreConfig`].
     ///
-    /// Requires that secrets have already been bound via [`UdexConfig::load`].
-    pub fn to_server_config(&self) -> Result<udex_server::config::ServerConfig> {
-        let bind_address = self
-            .server
+    /// Consumes `self` so that bound [`Secret<String>`] values in `tls` and
+    /// `authz` are moved directly into the server config without cloning.
+    /// Call [`UdexConfig::validate`] before this method.
+    pub fn into_configs(
+        self,
+    ) -> Result<(
+        udex_server::config::ServerConfig,
+        udex_datastore::config::DatastoreConfig,
+    )> {
+        let Self { server, datastore } = self;
+
+        let bind_address = server
             .bind_address
             .parse()
-            .with_context(|| format!("invalid bind_address: {}", self.server.bind_address))?;
+            .with_context(|| format!("invalid bind_address: {}", server.bind_address))?;
 
-        let cert_pem = self
-            .server
-            .tls
-            .cert
-            .value()
-            .context("server.tls.cert is not bound (call load() first)")?
-            .clone();
-        let key_pem = self
-            .server
-            .tls
-            .key
-            .value()
-            .context("server.tls.key is not bound (call load() first)")?
-            .clone();
-
-        let jwt_public_key_pem = self
-            .server
-            .authz
-            .jwt_public_key
-            .as_ref()
-            .map(|s| {
-                s.value()
-                    .context("server.authz.jwt_public_key is not bound (call load() first)")
-                    .cloned()
-            })
-            .transpose()?;
-
-        Ok(udex_server::config::ServerConfig {
+        let server_config = udex_server::config::ServerConfig {
             bind_address,
-            request_timeout: std::time::Duration::from_secs(self.server.request_timeout_secs),
-            max_connections: self.server.max_connections,
-            max_message_size: self.server.max_message_size_bytes,
-            tls: udex_server::config::TlsConfig { cert_pem, key_pem },
-            authz: udex_server::config::AuthzConfig {
-                jwks_url: self.server.authz.jwks_url.clone(),
-                jwt_public_key_pem,
-                jwt_issuer: self.server.authz.jwt_issuer.clone(),
-                jwt_audience: self.server.authz.jwt_audience.clone(),
-                danger_allow_non_tls: self.server.authz.danger_allow_non_tls,
-                scope_claim_name: self.server.authz.scope_claim_name.clone(),
-            },
+            request_timeout: Duration::from_secs(server.request_timeout_secs),
+            max_connections: server.max_connections,
+            max_message_size: server.max_message_size_bytes,
+            tls: server.tls,
+            authz: server.authz,
             init_indexes: vec![],
-        })
-    }
+        };
 
-    /// Convert to the datastore's [`udex_datastore::config::DatastoreConfig`].
-    ///
-    /// Copies the connection URL URN from this config and binds it against the
-    /// environment, returning a fully-bound datastore config ready for use.
-    ///
-    /// # URN copy pattern
-    ///
-    /// `Secret<T>` does not implement `Clone`. The URN copy pattern (formalized in
-    /// secrets-rs 1.0.0) reconstructs a fresh unbound `Secret` from the URN string
-    /// and binds it independently, reading `DATABASE_URL` from the environment a
-    /// second time. See `Secret::urn()` for details.
-    pub fn to_datastore_config(&self) -> Result<udex_datastore::config::DatastoreConfig> {
-        let urn_str = self.datastore.connection_url.urn().to_string();
-        let mut config = udex_datastore::config::DatastoreConfig {
+        // URN copy pattern: reconstruct a fresh unbound Secret from the URN
+        // string and bind it against a new registry. This is the formalized
+        // pattern from secrets-rs 1.0.0 for sharing a secret across owners.
+        let urn_str = datastore.connection_url.urn().to_string();
+        let mut datastore_config = udex_datastore::config::DatastoreConfig {
             connection_url: Secret::new(&urn_str)
                 .expect("URN from a parsed Secret is always valid"),
-            max_connections: self.datastore.max_connections,
-            min_connections: self.datastore.min_connections,
-            connection_timeout: std::time::Duration::from_secs(
-                self.datastore.connection_timeout_secs,
-            ),
-            query_timeout: std::time::Duration::from_secs(self.datastore.query_timeout_secs),
-            dangerous_allow_non_tls: self.datastore.dangerous_allow_non_tls,
+            max_connections: datastore.max_connections,
+            min_connections: datastore.min_connections,
+            connection_timeout: Duration::from_secs(datastore.connection_timeout_secs),
+            query_timeout: Duration::from_secs(datastore.query_timeout_secs),
+            dangerous_allow_non_tls: datastore.dangerous_allow_non_tls,
         };
 
         // EnvSource is pre-registered by SourceRegistry::new() in secrets-rs 1.0.0.
         let registry = SourceRegistry::new();
-        bind_all(&mut config, &registry).map_err(|errs| {
+        bind_all(&mut datastore_config, &registry).map_err(|errs| {
             anyhow::anyhow!(
                 "failed to bind datastore secrets: {}",
                 errs.iter()
@@ -371,7 +302,7 @@ impl UdexConfig {
             )
         })?;
 
-        Ok(config)
+        Ok((server_config, datastore_config))
     }
 }
 
