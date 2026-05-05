@@ -28,8 +28,9 @@ fn hydra_admin_config(admin_url: &str) -> Configuration {
 
 /// Register (or update) an OAuth2 client in Hydra via the admin API.
 ///
-/// Uses PUT (upsert) so that stale clients from previous runs are updated to
-/// the current config rather than silently reused with outdated settings.
+/// Tries POST (create) first. On 409 Conflict (client already exists from a
+/// previous run), falls back to PUT (replace). This makes the call idempotent
+/// across both fresh Hydra instances (CI) and persistent ones (devcontainer).
 ///
 /// `admin_url` — base URL of the Hydra admin endpoint (e.g. `http://hydra:4445`).
 pub async fn create_oauth2_client(
@@ -49,11 +50,23 @@ pub async fn create_oauth2_client(
     body.scope = Some(client.scopes.join(" "));
     body.token_endpoint_auth_method = Some("client_secret_post".to_string());
 
+    match o_auth2_api::create_o_auth2_client(&config, body.clone()).await {
+        Ok(_) => return Ok(()),
+        Err(e) if is_conflict(&e) => {}
+        Err(e) => return Err(anyhow::anyhow!("Hydra create_client failed: {e}")),
+    }
+
     o_auth2_api::set_o_auth2_client(&config, &client_id, body)
         .await
-        .map_err(|e| anyhow::anyhow!("Hydra set_client failed: {e}"))?;
+        .map(|_| ())
+        .map_err(|e| anyhow::anyhow!("Hydra set_client failed: {e}"))
+}
 
-    Ok(())
+fn is_conflict<E>(e: &ory_hydra_client::apis::Error<E>) -> bool {
+    matches!(
+        e,
+        ory_hydra_client::apis::Error::ResponseError(r) if r.status.as_u16() == 409
+    )
 }
 
 /// Exchange client credentials for a JWT access token.
