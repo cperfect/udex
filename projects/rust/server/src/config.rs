@@ -183,6 +183,16 @@ impl AuthzConfig {
             ));
         }
 
+        if let Some(name) = &self.scope_claim_name {
+            if name.trim().is_empty() {
+                return Err(crate::Error::ConfigValidation(
+                    "scope_claim_name must not be empty or whitespace when set; \
+                     omit it to use the default 'scope' claim"
+                        .to_string(),
+                ));
+            }
+        }
+
         Ok(())
     }
 }
@@ -430,5 +440,45 @@ mod tests {
             scope_claim_name: None,
         };
         assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn authz_validate_scope_claim_name_none_ok() {
+        assert!(valid_authz().validate().is_ok());
+    }
+
+    #[test]
+    fn authz_validate_scope_claim_name_non_empty_ok() {
+        let cfg = AuthzConfig {
+            scope_claim_name: Some("scp".to_string()),
+            ..valid_authz()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn authz_validate_scope_claim_name_empty_is_err() {
+        let cfg = AuthzConfig {
+            scope_claim_name: Some(String::new()),
+            ..valid_authz()
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("scope_claim_name"),
+            "expected 'scope_claim_name' in error: {err}"
+        );
+    }
+
+    #[test]
+    fn authz_validate_scope_claim_name_whitespace_is_err() {
+        let cfg = AuthzConfig {
+            scope_claim_name: Some("   ".to_string()),
+            ..valid_authz()
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("scope_claim_name"),
+            "expected 'scope_claim_name' in error: {err}"
+        );
     }
 }
