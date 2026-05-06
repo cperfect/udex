@@ -138,12 +138,15 @@ impl BenchFixture {
     }
 
     /// Builds a bulk write request creating `n` new entries.
+    ///
+    /// Each entry gets a unique context so all `n` operations are genuine inserts
+    /// rather than idempotent returns of a single pre-existing key.
     pub fn bulk_create_request(&self, n: usize) -> BulkWriteEntryOperationRequest {
         let operations = (0..n)
             .map(|_| BulkWriteEntryOperation {
                 operation: Some(WriteOp::CreateEntry(CreateEntryRequest {
                     index_name: self.index_name.clone(),
-                    context: Some(Self::bench_context()),
+                    context: Some(self.unique_context()),
                 })),
             })
             .collect();
@@ -327,12 +330,22 @@ async fn start_server_and_connect() -> (
         .into_inner();
 
     // Seed BULK_SEED_COUNT entries for bulk read benchmarks via a single bulk write.
-    // All entries share the same context (reused by hash) — unique keys are server-generated.
+    // Each entry gets a unique context so all BULK_SEED_COUNT inserts land as distinct rows.
     let bulk_ops: Vec<BulkWriteEntryOperation> = (0..BULK_SEED_COUNT)
-        .map(|_| BulkWriteEntryOperation {
+        .map(|i| BulkWriteEntryOperation {
             operation: Some(WriteOp::CreateEntry(CreateEntryRequest {
                 index_name: index_name.clone(),
-                context: Some(BenchFixture::bench_context()),
+                context: Some(ContextInput {
+                    pairs: vec![KeyValuePair {
+                        key: "bench_seed_iter".to_string(),
+                        value: Some(Value {
+                            value: Some(udex_api::entry::value::Value::StringValue(i.to_string())),
+                        }),
+                        kek_id: None,
+                    }],
+                    dek: None,
+                    kek_id: None,
+                }),
             })),
         })
         .collect();

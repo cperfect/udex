@@ -116,7 +116,7 @@ fn bench_delete_entry(c: &mut Criterion) {
                     client
                         .create_entry(fix.authed(CreateEntryRequest {
                             index_name: fix.index_name.clone(),
-                            context: Some(common::BenchFixture::bench_context()),
+                            context: Some(fix.unique_context()),
                         }))
                         .await
                         .expect("create entry for delete bench setup")

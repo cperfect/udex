@@ -3,7 +3,7 @@ verblock: "06 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-06
 title: "Update benchmarks for unique-context and compare baseline"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-06: Update benchmarks for unique-context and compare baseline
