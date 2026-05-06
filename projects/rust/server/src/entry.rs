@@ -333,10 +333,9 @@ where
             return Err(Status::invalid_argument("operations cannot be empty"));
         }
 
-        // Convert API operations to datastore operations.
-        // Track context_hashes alongside ops so we can build responses after the write.
-        let mut datastore_operations = Vec::new();
-        let mut context_hashes: Vec<Option<String>> = Vec::new();
+        // Convert API operations into (datastore_op, context_hash) pairs kept together
+        // so the two can never diverge in length — eliminating the zip-truncation risk.
+        let mut ops_with_meta: Vec<(EntryWriteOperation, Option<String>)> = Vec::new();
 
         for op in req.operations {
             match op.operation {
@@ -353,7 +352,6 @@ where
 
                     // save this for the response before moving the context below
                     let context_hash = context.hash.clone();
-                    context_hashes.push(Some(context_hash));
 
                     // Create entry with the specified index name
                     let entry = Entry {
@@ -362,7 +360,7 @@ where
                         index_name: req.index_name.clone(),
                     };
 
-                    datastore_operations.push(EntryWriteOperation::Create(entry));
+                    ops_with_meta.push((EntryWriteOperation::Create(entry), Some(context_hash)));
                 }
                 Some(udex_api::entry::bulk_write_entry_operation::Operation::DeleteEntry(
                     delete_op,
@@ -370,17 +368,22 @@ where
                     let key = Uuid::parse_str(&delete_op.key)
                         .map_err(|_| Status::invalid_argument("Invalid key format"))?;
 
-                    context_hashes.push(None);
-                    datastore_operations.push(EntryWriteOperation::Delete {
-                        index_name: req.index_name.clone(),
-                        key,
-                    });
+                    ops_with_meta.push((
+                        EntryWriteOperation::Delete {
+                            index_name: req.index_name.clone(),
+                            key,
+                        },
+                        None,
+                    ));
                 }
                 None => {
                     return Err(Status::invalid_argument("operation is required"));
                 }
             }
         }
+
+        let (datastore_operations, context_hashes): (Vec<_>, Vec<_>) =
+            ops_with_meta.into_iter().unzip();
 
         // Execute bulk write — use returned results for actual keys (idempotent creates
         // may return a pre-existing key rather than the candidate key above).
@@ -389,6 +392,15 @@ where
             .bulk_entry_write(datastore_operations)
             .await
             .map_err(|e| self.datastore_error_to_status(e.into_source()))?;
+
+        // Validate the datastore upheld the contract of one result per operation.
+        if write_results.len() != context_hashes.len() {
+            return Err(Status::internal(format!(
+                "bulk write result count mismatch: expected {}, got {}",
+                context_hashes.len(),
+                write_results.len(),
+            )));
+        }
 
         let mut response_results = Vec::new();
         for (write_result, context_hash) in write_results.into_iter().zip(context_hashes) {
