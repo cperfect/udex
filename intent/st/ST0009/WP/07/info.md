@@ -3,7 +3,7 @@ verblock: "06 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-07
 title: "Update docs and README data model"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-07: Update docs and README data model

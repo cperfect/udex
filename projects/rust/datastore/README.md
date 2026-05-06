@@ -27,7 +27,9 @@ udex-datastore = { path = "../datastore" }
 
 ## Data Model
 
-Three tables make up the schema. `index` holds policy configuration for a named index; `context` is an immutable, content-addressed record of a key-value pair set; and `entry` is the join between the two — a server-generated UUID key scoped to one index and one context.
+Two tables make up the schema. `index` holds policy configuration for a named index; `entry_context` is a merged table that stores both the UUID entry key and its content-addressed context in a single row. The `UNIQUE(context_hash)` constraint enforces a strict 1:1 mapping: one context fingerprint maps to exactly one entry key, per the whole system (not per index).
+
+`create_entry` is idempotent on duplicate context: if an entry already exists for the submitted `context_hash`, the existing key is returned and no new row is written.
 
 ### Tables
 
@@ -47,31 +49,23 @@ Three tables make up the schema. `index` holds policy configuration for a named 
 | `updated_at` | `TIMESTAMPTZ` | Set on update; null until first update |
 | `updated_by` | `TEXT` | Subject of the last updating request |
 
-**`context`** — Content-addressed key-value fingerprints. The `hash` is derived from the `pairs` JSONB using the algorithm named in `hash_algorithm`. Two requests with identical pairs and the same algorithm produce the same context row; the hash serves as the deduplication key.
-
-| Column | Type | Notes |
-|---|---|---|
-| `hash` | `TEXT` | Primary key — hash of `pairs` |
-| `pairs` | `JSONB` | Serialised key-value pairs |
-| `dek` | `TEXT` | Optional Data Encryption Key reference |
-| `kek_id` | `TEXT` | Optional Key Encryption Key ID |
-| `hash_algorithm` | `TEXT` | Algorithm used to compute `hash` |
-
-**`entry`** — A server-generated UUID entry key scoped to one index and one context. Many entries may share the same context (same key-value fingerprint) within or across indexes.
+**`entry_context`** — A server-generated UUID key paired with its content-addressed context. `UNIQUE(context_hash)` enforces the 1:1 contract at the database level.
 
 | Column | Type | Notes |
 |---|---|---|
 | `key` | `UUID` | Primary key — server-generated |
 | `index_name` | `TEXT` | Foreign key → `index.name` |
-| `context_hash` | `TEXT` | Foreign key → `context.hash` |
+| `context_hash` | `TEXT` | Hash of `pairs`; `UNIQUE` — one context, one key |
+| `pairs` | `JSONB` | Serialised key-value pairs |
+| `dek` | `TEXT` | Optional Data Encryption Key reference |
+| `kek_id` | `TEXT` | Optional Key Encryption Key ID |
+| `hash_algorithm` | `TEXT` | Algorithm used to compute `context_hash` |
 
 ### Indexes
 
 | Name | Columns | Purpose |
 |---|---|---|
-| `idx_entry_context_hash` | `entry(context_hash)` | Context-based lookups |
-| `idx_entry_index_name` | `entry(index_name)` | Index-scoped queries |
-| `idx_entry_index_context` | `entry(index_name, context_hash)` | Multi-tenant context fan-out |
+| `idx_entry_context_index_context` | `entry_context(index_name, context_hash)` | Index-scoped context lookups; leftmost prefix serves index-only queries |
 
 ### Diagram
 
@@ -91,22 +85,17 @@ erDiagram
         text updated_by
     }
 
-    context {
-        text hash PK
+    entry_context {
+        uuid key PK
+        text index_name FK
+        text context_hash "UNIQUE"
         jsonb pairs
         text dek
         text kek_id
         text hash_algorithm
     }
 
-    entry {
-        uuid key PK
-        text index_name FK
-        text context_hash FK
-    }
-
-    index ||--o{ entry : "scopes"
-    context ||--o{ entry : "fingerprints"
+    index ||--o{ entry_context : "scopes"
 ```
 
 ## Development
