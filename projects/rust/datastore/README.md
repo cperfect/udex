@@ -27,7 +27,7 @@ udex-datastore = { path = "../datastore" }
 
 ## Data Model
 
-Two tables make up the schema. `index` holds policy configuration for a named index; `entry_context` is a merged table that stores both the UUID entry key and its content-addressed context in a single row. The `UNIQUE(context_hash)` constraint enforces a strict 1:1 mapping: one context fingerprint maps to exactly one entry key, per the whole system (not per index).
+Two tables make up the schema. `index` holds policy configuration for a named index; `entry_context` is a merged table that stores both the UUID entry key and its content-addressed context in a single row. The composite `UNIQUE(index_name, context_hash)` constraint enforces a strict 1:1 mapping: one context fingerprint maps to exactly one entry key **within a given index**. The same context hash may exist in different indexes and will produce independent keys.
 
 `create_entry` is idempotent on duplicate context: if an entry already exists for the submitted `context_hash`, the existing key is returned and no new row is written.
 
@@ -49,13 +49,13 @@ Two tables make up the schema. `index` holds policy configuration for a named in
 | `updated_at` | `TIMESTAMPTZ` | Set on update; null until first update |
 | `updated_by` | `TEXT` | Subject of the last updating request |
 
-**`entry_context`** — A server-generated UUID key paired with its content-addressed context. `UNIQUE(context_hash)` enforces the 1:1 contract at the database level.
+**`entry_context`** — A server-generated UUID key paired with its content-addressed context. `UNIQUE(index_name, context_hash)` enforces the 1:1 contract at the database level — uniqueness is scoped per index, not system-wide.
 
 | Column | Type | Notes |
 |---|---|---|
 | `key` | `UUID` | Primary key — server-generated |
 | `index_name` | `TEXT` | Foreign key → `index.name` |
-| `context_hash` | `TEXT` | Hash of `pairs`; `UNIQUE` — one context, one key |
+| `context_hash` | `TEXT` | Hash of `pairs`; unique per `index_name` — one context, one key within an index |
 | `pairs` | `JSONB` | Serialised key-value pairs |
 | `dek` | `TEXT` | Optional Data Encryption Key reference |
 | `kek_id` | `TEXT` | Optional Key Encryption Key ID |
@@ -88,7 +88,7 @@ erDiagram
     entry_context {
         uuid key PK
         text index_name FK
-        text context_hash "UNIQUE"
+        text context_hash "UNIQUE per index_name"
         jsonb pairs
         text dek
         text kek_id
