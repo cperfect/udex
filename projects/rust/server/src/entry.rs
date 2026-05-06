@@ -394,13 +394,15 @@ where
         for (write_result, context_hash) in write_results.into_iter().zip(context_hashes) {
             match write_result {
                 EntryWriteResult::Created(key) => {
+                    let context_hash = context_hash.ok_or_else(|| {
+                        Status::internal("bulk write Created result missing context_hash")
+                    })?;
                     response_results.push(BulkWriteEntryOperationResult {
                         result: Some(
                             udex_api::entry::bulk_write_entry_operation_result::Result::CreateEntry(
                                 CreateEntryResponse {
                                     key: key.to_string(),
-                                    context_hash: context_hash
-                                        .expect("Created result must have context_hash"),
+                                    context_hash,
                                 },
                             ),
                         ),
