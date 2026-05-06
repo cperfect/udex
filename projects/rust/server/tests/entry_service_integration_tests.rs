@@ -478,7 +478,7 @@ async fn test_bulk_read_entry_operation() {
             )),
         },
         BulkReadEntryOperation {
-            operation: Some(Operation::LookupKeys(
+            operation: Some(Operation::LookupKey(
                 udex_api::entry::LookupKeyByContextRequest {
                     index_name: index_name.clone(),
                     context_hash,
@@ -514,7 +514,7 @@ async fn test_bulk_read_entry_operation() {
     }
 
     // Second result should be a keys lookup returning the single stored key.
-    if let Some(udex_api::entry::bulk_read_entry_operation_result::Result::LookupKeys(
+    if let Some(udex_api::entry::bulk_read_entry_operation_result::Result::LookupKey(
         keys_response,
     )) = &results[1].result
     {

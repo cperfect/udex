@@ -451,7 +451,7 @@ where
 
                     datastore_operations.push(EntryReadOperation::GetByKey(key));
                 }
-                Some(udex_api::entry::bulk_read_entry_operation::Operation::LookupKeys(
+                Some(udex_api::entry::bulk_read_entry_operation::Operation::LookupKey(
                     lookup_op,
                 )) => {
                     if lookup_op.context_hash.is_empty() {
@@ -497,7 +497,7 @@ where
 
                     response_results.push(BulkReadEntryOperationResult {
                         result: Some(
-                            udex_api::entry::bulk_read_entry_operation_result::Result::LookupKeys(
+                            udex_api::entry::bulk_read_entry_operation_result::Result::LookupKey(
                                 keys_response,
                             ),
                         ),

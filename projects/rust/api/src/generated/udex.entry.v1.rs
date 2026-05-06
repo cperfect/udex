@@ -208,7 +208,7 @@ pub mod bulk_read_entry_operation {
         #[prost(message, tag = "1")]
         LookupContext(super::LookupContextByKeyRequest),
         #[prost(message, tag = "2")]
-        LookupKeys(super::LookupKeyByContextRequest),
+        LookupKey(super::LookupKeyByContextRequest),
     }
 }
 /// BulkReadEntryOperationRequest performs multiple read operations
@@ -243,7 +243,7 @@ pub mod bulk_read_entry_operation_result {
         #[prost(message, tag = "1")]
         LookupContext(super::LookupContextByKeyResponse),
         #[prost(message, tag = "2")]
-        LookupKeys(super::LookupKeyByContextResponse),
+        LookupKey(super::LookupKeyByContextResponse),
     }
 }
 /// Generated client implementations.

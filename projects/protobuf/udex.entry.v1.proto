@@ -145,7 +145,7 @@ message BulkWriteEntryOperationResult {
 message BulkReadEntryOperation {
   oneof operation {
     LookupContextByKeyRequest lookup_context = 1;
-    LookupKeyByContextRequest lookup_keys = 2;
+    LookupKeyByContextRequest lookup_key = 2;
   }
 }
 
@@ -164,6 +164,6 @@ message BulkReadEntryOperationResponse {
 message BulkReadEntryOperationResult {
   oneof result {
     LookupContextByKeyResponse lookup_context = 1;
-    LookupKeyByContextResponse lookup_keys = 2;
+    LookupKeyByContextResponse lookup_key = 2;
   }
 } 
