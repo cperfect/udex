@@ -122,7 +122,7 @@ pub struct LookupContextByKeyResponse {
     #[prost(message, optional, tag = "2")]
     pub context: ::core::option::Option<Context>,
 }
-/// LookupKeyByContextRequest retrieves keys for a context
+/// LookupKeyByContextRequest retrieves key for a context
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct LookupKeyByContextRequest {

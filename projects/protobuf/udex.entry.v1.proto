@@ -102,7 +102,7 @@ message LookupContextByKeyResponse {
   Context context = 2;
 }
 
-// LookupKeyByContextRequest retrieves keys for a context
+// LookupKeyByContextRequest retrieves key for a context
 message LookupKeyByContextRequest {
   string index_name = 1; // Name of the index to which this entry belongs
   string context_hash = 2;
