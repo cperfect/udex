@@ -25,6 +25,90 @@ Add to your `Cargo.toml`:
 udex-datastore = { path = "../datastore" }
 ```
 
+## Data Model
+
+Three tables make up the schema. `index` holds policy configuration for a named index; `context` is an immutable, content-addressed record of a key-value pair set; and `entry` is the join between the two — a server-generated UUID key scoped to one index and one context.
+
+### Tables
+
+**`index`** — Named index definitions. Each index declares the operational limits and hashing algorithm applied to entries stored under it.
+
+| Column | Type | Notes |
+|---|---|---|
+| `name` | `TEXT` | Primary key — unique index name |
+| `description` | `TEXT` | Human-readable description |
+| `max_bulk_operations` | `INTEGER` | Maximum operations per bulk request |
+| `max_key_length` | `INTEGER` | Maximum entry key length (bytes) |
+| `max_value_length` | `INTEGER` | Maximum context value length (bytes) |
+| `max_kv_pairs_per_context` | `INTEGER` | Maximum key-value pairs per context |
+| `hash_algorithm` | `TEXT` | Algorithm used to hash contexts (e.g. `Xxh3`) |
+| `created_at` | `TIMESTAMPTZ` | Set on insert |
+| `created_by` | `TEXT` | Subject of the creating request |
+| `updated_at` | `TIMESTAMPTZ` | Set on update; null until first update |
+| `updated_by` | `TEXT` | Subject of the last updating request |
+
+**`context`** — Content-addressed key-value fingerprints. The `hash` is derived from the `pairs` JSONB using the algorithm named in `hash_algorithm`. Two requests with identical pairs and the same algorithm produce the same context row; the hash serves as the deduplication key.
+
+| Column | Type | Notes |
+|---|---|---|
+| `hash` | `TEXT` | Primary key — hash of `pairs` |
+| `pairs` | `JSONB` | Serialised key-value pairs |
+| `dek` | `TEXT` | Optional Data Encryption Key reference |
+| `kek_id` | `TEXT` | Optional Key Encryption Key ID |
+| `hash_algorithm` | `TEXT` | Algorithm used to compute `hash` |
+
+**`entry`** — A server-generated UUID entry key scoped to one index and one context. Many entries may share the same context (same key-value fingerprint) within or across indexes.
+
+| Column | Type | Notes |
+|---|---|---|
+| `key` | `UUID` | Primary key — server-generated |
+| `index_name` | `TEXT` | Foreign key → `index.name` |
+| `context_hash` | `TEXT` | Foreign key → `context.hash` |
+
+### Indexes
+
+| Name | Columns | Purpose |
+|---|---|---|
+| `idx_entry_context_hash` | `entry(context_hash)` | Context-based lookups |
+| `idx_entry_index_name` | `entry(index_name)` | Index-scoped queries |
+| `idx_entry_index_context` | `entry(index_name, context_hash)` | Multi-tenant context fan-out |
+
+### Diagram
+
+```mermaid
+erDiagram
+    index {
+        text name PK
+        text description
+        integer max_bulk_operations
+        integer max_key_length
+        integer max_value_length
+        integer max_kv_pairs_per_context
+        text hash_algorithm
+        timestamptz created_at
+        text created_by
+        timestamptz updated_at
+        text updated_by
+    }
+
+    context {
+        text hash PK
+        jsonb pairs
+        text dek
+        text kek_id
+        text hash_algorithm
+    }
+
+    entry {
+        uuid key PK
+        text index_name FK
+        text context_hash FK
+    }
+
+    index ||--o{ entry : "scopes"
+    context ||--o{ entry : "fingerprints"
+```
+
 ## Development
 
 ### Running Tests
