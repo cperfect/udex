@@ -3,7 +3,7 @@ verblock: "06 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-04
 title: "Update datastore trait and PostgreSQL implementation"
 scope: Medium
-status: Not Started
+status: Done
 ---
 
 # WP-04: Update datastore trait and PostgreSQL implementation

@@ -10,6 +10,7 @@
 //! Compile-check only (no DB): `cargo bench --bench postgres_datastore --no-run`
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use udex_api::entry::{Context, KeyValuePair, Value};
@@ -22,10 +23,8 @@ use uuid::Uuid;
 const ID_PREFIX: &str = "bench-datastore";
 /// Number of entries pre-seeded for bulk read benchmarks.
 const BULK_SEED_COUNT: usize = 1000;
-/// Context hash used by all bench entries — shared by hash in the DB.
-const BENCH_CONTEXT_HASH: &str = "bench-context-hash-001";
-/// Context hash used exclusively by `bench_get_entries_by_context` so the
-/// lookup always measures a single-result fan-out.
+/// Context hash used exclusively by `bench_get_entry_by_context` so the
+/// lookup always measures a point lookup against a known-present entry.
 const GET_BY_CONTEXT_BENCH_HASH: &str = "bench-context-hash-get-by-context-only";
 
 /// All resources needed to run datastore benchmarks.
@@ -40,20 +39,22 @@ struct BenchFixture {
     seed_key: Uuid,
     /// Keys of `BULK_SEED_COUNT` pre-created entries for bulk read benchmarks.
     bulk_seed_keys: Vec<Uuid>,
+    /// Monotonic counter for producing a unique context hash per create iteration.
+    iter_counter: AtomicU64,
     _db_name: String,
 }
 
 impl BenchFixture {
-    /// Builds the shared bench context (same hash and pairs for all iterations).
-    fn bench_context() -> Context {
+    /// Returns a unique context per call so every `bench_create_entry` iteration
+    /// is a genuine insert rather than an idempotent return.
+    fn unique_context(&self) -> Context {
+        let n = self.iter_counter.fetch_add(1, Ordering::Relaxed);
         Context {
-            hash: BENCH_CONTEXT_HASH.to_string(),
+            hash: format!("bench-unique-context-{}", n),
             pairs: vec![KeyValuePair {
-                key: "bench_user_id".to_string(),
+                key: "bench_iter".to_string(),
                 value: Some(Value {
-                    value: Some(udex_api::entry::value::Value::StringValue(
-                        "bench_user_001".to_string(),
-                    )),
+                    value: Some(udex_api::entry::value::Value::StringValue(n.to_string())),
                 }),
                 kek_id: None,
             }],
@@ -62,8 +63,8 @@ impl BenchFixture {
         }
     }
 
-    /// Context used exclusively by `bench_get_entries_by_context` so the lookup
-    /// always measures a single-result fan-out, unaffected by other benchmarks.
+    /// Context used exclusively by `bench_get_entry_by_context` so the lookup
+    /// always measures a point lookup, unaffected by other benchmarks.
     fn get_by_context_bench_context() -> Context {
         Context {
             hash: GET_BY_CONTEXT_BENCH_HASH.to_string(),
@@ -78,15 +79,6 @@ impl BenchFixture {
             }],
             dek: None,
             kek_id: None,
-        }
-    }
-
-    /// Builds a new entry with a fresh UUID key against the bench index.
-    fn new_entry(index_name: &str) -> Entry {
-        Entry {
-            key: Uuid::new_v4(),
-            context: Self::bench_context(),
-            index_name: index_name.to_string(),
         }
     }
 }
@@ -105,6 +97,7 @@ fn fixture() -> &'static BenchFixture {
             index_name,
             seed_key,
             bulk_seed_keys,
+            iter_counter: AtomicU64::new(0),
             _db_name: db_name,
         }
     })
@@ -154,21 +147,46 @@ async fn setup_datastore() -> (
     datastore
         .create_entry(Entry {
             key: seed_key,
-            context: BenchFixture::bench_context(),
+            context: Context {
+                hash: "bench-seed-context".to_string(),
+                pairs: vec![KeyValuePair {
+                    key: "bench_user_id".to_string(),
+                    value: Some(Value {
+                        value: Some(udex_api::entry::value::Value::StringValue(
+                            "bench_user_001".to_string(),
+                        )),
+                    }),
+                    kek_id: None,
+                }],
+                dek: None,
+                kek_id: None,
+            },
             index_name: index_name.clone(),
         })
         .await
         .expect("create seed entry");
 
     // Seed BULK_SEED_COUNT entries for bulk read benchmarks.
-    // All share the same context hash (multiple entries can map to the same context).
+    // Each entry gets a unique context so all inserts land as distinct rows.
     let bulk_seed_keys: Vec<Uuid> = (0..BULK_SEED_COUNT).map(|_| Uuid::new_v4()).collect();
     let bulk_ops: Vec<EntryWriteOperation> = bulk_seed_keys
         .iter()
-        .map(|&key| {
+        .enumerate()
+        .map(|(i, &key)| {
             EntryWriteOperation::Create(Entry {
                 key,
-                context: BenchFixture::bench_context(),
+                context: Context {
+                    hash: format!("bench-bulk-seed-context-{}", i),
+                    pairs: vec![KeyValuePair {
+                        key: "bench_iter".to_string(),
+                        value: Some(Value {
+                            value: Some(udex_api::entry::value::Value::StringValue(i.to_string())),
+                        }),
+                        kek_id: None,
+                    }],
+                    dek: None,
+                    kek_id: None,
+                },
                 index_name: index_name.clone(),
             })
         })
@@ -189,7 +207,11 @@ fn bench_create_entry(c: &mut Criterion) {
     c.bench_function("datastore/pg/entry/create", |b| {
         b.to_async(fix.rt).iter(|| async {
             fix.datastore
-                .create_entry(BenchFixture::new_entry(&fix.index_name))
+                .create_entry(Entry {
+                    key: Uuid::new_v4(),
+                    context: fix.unique_context(),
+                    index_name: fix.index_name.clone(),
+                })
                 .await
                 .expect("create_entry failed");
         });
@@ -209,11 +231,11 @@ fn bench_get_entry_by_key(c: &mut Criterion) {
     });
 }
 
-fn bench_get_entries_by_context(c: &mut Criterion) {
+fn bench_get_entry_by_context(c: &mut Criterion) {
     let fix = fixture();
 
     // Seed exactly one entry with a context used by no other benchmark so the
-    // lookup always measures a single-result fan-out.
+    // lookup always measures a point lookup against a known-present entry.
     fix.rt.block_on(async {
         fix.datastore
             .create_entry(Entry {
@@ -228,9 +250,9 @@ fn bench_get_entries_by_context(c: &mut Criterion) {
     c.bench_function("datastore/pg/entry/get_by_context", |b| {
         b.to_async(fix.rt).iter(|| async {
             fix.datastore
-                .get_entries_by_context(GET_BY_CONTEXT_BENCH_HASH)
+                .get_entry_by_context(GET_BY_CONTEXT_BENCH_HASH)
                 .await
-                .expect("get_entries_by_context failed");
+                .expect("get_entry_by_context failed");
         });
     });
 }
@@ -247,7 +269,7 @@ fn bench_delete_entry(c: &mut Criterion) {
                     fix.datastore
                         .create_entry(Entry {
                             key,
-                            context: BenchFixture::bench_context(),
+                            context: fix.unique_context(),
                             index_name: fix.index_name.clone(),
                         })
                         .await
@@ -282,7 +304,13 @@ fn bench_bulk_write(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
             b.to_async(fix.rt).iter(|| async move {
                 let ops: Vec<EntryWriteOperation> = (0..n)
-                    .map(|_| EntryWriteOperation::Create(BenchFixture::new_entry(&fix.index_name)))
+                    .map(|_| {
+                        EntryWriteOperation::Create(Entry {
+                            key: Uuid::new_v4(),
+                            context: fix.unique_context(),
+                            index_name: fix.index_name.clone(),
+                        })
+                    })
                     .collect();
                 fix.datastore
                     .bulk_entry_write(ops)
@@ -324,7 +352,7 @@ criterion_group!(
     benches,
     bench_create_entry,
     bench_get_entry_by_key,
-    bench_get_entries_by_context,
+    bench_get_entry_by_context,
     bench_delete_entry,
     bench_bulk_write,
     bench_bulk_read,
