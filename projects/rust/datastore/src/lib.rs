@@ -98,7 +98,7 @@ impl Type<sqlx::Postgres> for UuidWrapper {
 }
 
 /// Represents an Entry in the index: a mapping between a key and a context
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Entry {
     pub key: Uuid,
     pub context: Context,
@@ -119,7 +119,7 @@ pub enum EntryWriteResult {
     Deleted,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntryReadOperation {
     GetByKey(Uuid),
     GetByContext {
@@ -128,7 +128,7 @@ pub enum EntryReadOperation {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EntryReadResult {
     /// Result of a `GetByKey` operation.
     Entry(Entry),
