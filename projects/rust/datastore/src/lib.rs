@@ -61,6 +61,14 @@ pub struct BulkOperationError {
     source: crate::Error,
 }
 
+impl BulkOperationError {
+    /// Returns the underlying datastore error, allowing callers to map it to
+    /// a precise status code rather than collapsing everything to `internal`.
+    pub fn into_source(self) -> crate::Error {
+        self.source
+    }
+}
+
 /// Wrapper type for Uuid to implement SQL traits
 #[derive(Debug, Clone, Copy)]
 pub struct UuidWrapper(pub Uuid);

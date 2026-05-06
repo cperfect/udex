@@ -384,7 +384,7 @@ where
             .datastore
             .bulk_entry_write(datastore_operations)
             .await
-            .map_err(|e| Status::internal(format!("Bulk write operation failed: {}", e)))?;
+            .map_err(|e| self.datastore_error_to_status(e.into_source()))?;
 
         let mut response_results = Vec::new();
         for (write_result, context_hash) in write_results.into_iter().zip(context_hashes) {
@@ -473,7 +473,7 @@ where
             .datastore
             .bulk_entry_read(datastore_operations)
             .await
-            .map_err(|e| Status::internal(format!("Bulk read operation failed: {}", e)))?;
+            .map_err(|e| self.datastore_error_to_status(e.into_source()))?;
 
         // Convert results to API format
         let mut response_results = Vec::new();
