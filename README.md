@@ -13,11 +13,13 @@ Udex
 
 Udex is a universal index that maps arbitrary unique keys against contexts. It is lightweight, fast, and efficient for high transaction volumes across organisational and regulatory boundaries.  entity identifiers across boundaries.
 
-While this could just be used as directory where the contexts are the entire entity records it is primarily intended for use in integration and data management scenarios:
+It has been built with the following integration and data management scenarios in mind:
 
 1. Providing stable and per-party keys for resolution across integration boundaries so that no parties share the same keys for the same entities (preventing compromise of one party leading to compromise of another) and that no external party needs to know the internal keys of the entity so that the internals are decoupled from the interfaces.
 2. Replacing a sensitive primary key with an non-sensitive one - e.g. use a UUID rather than a Credit Card number (PAN, which is PCI-DSS restricted) as keys to interact with Credit Card accounts.
 3. Attaching arbitrary metadata to an entity when the native store doesn't support it - for example data classification and leasing information.
+
+It is not intended to be a generic entity database and aggregate queries are deliberately not supported.
 
 For full detail on the data model, operations, components, security model, and design principles, see [docs/intent/ARCHITECTURE.md](docs/intent/ARCHITECTURE.md).
 
