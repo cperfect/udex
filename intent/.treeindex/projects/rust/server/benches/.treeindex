@@ -1,0 +1,13 @@
+<!-- treeindex v1 fingerprint:26f444dd generated:2026-05-06T01:12:29Z -->
+
+# benches/
+
+Performance benchmarks using Criterion for the Udex gRPC API. Measures request latency and throughput through the full stack including authentication, routing, and database operations. Requires a running PostgreSQL instance.
+
+## Dirs
+
+- `common/` -- Shared benchmark fixtures, harness setup, and test utilities
+
+## Files
+
+- `entry_service.rs` -- Criterion benchmarks for Entry gRPC service operations (create, lookup by key/context)

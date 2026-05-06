@@ -1,10 +1,15 @@
-<!-- treeindex v1 fingerprint:e1937ce9 generated:2026-04-06T03:50:43Z -->
+<!-- treeindex v1 fingerprint:293ac5f9 generated:2026-05-06T01:13:47Z -->
 
 # src/
 
-Core library implementation for the Udex API. Contains the main library exports, re-exports of auto-generated protobuf code, utility functions for timestamp conversion, and context hashing logic.
+Core API types, authorization, and utilities for the Udex service. Contains protobuf-generated gRPC definitions, authorization middleware, and helper functions for context hashing and timestamp conversion.
+
+## Dirs
+
+- `authz/` -- Authorization and permission enforcement for gRPC services
+- `generated/` -- Auto-generated Rust code from Protocol Buffer definitions
 
 ## Files
 
-- `lib.rs` -- Main library entry point; re-exports generated modules (index, entry, healthz) and common types; provides timestamp conversion utilities and Error enum
-- `hash.rs` -- Context hashing with SHA1, supporting deterministic hash generation via sorted key-value pairs and comprehensive test coverage
+- `lib.rs` -- Library root with module exports, Error enum, and timestamp conversion utilities
+- `hash.rs` -- Context hashing using xxHash (xxh3-64) with deterministic pair sorting

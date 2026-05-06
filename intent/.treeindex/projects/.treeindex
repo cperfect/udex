@@ -1,0 +1,11 @@
+<!-- treeindex v1 fingerprint:3e97041f generated:2026-05-06T01:15:59Z -->
+
+# projects/
+
+Implementation projects for Udex organized by technology stack. Contains the Rust workspace with gRPC server and CLI implementation, protobuf wire protocol definitions, and Docker Compose infrastructure for local development environments.
+
+## Dirs
+
+- `compose/` -- Docker Compose configuration for PostgreSQL, Hydra OAuth2, and database migration services
+- `protobuf/` -- Protobuf service definitions for IndexService, EntryService, and HealthzService
+- `rust/` -- Rust workspace with udex-api, udex-server, udex-datastore, and udex-cli crates

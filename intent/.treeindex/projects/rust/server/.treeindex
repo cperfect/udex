@@ -1,15 +1,16 @@
-<!-- treeindex v1 fingerprint:74d793af generated:2026-04-06T03:51:02Z -->
+<!-- treeindex v1 fingerprint:b67875d5 generated:2026-05-06T01:14:13Z -->
 
 # server/
 
-gRPC server for Udex providing authentication, service implementations, and server orchestration. Implements core Entry and Index services with TLS support, JWT authentication, and observability through tracing. Integration tests use Postgres containers and shared certificate fixtures.
+The udex-server crate providing the gRPC server implementation with service handlers, middleware, authorization enforcement, TLS support, and configuration management. Houses the library code, integration tests, and performance benchmarks.
 
 ## Dirs
 
-- `src/` -- Core server implementation with authentication, service handlers, and logging setup
-- `tests/` -- Integration test suite with TLS certificates and JWT key pairs
+- `benches/` -- Criterion performance benchmarks for gRPC service request latency and throughput
+- `src/` -- Core gRPC server implementation with service handlers, JWT authz, config, and logging
+- `tests/` -- Integration tests with OAuth2 fixtures, JWT key material, and TLS certificates
 
 ## Files
 
-- `Cargo.toml` -- Project manifest with gRPC, authentication, and observability dependencies
-- `README.md` -- Server documentation, features, usage, and architecture overview
+- `Cargo.toml` -- Package definition with dependencies for gRPC, TLS, JWT, and structured logging
+- `README.md` -- Crate overview, module responsibilities, authorization architecture, and server configuration

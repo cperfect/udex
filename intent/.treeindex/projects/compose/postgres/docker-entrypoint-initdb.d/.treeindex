@@ -1,0 +1,9 @@
+<!-- treeindex v1 fingerprint:cfe33ec4 generated:2026-05-06T01:13:54Z -->
+
+# docker-entrypoint-initdb.d/
+
+Directory for Docker initialization scripts that execute when the PostgreSQL container starts. Scripts are run in alphabetical order by the official PostgreSQL Docker image, enabling setup of additional databases, users, and initial configuration beyond the environment-variable-driven primary database.
+
+## Files
+
+- `01-init-hydra-db.sh` -- Initializes a secondary PostgreSQL database and user for Hydra, using safe psql variable substitution to prevent SQL injection in password handling

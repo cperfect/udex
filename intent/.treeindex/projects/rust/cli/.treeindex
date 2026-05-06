@@ -1,14 +1,15 @@
-<!-- treeindex v1 fingerprint:a8b401d7 generated:2026-04-06T03:51:17Z -->
+<!-- treeindex v1 fingerprint:3f1f06f9 generated:2026-05-06T01:14:38Z -->
 
 # cli/
 
-The CLI interface for Udex providing command-line tools for server management, index operations, context operations, and configuration validation. Supports multiple output formats (table, JSON, YAML) and offline utilities like hash computation, token inspection, and benchmarking.
+Command-line interface (udex binary) for the Udex universal lookup directory. Provides configuration management, index/entry operations, OAuth2 token fetching, context hashing, and server lifecycle control via a composable subcommand structure.
 
 ## Dirs
 
-- `src/` -- CLI implementation with subcommands and handlers
+- `src/` -- CLI source code: command definitions, gRPC client setup, config loading
+- `tests/` -- Integration tests for CLI subcommands and server lifecycle
 
 ## Files
 
-- `Cargo.toml` -- Package manifest and dependencies
-- `README.md` -- Feature documentation and usage examples
+- `Cargo.toml` -- Package manifest; depends on api, datastore, server crates
+- `README.md` -- CLI command reference and usage examples

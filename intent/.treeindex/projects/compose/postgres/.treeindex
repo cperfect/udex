@@ -1,0 +1,16 @@
+<!-- treeindex v1 fingerprint:6ca02612 generated:2026-05-06T01:15:03Z -->
+
+I need to find the postgres directory. Let me check the workspace structure.
+
+```bash
+find /workspace -type d -name "postgres" 2>/dev/null
+```
+
+This will help me locate the exact path of the postgres directory so I can generate the correct .treeindex file.
+
+Could you provide the full path to the postgres directory you'd like me to generate a .treeindex for? For example, is it:
+- `/workspace/postgres/`
+- `/workspace/projects/compose/postgres/`
+- Or somewhere else?
+
+Once I have the correct path, I can explore its contents and generate the .treeindex file following the format rules.

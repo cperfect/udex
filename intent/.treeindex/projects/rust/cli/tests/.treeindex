@@ -1,0 +1,12 @@
+<!-- treeindex v1 fingerprint:77f8e97c generated:2026-05-06T01:13:23Z -->
+
+# tests/
+
+Integration tests for the `udex` CLI binary using `assert_cmd` for subprocess spawning. Tests cover argument parsing, help discovery, config initialization, and the serve command with both offline and live server scenarios.
+
+## Files
+
+- `serve_live_tests.rs` -- End-to-end server integration: TLS config loading, gRPC health checks, PostgreSQL connectivity
+- `serve_tests.rs` -- Config validation and error handling for `udex serve` without live database
+- `config_tests.rs` -- `udex config` subcommand tests: init, templating, secrets resolution
+- `cli_tests.rs` -- Help text, subcommand discovery, unknown command rejection

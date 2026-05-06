@@ -1,5 +1,9 @@
-<!-- treeindex v1 fingerprint:431bddf9 generated:2026-04-06T03:50:07Z -->
+<!-- treeindex v1 fingerprint:6eb51903 generated:2026-05-06T01:12:41Z -->
 
-I need to check what files are in the tests/ directory. Let me look at the actual directory structure first.
+# tests/
 
-What files are currently in the tests/ directory? The postgres_integration_tests.rs source you showed me doesn't appear to be in the repo yet. Are you asking me to generate the .treeindex based on what will be there, or should I check the actual current state?
+Integration tests for the udex-server datastore implementations. Tests are organized by datastore type and use rstest with tokio-shared-rt to ensure reliable test isolation and state management across async test suites.
+
+## Files
+
+- `postgres_integration_tests.rs` -- PostgreSQL datastore integration tests covering index creation, context operations, and entry read/write workflows

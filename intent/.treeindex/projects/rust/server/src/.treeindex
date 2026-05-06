@@ -1,16 +1,16 @@
-<!-- treeindex v1 fingerprint:9391e2be generated:2026-04-06T03:49:59Z -->
+<!-- treeindex v1 fingerprint:437bb458 generated:2026-05-06T01:12:19Z -->
 
 # src/
 
-Core gRPC server implementation for Udex, providing authentication, service implementations, and server orchestration. Contains the main library exports, configuration management, logging setup, and service handlers for Entry, Index, and Health Check operations.
+Core gRPC server implementation for Udex, comprising service handlers, middleware, configuration management, and initialization logic. Exports the primary `start()` and `serve()` entry points, along with `EntryService`, `IndexService`, and `HealthzService` implementations.
 
 ## Files
 
-- `lib.rs` -- Library exports, Error type, and HealthCheck trait definition
-- `server.rs` -- Server startup, TLS configuration, and service initialization
-- `config.rs` -- ServerConfig, TlsConfig, and AuthNzConfig structures with validation
-- `logging.rs` -- Tracing subscriber initialization with JSON output
-- `authn.rs` -- JWT authentication interceptor for token validation and Bearer extraction
-- `healthz.rs` -- Health check service implementation across Entry and Index services
-- `index.rs` -- Index service with CRUD operations and datastore integration
-- `entry.rs` -- Entry service with bulk read/write operations and context hashing
+- `lib.rs` -- Library root; exports services, public error type, and HealthCheck trait
+- `server.rs` -- Server startup and wiring; initializes datastore, services, TLS, and authz interceptor
+- `authz.rs` -- JWT validation interceptor; supports static keys and JWKS discovery with algorithm inference
+- `config.rs` -- Configuration structures for server, TLS, and authz with validation
+- `logging.rs` -- Tracing initialization for JSON (production) and human-readable (test) output
+- `entry.rs` -- Entry service implementation; handles CRUD and bulk entry operations with context hashing
+- `index.rs` -- Index service implementation; manages index lifecycle and initialization
+- `healthz.rs` -- Health check service; aggregates health status from entry and index services

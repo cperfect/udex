@@ -1,0 +1,11 @@
+<!-- treeindex v1 fingerprint:0cdc3fdf generated:2026-05-06T01:15:23Z -->
+
+# protobuf/
+
+Protobuf definitions for the Udex service API. Defines three main services: IndexService (index configuration), EntryService (key-context mappings), and HealthzService (health checks). These are the wire contracts between client and server.
+
+## Files
+
+- `udex.index.v1.proto` -- Index service for creating and managing indices with configurable constraints and hash algorithms
+- `udex.entry.v1.proto` -- Entry service for creating/deleting key-context mappings and bulk read/write operations
+- `udex.healthz.v1.proto` -- Health check service for server status monitoring

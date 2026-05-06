@@ -1,16 +1,19 @@
-<!-- treeindex v1 fingerprint:29eab0dd generated:2026-04-06T03:49:52Z -->
+<!-- treeindex v1 fingerprint:4fbbeba8 generated:2026-05-06T01:12:08Z -->
 
 # tests/
 
-Integration test suite for gRPC services using the Maybe Once pattern for efficient Postgres container setup across tests. Includes shared fixtures for TLS certificates and JWT key pairs used across server and service tests.
+Integration and unit tests for the Udex server. Tests use the `maybe_once` pattern with `rstest` for shared test fixtures and resource cleanup. Includes test helpers for OAuth2 client registration and JWT token generation.
 
 ## Dirs
 
-- `certs/` -- Self-signed CA and server certificates for local HTTPS/TLS testing
-- `jwt/` -- ECDSA key pairs for JWT signing and verification in integration tests
+- `certs/` -- Self-signed TLS certificates and CA for local HTTPS testing
+- `jwt/` -- ECDSA P-256 key pairs for JWT signing and verification with good and bad keys
 
 ## Files
 
-- `server_integration_tests.rs` -- Full server integration tests with TLS, JWT auth, health checks, and Postgres setup
-- `entry_service_integration_tests.rs` -- Entry service integration tests with shared Postgres container and index initialization
-- `index_service_integration_tests.rs` -- Index service integration tests with shared Postgres container and test index setup
+- `server_integration_tests.rs` -- Integration tests for the server, tonic clients, and gRPC handlers; manages shared Postgres container and JWT key material
+- `entry_service_integration_tests.rs` -- Integration tests for entry service using shared Postgres fixtures
+- `index_service_integration_tests.rs` -- Integration tests for index service; verifies initialization and describe endpoints
+- `logging_init_tests.rs` -- Tests verifying global tracing subscriber installation; isolated binary to avoid interference
+- `logging_not_initialised_test.rs` -- Verification that no subscriber is set before init_tracing; sole test in its binary for isolation
+- `auth_server.rs` -- Test helper for Hydra OAuth2 client registration and client_credentials token exchange (ST0007/WP-03)

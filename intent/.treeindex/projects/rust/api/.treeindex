@@ -1,15 +1,15 @@
-<!-- treeindex v1 fingerprint:13dbc971 generated:2026-04-06T03:51:28Z -->
+<!-- treeindex v1 fingerprint:06bf80b5 generated:2026-05-06T01:14:51Z -->
 
 # api/
 
-Rust crate providing gRPC API definitions, client/server stubs, and protocol buffer bindings for Udex. The build process automatically generates code from protobuf definitions, applies Serde serialization support, and handles code generation into the `src/generated` directory.
+The `udex-api` crate containing protobuf-generated gRPC types, service definitions, and authorization logic for the Udex service. It has no I/O operations — all network concerns live in `udex-server` and `udex-cli`. The build script generates Rust code from three protobuf services: entry, index, and healthz.
 
 ## Dirs
 
-- `src/` -- Core library exports, generated protobuf modules, timestamp utilities, and context hashing logic
+- `src/` -- Core API types, authorization utilities, and generated protobuf code
 
 ## Files
 
-- `build.rs` -- Protobuf compilation script using tonic-build; generates Rust code with Serde support and fixes well-known types doc tests
-- `Cargo.toml` -- Package metadata and workspace dependency declarations for the udex-api crate
-- `README.md` -- Usage documentation with client/server examples and development guidelines for protobuf code generation
+- `build.rs` -- Protobuf compilation script; generates Rust types from .proto files and fixes google.protobuf doctests
+- `Cargo.toml` -- Package manifest with dependencies (tonic, prost, thiserror)
+- `README.md` -- API documentation including JWT claims format, permission scopes, and client usage examples
