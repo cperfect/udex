@@ -281,7 +281,7 @@ fn bench_delete_entry(c: &mut Criterion) {
             |key| {
                 fix.rt.block_on(async move {
                     fix.datastore
-                        .delete_entry(key)
+                        .delete_entry(&fix.index_name, key)
                         .await
                         .expect("delete_entry failed");
                 })

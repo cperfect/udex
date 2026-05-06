@@ -399,7 +399,7 @@ async fn test_delete_entry(#[context] ctx: Context) {
 
     // Delete the entry
     datastore
-        .delete_entry(stored_key)
+        .delete_entry(&idx_name, stored_key)
         .await
         .expect("Deleting entry should succeed");
 
@@ -764,7 +764,10 @@ async fn test_bulk_entry_write(#[context] ctx: Context) {
     let operations = vec![
         EntryWriteOperation::Create(entry1.clone()),
         EntryWriteOperation::Create(entry2.clone()),
-        EntryWriteOperation::Delete(stored_key3),
+        EntryWriteOperation::Delete {
+            index_name: idx_name.clone(),
+            key: stored_key3,
+        },
     ];
 
     let results = datastore
@@ -958,7 +961,10 @@ async fn test_bulk_entry_write_rollback(#[context] ctx: Context) {
     let non_existent_key = Uuid::new_v4();
     let operations = vec![
         EntryWriteOperation::Create(entry2),
-        EntryWriteOperation::Delete(non_existent_key),
+        EntryWriteOperation::Delete {
+            index_name: idx_name.clone(),
+            key: non_existent_key,
+        },
     ];
 
     let result = datastore.bulk_entry_write(operations).await;

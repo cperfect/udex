@@ -112,6 +112,7 @@ impl PostgresDatastore {
     /// Delete an entry within an existing transaction.
     async fn delete_entry_tx(
         &self,
+        index_name: &str,
         key: Uuid,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<(), Error> {
@@ -119,9 +120,11 @@ impl PostgresDatastore {
             r#"
             DELETE FROM entry_context
             WHERE key = $1
+              AND index_name = $2
             "#,
         )
         .bind(UuidWrapper(key))
+        .bind(index_name)
         .execute(&mut **tx)
         .await
         .map_err(Error::Database)?;
@@ -559,9 +562,9 @@ impl Datastore for PostgresDatastore {
             .await
     }
 
-    async fn delete_entry(&self, key: Uuid) -> Result<(), Error> {
+    async fn delete_entry(&self, index_name: &str, key: Uuid) -> Result<(), Error> {
         let mut tx = self.pool.begin().await.map_err(Error::Database)?;
-        self.delete_entry_tx(key, &mut tx).await?;
+        self.delete_entry_tx(index_name, key, &mut tx).await?;
         tx.commit().await.map_err(Error::Database)?;
         Ok(())
     }
@@ -617,8 +620,8 @@ impl Datastore for PostgresDatastore {
                     .create_entry_tx(entry, &mut tx)
                     .await
                     .map(EntryWriteResult::Created),
-                EntryWriteOperation::Delete(key) => self
-                    .delete_entry_tx(key, &mut tx)
+                EntryWriteOperation::Delete { index_name, key } => self
+                    .delete_entry_tx(&index_name, key, &mut tx)
                     .await
                     .map(|_| EntryWriteResult::Deleted),
             };

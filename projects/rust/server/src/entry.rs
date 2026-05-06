@@ -244,9 +244,10 @@ where
         let key = Uuid::parse_str(&req.key)
             .map_err(|_| Status::invalid_argument("Invalid key format"))?;
 
-        // Delete entry
+        // Delete entry — index_name is included in the WHERE clause so a caller with
+        // scope for index_a cannot delete a key that belongs to index_b.
         self.datastore
-            .delete_entry(key)
+            .delete_entry(&req.index_name, key)
             .await
             .map_err(|e| self.datastore_error_to_status(e))?;
 
@@ -370,7 +371,10 @@ where
                         .map_err(|_| Status::invalid_argument("Invalid key format"))?;
 
                     context_hashes.push(None);
-                    datastore_operations.push(EntryWriteOperation::Delete(key));
+                    datastore_operations.push(EntryWriteOperation::Delete {
+                        index_name: req.index_name.clone(),
+                        key,
+                    });
                 }
                 None => {
                     return Err(Status::invalid_argument("operation is required"));

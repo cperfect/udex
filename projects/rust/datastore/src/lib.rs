@@ -107,7 +107,7 @@ pub struct Entry {
 
 pub enum EntryWriteOperation {
     Create(Entry),
-    Delete(Uuid),
+    Delete { index_name: String, key: Uuid },
 }
 
 /// Result of a single write operation in a bulk write.
@@ -182,7 +182,7 @@ pub trait Datastore: Send + Sync {
     ) -> Result<Option<Entry>, Error>;
 
     /// Delete an entry by key.
-    async fn delete_entry(&self, key: Uuid) -> Result<(), Error>;
+    async fn delete_entry(&self, index_name: &str, key: Uuid) -> Result<(), Error>;
 
     /// Perform multiple entry write operations in a single transaction.
     /// Any failure will rollback all operations.
