@@ -1,8 +1,10 @@
 -- Initial schema for Udex datastore.
 --
 -- entry_context merges the former entry + context tables into one.
--- UNIQUE(context_hash) enforces the 1:1 constraint at the database level:
--- one context fingerprint produces exactly one entry key per index.
+-- UNIQUE(index_name, context_hash) enforces the 1:1 constraint per index:
+-- one context fingerprint produces exactly one entry key within a given index.
+-- The same context may appear in different indexes with independent keys.
+-- The unique constraint also serves as the B-tree index for context lookups.
 
 CREATE TABLE IF NOT EXISTS index (
     name                    TEXT        PRIMARY KEY,
@@ -21,14 +23,10 @@ CREATE TABLE IF NOT EXISTS index (
 CREATE TABLE IF NOT EXISTS entry_context (
     key             UUID        PRIMARY KEY,
     index_name      TEXT        NOT NULL REFERENCES index(name),
-    context_hash    TEXT        NOT NULL UNIQUE,
+    context_hash    TEXT        NOT NULL,
     pairs           JSONB       NOT NULL,
     dek             TEXT,
     kek_id          TEXT,
-    hash_algorithm  TEXT        NOT NULL
+    hash_algorithm  TEXT        NOT NULL,
+    CONSTRAINT uq_entry_context_index_hash UNIQUE (index_name, context_hash)
 );
-
--- Composite index for index-scoped context lookups.
--- Also serves index_name-only queries via the leftmost prefix.
-CREATE INDEX idx_entry_context_index_context
-    ON entry_context (index_name, context_hash);

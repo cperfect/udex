@@ -65,7 +65,7 @@ Two tables make up the schema. `index` holds policy configuration for a named in
 
 | Name | Columns | Purpose |
 |---|---|---|
-| `idx_entry_context_index_context` | `entry_context(index_name, context_hash)` | Index-scoped context lookups; leftmost prefix serves index-only queries |
+| `uq_entry_context_index_hash` | `entry_context(index_name, context_hash)` | Unique constraint + B-tree for index-scoped context lookups |
 
 ### Diagram
 

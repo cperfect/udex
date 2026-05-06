@@ -112,7 +112,10 @@ pub enum EntryWriteResult {
 
 pub enum EntryReadOperation {
     GetByKey(Uuid),
-    GetByContext(String),
+    GetByContext {
+        index_name: String,
+        context_hash: String,
+    },
 }
 
 pub enum EntryReadResult {
@@ -160,8 +163,12 @@ pub trait Datastore: Send + Sync {
     /// Get an entry by key
     async fn get_entry_by_key(&self, key: Uuid) -> Result<Entry, Error>;
 
-    /// Get the single entry for a context hash, if one exists.
-    async fn get_entry_by_context(&self, context_hash: &str) -> Result<Option<Entry>, Error>;
+    /// Get the single entry for a context hash within a named index, if one exists.
+    async fn get_entry_by_context(
+        &self,
+        index_name: &str,
+        context_hash: &str,
+    ) -> Result<Option<Entry>, Error>;
 
     /// Delete an entry by key.
     async fn delete_entry(&self, key: Uuid) -> Result<(), Error>;

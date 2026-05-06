@@ -250,7 +250,7 @@ fn bench_get_entry_by_context(c: &mut Criterion) {
     c.bench_function("datastore/pg/entry/get_by_context", |b| {
         b.to_async(fix.rt).iter(|| async {
             fix.datastore
-                .get_entry_by_context(GET_BY_CONTEXT_BENCH_HASH)
+                .get_entry_by_context(&fix.index_name, GET_BY_CONTEXT_BENCH_HASH)
                 .await
                 .expect("get_entry_by_context failed");
         });

@@ -302,10 +302,10 @@ where
             return Err(Status::invalid_argument("context_hash cannot be empty"));
         }
 
-        // Get entry by context hash — returns None when no entry exists
+        // Get entry by context hash within the named index — returns None when no entry exists
         let entry = self
             .datastore
-            .get_entry_by_context(&req.context_hash)
+            .get_entry_by_context(&req.index_name, &req.context_hash)
             .await
             .map_err(|e| self.datastore_error_to_status(e))?;
 
@@ -457,8 +457,10 @@ where
                         return Err(Status::invalid_argument("context_hash cannot be empty"));
                     }
 
-                    datastore_operations
-                        .push(EntryReadOperation::GetByContext(lookup_op.context_hash));
+                    datastore_operations.push(EntryReadOperation::GetByContext {
+                        index_name: req.index_name.clone(),
+                        context_hash: lookup_op.context_hash,
+                    });
                 }
                 None => {
                     return Err(Status::invalid_argument("operation is required"));

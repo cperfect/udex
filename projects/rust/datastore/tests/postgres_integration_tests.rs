@@ -320,7 +320,7 @@ async fn test_get_entry_by_context(#[context] ctx: Context) {
 
     // No entry yet — expect None.
     let result = datastore
-        .get_entry_by_context(&context.hash)
+        .get_entry_by_context(&idx_name, &context.hash)
         .await
         .expect("query should succeed");
     assert!(
@@ -340,7 +340,7 @@ async fn test_get_entry_by_context(#[context] ctx: Context) {
 
     // Exactly one entry — expect Some.
     let result = datastore
-        .get_entry_by_context(&context.hash)
+        .get_entry_by_context(&idx_name, &context.hash)
         .await
         .expect("Failed to get entry by context");
     let entry = result.expect("Expected Some after creating entry");
@@ -412,7 +412,7 @@ async fn test_delete_entry(#[context] ctx: Context) {
 
     // Verify the entry is gone by context
     let by_ctx = datastore
-        .get_entry_by_context(&context.hash)
+        .get_entry_by_context(&idx_name, &context.hash)
         .await
         .expect("query failed");
     assert!(
@@ -462,7 +462,9 @@ async fn test_error_handling() {
     );
 
     // Test getting entry by non-existent context returns None, not an error.
-    let result = datastore.get_entry_by_context("non_existent_context").await;
+    let result = datastore
+        .get_entry_by_context("non_existent_index", "non_existent_context")
+        .await;
     assert!(
         result.is_ok(),
         "Getting entry by non-existent context should succeed"
@@ -851,8 +853,14 @@ async fn test_bulk_entry_read(#[context] ctx: Context) {
     let operations = vec![
         EntryReadOperation::GetByKey(stored_key1),
         EntryReadOperation::GetByKey(stored_key2),
-        EntryReadOperation::GetByContext(context1.hash.clone()),
-        EntryReadOperation::GetByContext("nonexistent_hash".to_string()),
+        EntryReadOperation::GetByContext {
+            index_name: idx_name.clone(),
+            context_hash: context1.hash.clone(),
+        },
+        EntryReadOperation::GetByContext {
+            index_name: idx_name.clone(),
+            context_hash: "nonexistent_hash".to_string(),
+        },
     ];
 
     let result = datastore.bulk_entry_read(operations).await;
@@ -969,4 +977,214 @@ async fn test_bulk_entry_write_rollback(#[context] ctx: Context) {
     // Verify that entry1 still exists (it was created before the bulk operation)
     let entry1_result = datastore.get_entry_by_key(stored_key1).await;
     assert!(entry1_result.is_ok(), "entry1 should still exist");
+}
+
+/// Tests that the 1:1 constraint is per-index, not global.
+///
+/// The same context hash must be allowed to appear in two different indexes, each
+/// producing an independent entry key. A `UNIQUE(context_hash)` global constraint
+/// would reject the second insert — this test would then fail, proving the bug.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_same_context_different_indexes_get_independent_keys(#[context] ctx: Context) {
+    let data = data(false).await;
+    let datastore = &data.0;
+    let idx_a = format!("{}_multi_idx_a", index_name(&ctx));
+    let idx_b = format!("{}_multi_idx_b", index_name(&ctx));
+
+    datastore
+        .create_index(create_sample_index(&idx_a))
+        .await
+        .expect("create index A");
+    datastore
+        .create_index(create_sample_index(&idx_b))
+        .await
+        .expect("create index B");
+
+    // The same context pairs → same hash — used in both indexes.
+    let context = create_sample_context("shared_context_hash_multi_index");
+
+    let key_a = datastore
+        .create_entry(Entry {
+            key: Uuid::new_v4(),
+            context: context.clone(),
+            index_name: idx_a.clone(),
+        })
+        .await
+        .expect("create entry in index A");
+
+    // Must not fail — per-index uniqueness allows the same hash in a different index.
+    let key_b = datastore
+        .create_entry(Entry {
+            key: Uuid::new_v4(),
+            context: context.clone(),
+            index_name: idx_b.clone(),
+        })
+        .await
+        .expect("create entry in index B must succeed (per-index uniqueness)");
+
+    assert_ne!(key_a, key_b, "each index must produce an independent key");
+
+    // Lookup by context is scoped to the index — each returns its own entry.
+    let found_a = datastore
+        .get_entry_by_context(&idx_a, &context.hash)
+        .await
+        .expect("lookup in index A")
+        .expect("should be Some");
+    assert_eq!(found_a.key, key_a);
+    assert_eq!(found_a.index_name, idx_a);
+
+    let found_b = datastore
+        .get_entry_by_context(&idx_b, &context.hash)
+        .await
+        .expect("lookup in index B")
+        .expect("should be Some");
+    assert_eq!(found_b.key, key_b);
+    assert_eq!(found_b.index_name, idx_b);
+}
+
+/// Tests that idempotent create remains per-index under the new constraint.
+///
+/// Creating the same context twice in index A returns the same key both times.
+/// Creating the same context in index B is independent and gets its own key.
+/// This verifies the full per-index idempotency contract.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_idempotent_create_is_per_index(#[context] ctx: Context) {
+    let data = data(false).await;
+    let datastore = &data.0;
+    let idx_a = format!("{}_idem_idx_a", index_name(&ctx));
+    let idx_b = format!("{}_idem_idx_b", index_name(&ctx));
+
+    datastore
+        .create_index(create_sample_index(&idx_a))
+        .await
+        .expect("create index A");
+    datastore
+        .create_index(create_sample_index(&idx_b))
+        .await
+        .expect("create index B");
+
+    let context = create_sample_context("idempotent_multi_index_hash");
+
+    // First create in A.
+    let key_a1 = datastore
+        .create_entry(Entry {
+            key: Uuid::new_v4(),
+            context: context.clone(),
+            index_name: idx_a.clone(),
+        })
+        .await
+        .expect("first create in A");
+
+    // Second create in A with the same context — idempotent, must return key_a1.
+    let key_a2 = datastore
+        .create_entry(Entry {
+            key: Uuid::new_v4(),
+            context: context.clone(),
+            index_name: idx_a.clone(),
+        })
+        .await
+        .expect("second create in A");
+    assert_eq!(
+        key_a1, key_a2,
+        "idempotent create in same index must return same key"
+    );
+
+    // First create in B — independent of A, must get a new key.
+    let key_b = datastore
+        .create_entry(Entry {
+            key: Uuid::new_v4(),
+            context: context.clone(),
+            index_name: idx_b.clone(),
+        })
+        .await
+        .expect("first create in B");
+    assert_ne!(
+        key_a1, key_b,
+        "different indexes must produce independent keys"
+    );
+}
+
+/// Tests bulk read across two indexes with the same context hash.
+///
+/// GetByContext operations are scoped to an index — the same hash in two
+/// indexes returns two distinct entries, one per index.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_bulk_read_get_by_context_is_index_scoped(#[context] ctx: Context) {
+    let data = data(false).await;
+    let datastore = &data.0;
+    let idx_a = format!("{}_bulk_ctx_idx_a", index_name(&ctx));
+    let idx_b = format!("{}_bulk_ctx_idx_b", index_name(&ctx));
+
+    datastore
+        .create_index(create_sample_index(&idx_a))
+        .await
+        .expect("create index A");
+    datastore
+        .create_index(create_sample_index(&idx_b))
+        .await
+        .expect("create index B");
+
+    let context = create_sample_context("bulk_read_multi_index_hash");
+
+    let key_a = datastore
+        .create_entry(Entry {
+            key: Uuid::new_v4(),
+            context: context.clone(),
+            index_name: idx_a.clone(),
+        })
+        .await
+        .expect("create in A");
+    let key_b = datastore
+        .create_entry(Entry {
+            key: Uuid::new_v4(),
+            context: context.clone(),
+            index_name: idx_b.clone(),
+        })
+        .await
+        .expect("create in B");
+
+    let results = datastore
+        .bulk_entry_read(vec![
+            EntryReadOperation::GetByContext {
+                index_name: idx_a.clone(),
+                context_hash: context.hash.clone(),
+            },
+            EntryReadOperation::GetByContext {
+                index_name: idx_b.clone(),
+                context_hash: context.hash.clone(),
+            },
+            // Same hash, wrong index — must return None.
+            EntryReadOperation::GetByContext {
+                index_name: idx_a.clone(),
+                context_hash: "hash_that_does_not_exist".to_string(),
+            },
+        ])
+        .await
+        .expect("bulk read");
+
+    assert_eq!(results.len(), 3);
+
+    match &results[0] {
+        EntryReadResult::EntryByContext(Some(e)) => {
+            assert_eq!(e.key, key_a);
+            assert_eq!(e.index_name, idx_a);
+        }
+        other => panic!("expected Some entry for index A, got {:?}", other),
+    }
+
+    match &results[1] {
+        EntryReadResult::EntryByContext(Some(e)) => {
+            assert_eq!(e.key, key_b);
+            assert_eq!(e.index_name, idx_b);
+        }
+        other => panic!("expected Some entry for index B, got {:?}", other),
+    }
+
+    match &results[2] {
+        EntryReadResult::EntryByContext(None) => {}
+        other => panic!("expected None for missing hash, got {:?}", other),
+    }
 }

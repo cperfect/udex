@@ -30,10 +30,10 @@ impl PostgresDatastore {
 impl PostgresDatastore {
     /// Create an entry within an existing transaction.
     ///
-    /// Inserts into `entry_context` with `ON CONFLICT (context_hash) DO NOTHING`.
+    /// Inserts into `entry_context` with `ON CONFLICT (index_name, context_hash) DO NOTHING`.
     /// If the insert lands (rows_affected == 1) the provided key is returned.
-    /// If the context already exists the existing key is fetched and returned,
-    /// implementing the idempotent 1:1 contract.
+    /// If the context already exists within the same index the existing key is fetched
+    /// and returned, implementing the idempotent 1:1-per-index contract.
     async fn create_entry_tx(
         &self,
         entry: Entry,
@@ -69,7 +69,7 @@ impl PostgresDatastore {
                 $6,
                 $7
             )
-            ON CONFLICT (context_hash) DO NOTHING
+            ON CONFLICT (index_name, context_hash) DO NOTHING
             "#,
         )
         .bind(UuidWrapper(entry.key))
@@ -87,13 +87,15 @@ impl PostgresDatastore {
             return Ok(entry.key);
         }
 
-        // Context already existed — fetch the pre-existing key.
-        let existing_key: Uuid =
-            sqlx::query_scalar("SELECT key FROM entry_context WHERE context_hash = $1")
-                .bind(&entry.context.hash)
-                .fetch_one(&mut **tx)
-                .await
-                .map_err(Error::Database)?;
+        // Context already existed within this index — fetch the pre-existing key.
+        let existing_key: Uuid = sqlx::query_scalar(
+            "SELECT key FROM entry_context WHERE index_name = $1 AND context_hash = $2",
+        )
+        .bind(&entry.index_name)
+        .bind(&entry.context.hash)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(Error::Database)?;
 
         Ok(existing_key)
     }
@@ -151,9 +153,10 @@ impl PostgresDatastore {
         row_to_entry(&row)
     }
 
-    /// Get the single entry for a context hash, using an arbitrary executor.
+    /// Get the single entry for a context hash within a named index, using an arbitrary executor.
     async fn get_entry_by_context_ex<'e, E>(
         &self,
+        index_name: &str,
         context_hash: &str,
         executor: E,
     ) -> Result<Option<Entry>, Error>
@@ -173,9 +176,11 @@ impl PostgresDatastore {
             FROM
                 entry_context
             WHERE
-                context_hash = $1
+                index_name = $1
+                AND context_hash = $2
             "#,
         )
+        .bind(index_name)
         .bind(context_hash)
         .fetch_optional(executor)
         .await
@@ -537,8 +542,12 @@ impl Datastore for PostgresDatastore {
         self.get_entry_by_key_ex(key, &*self.pool).await
     }
 
-    async fn get_entry_by_context(&self, context_hash: &str) -> Result<Option<Entry>, Error> {
-        self.get_entry_by_context_ex(context_hash, &*self.pool)
+    async fn get_entry_by_context(
+        &self,
+        index_name: &str,
+        context_hash: &str,
+    ) -> Result<Option<Entry>, Error> {
+        self.get_entry_by_context_ex(index_name, context_hash, &*self.pool)
             .await
     }
 
@@ -561,8 +570,11 @@ impl Datastore for PostgresDatastore {
                     .get_entry_by_key_ex(key, &*self.pool)
                     .await
                     .map(EntryReadResult::Entry),
-                EntryReadOperation::GetByContext(context_hash) => self
-                    .get_entry_by_context_ex(&context_hash, &*self.pool)
+                EntryReadOperation::GetByContext {
+                    index_name,
+                    context_hash,
+                } => self
+                    .get_entry_by_context_ex(&index_name, &context_hash, &*self.pool)
                     .await
                     .map(EntryReadResult::EntryByContext),
             };
