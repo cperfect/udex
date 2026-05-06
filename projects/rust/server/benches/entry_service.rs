@@ -20,9 +20,9 @@ use udex_api::entry::{
 
 /// `grpc/entry/create` — insert one entry through the full gRPC stack.
 ///
-/// Each iteration produces a new server-generated UUID entry row against a
-/// shared context (the context is reused by hash — see schema). This
-/// measures the hot path: auth, routing, context lookup, and entry insert.
+/// Each iteration produces a unique context (via `fix.unique_context()`) so
+/// every call is a genuine insert, not an idempotent return of an existing key.
+/// This measures the hot path: auth, routing, context lookup, and entry insert.
 fn bench_create_entry(c: &mut Criterion) {
     let fix = common::fixture();
 
@@ -32,7 +32,7 @@ fn bench_create_entry(c: &mut Criterion) {
             client
                 .create_entry(fix.authed(CreateEntryRequest {
                     index_name: fix.index_name.clone(),
-                    context: Some(common::BenchFixture::bench_context()),
+                    context: Some(fix.unique_context()),
                 }))
                 .await
                 .expect("create_entry failed");

@@ -8,6 +8,7 @@
 use jsonwebtoken::{encode, EncodingKey, Header};
 use secrets_rs::{sources::file::FileSource, Secret, SourceRegistry};
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 use time::OffsetDateTime;
 use tokio::time::{sleep, Duration, Instant};
@@ -47,6 +48,8 @@ pub struct BenchFixture {
     /// Keys of `BULK_SEED_COUNT` pre-created entries — used by bulk read benchmarks.
     /// The first N keys cover bulk reads at N = 10, 100, and 1000.
     pub bulk_seed_keys: Vec<String>,
+    /// Monotonic counter used to produce a unique context per `bench_create_entry` iteration.
+    pub iter_counter: AtomicU64,
     // Held to prevent the server task and database from being dropped.
     _server_handle: tokio::task::JoinHandle<()>,
     _db_name: String,
@@ -86,6 +89,26 @@ impl BenchFixture {
                     value: Some(udex_api::entry::value::Value::StringValue(
                         "bench_user_001".to_string(),
                     )),
+                }),
+                kek_id: None,
+            }],
+            dek: None,
+            kek_id: None,
+        }
+    }
+
+    /// Returns a unique context input per call, suitable for `bench_create_entry`.
+    ///
+    /// Uses a monotonic counter so each iteration produces a distinct context
+    /// fingerprint. Required for a valid baseline under 1:1 semantics (where
+    /// reusing the same context would make all but the first iteration a no-op).
+    pub fn unique_context(&self) -> ContextInput {
+        let n = self.iter_counter.fetch_add(1, Ordering::Relaxed);
+        ContextInput {
+            pairs: vec![KeyValuePair {
+                key: "bench_iter".to_string(),
+                value: Some(Value {
+                    value: Some(udex_api::entry::value::Value::StringValue(n.to_string())),
                 }),
                 kek_id: None,
             }],
@@ -162,6 +185,7 @@ pub fn fixture() -> &'static BenchFixture {
             bearer_token,
             seed_entry_key,
             bulk_seed_keys,
+            iter_counter: AtomicU64::new(0),
             _server_handle: server_handle,
             _db_name: db_name,
         }
