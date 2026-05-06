@@ -577,7 +577,7 @@ impl Datastore for PostgresDatastore {
                 EntryReadOperation::GetByKey(key) => self
                     .get_entry_by_key_ex(key, &*self.pool)
                     .await
-                    .map(EntryReadResult::Entry),
+                    .map(EntryReadResult::ByKey),
                 EntryReadOperation::GetByContext {
                     index_name,
                     context_hash,

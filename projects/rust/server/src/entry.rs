@@ -481,7 +481,7 @@ where
 
         for result in results {
             match result {
-                EntryReadResult::Entry(entry) => {
+                EntryReadResult::ByKey(entry) => {
                     let context_response = LookupContextByKeyResponse {
                         index_name: req.index_name.clone(),
                         context: Some(self.datastore_entry_to_context(&entry)),

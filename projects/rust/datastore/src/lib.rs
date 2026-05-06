@@ -131,7 +131,7 @@ pub enum EntryReadOperation {
 #[derive(Debug, Clone, PartialEq)]
 pub enum EntryReadResult {
     /// Result of a `GetByKey` operation.
-    Entry(Entry),
+    ByKey(Entry),
     /// Result of a `GetByContext` operation — `None` when no entry exists for the hash.
     EntryByContext(Option<Entry>),
 }

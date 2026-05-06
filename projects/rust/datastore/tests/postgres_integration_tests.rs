@@ -875,7 +875,7 @@ async fn test_bulk_entry_read(#[context] ctx: Context) {
 
     // Check first result - GetByKey(stored_key1)
     match &results[0] {
-        EntryReadResult::Entry(entry) => {
+        EntryReadResult::ByKey(entry) => {
             assert_eq!(entry.key, stored_key1);
             assert_eq!(entry.context.hash, context1.hash);
             assert_eq!(entry.index_name, idx_name);
@@ -886,7 +886,7 @@ async fn test_bulk_entry_read(#[context] ctx: Context) {
 
     // Check second result - GetByKey(stored_key2)
     match &results[1] {
-        EntryReadResult::Entry(entry) => {
+        EntryReadResult::ByKey(entry) => {
             assert_eq!(entry.key, stored_key2);
             assert_eq!(entry.context.hash, context2.hash);
             assert_eq!(entry.index_name, idx_name);
