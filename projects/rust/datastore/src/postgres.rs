@@ -88,14 +88,23 @@ impl PostgresDatastore {
         }
 
         // Context already existed within this index — fetch the pre-existing key.
+        // fetch_optional is used rather than fetch_one because a concurrent DELETE
+        // (READ COMMITTED isolation) can remove the row between the conflict and
+        // this SELECT. None is treated as a transient error; the caller should retry.
         let existing_key: Uuid = sqlx::query_scalar(
             "SELECT key FROM entry_context WHERE index_name = $1 AND context_hash = $2",
         )
         .bind(&entry.index_name)
         .bind(&entry.context.hash)
-        .fetch_one(&mut **tx)
+        .fetch_optional(&mut **tx)
         .await
-        .map_err(Error::Database)?;
+        .map_err(Error::Database)?
+        .ok_or_else(|| {
+            Error::Transaction(
+                "entry was concurrently deleted between conflict detection and key fetch"
+                    .to_string(),
+            )
+        })?;
 
         Ok(existing_key)
     }
