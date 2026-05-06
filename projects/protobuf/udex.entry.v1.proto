@@ -9,18 +9,19 @@ import "google/protobuf/timestamp.proto";
 
 // EntryService provides operations for managing context-key entries
 service EntryService {
-  // CreateEntry creates a new entry between a key and context
+  // CreateEntry creates a new entry for a context. Idempotent: if an entry
+  // already exists for the given context within the index, the existing key
+  // is returned unchanged (no duplicate is created).
   rpc CreateEntry(CreateEntryRequest) returns (CreateEntryResponse);
-  
-  // DeleteEntry removes a key-context entry
-  // if the entrye deleted is the last one for the context,
-  // the context is also deleted
+
+  // DeleteEntry removes an entry by key.
   rpc DeleteEntry(DeleteEntryRequest) returns (DeleteEntryResponse);
-  
+
   // LookupContextByKey retrieves the context for a given key
   rpc LookupContextByKey(LookupContextByKeyRequest) returns (LookupContextByKeyResponse);
-  
-  // LookupKeysByContext retrieves all keys for a given context
+
+  // LookupKeysByContext retrieves the single key for a given context, if one exists.
+  // Returns an empty key field when no entry matches the context hash.
   rpc LookupKeysByContext(LookupKeysByContextRequest) returns (LookupKeysByContextResponse);
   
   // BulkWriteEntryOperation performs multiple write operations in a single transaction
@@ -73,7 +74,8 @@ message CreateEntryRequest {
   ContextInput context = 2;
 }
 
-// CreateEntryResponse returns the created entry
+// CreateEntryResponse returns the entry key — either newly created or the
+// existing key if the context was already registered in this index.
 message CreateEntryResponse {
   string key = 1; // Server-generated UUIDv4 globally unique key
   string context_hash = 2; // Server-generated context hash
@@ -106,9 +108,10 @@ message LookupKeysByContextRequest {
   string context_hash = 2;
 }
 
-// LookupKeysByContextResponse returns the keys
+// LookupKeysByContextResponse returns the single key for the context, if found.
+// The key field is absent when no entry exists for the given context hash.
 message LookupKeysByContextResponse {
-  repeated string keys = 1;
+  optional string key = 1;
 }
 
 // BulkWriteEntryOperation represents a single write operation in a bulk write request

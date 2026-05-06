@@ -76,7 +76,8 @@ pub struct CreateEntryRequest {
     #[prost(message, optional, tag = "2")]
     pub context: ::core::option::Option<ContextInput>,
 }
-/// CreateEntryResponse returns the created entry
+/// CreateEntryResponse returns the entry key — either newly created or the
+/// existing key if the context was already registered in this index.
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateEntryResponse {
@@ -131,12 +132,13 @@ pub struct LookupKeysByContextRequest {
     #[prost(string, tag = "2")]
     pub context_hash: ::prost::alloc::string::String,
 }
-/// LookupKeysByContextResponse returns the keys
+/// LookupKeysByContextResponse returns the single key for the context, if found.
+/// The key field is absent when no entry exists for the given context hash.
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct LookupKeysByContextResponse {
-    #[prost(string, repeated, tag = "1")]
-    pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "1")]
+    pub key: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// BulkWriteEntryOperation represents a single write operation in a bulk write request
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -336,7 +338,9 @@ pub mod entry_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
-        /// CreateEntry creates a new entry between a key and context
+        /// CreateEntry creates a new entry for a context. Idempotent: if an entry
+        /// already exists for the given context within the index, the existing key
+        /// is returned unchanged (no duplicate is created).
         pub async fn create_entry(
             &mut self,
             request: impl tonic::IntoRequest<super::CreateEntryRequest>,
@@ -361,9 +365,7 @@ pub mod entry_service_client {
                 .insert(GrpcMethod::new("udex.entry.v1.EntryService", "CreateEntry"));
             self.inner.unary(req, path, codec).await
         }
-        /// DeleteEntry removes a key-context entry
-        /// if the entrye deleted is the last one for the context,
-        /// the context is also deleted
+        /// DeleteEntry removes an entry by key.
         pub async fn delete_entry(
             &mut self,
             request: impl tonic::IntoRequest<super::DeleteEntryRequest>,
@@ -415,7 +417,8 @@ pub mod entry_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
-        /// LookupKeysByContext retrieves all keys for a given context
+        /// LookupKeysByContext retrieves the single key for a given context, if one exists.
+        /// Returns an empty key field when no entry matches the context hash.
         pub async fn lookup_keys_by_context(
             &mut self,
             request: impl tonic::IntoRequest<super::LookupKeysByContextRequest>,
@@ -518,7 +521,9 @@ pub mod entry_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with EntryServiceServer.
     #[async_trait]
     pub trait EntryService: std::marker::Send + std::marker::Sync + 'static {
-        /// CreateEntry creates a new entry between a key and context
+        /// CreateEntry creates a new entry for a context. Idempotent: if an entry
+        /// already exists for the given context within the index, the existing key
+        /// is returned unchanged (no duplicate is created).
         async fn create_entry(
             &self,
             request: tonic::Request<super::CreateEntryRequest>,
@@ -526,9 +531,7 @@ pub mod entry_service_server {
             tonic::Response<super::CreateEntryResponse>,
             tonic::Status,
         >;
-        /// DeleteEntry removes a key-context entry
-        /// if the entrye deleted is the last one for the context,
-        /// the context is also deleted
+        /// DeleteEntry removes an entry by key.
         async fn delete_entry(
             &self,
             request: tonic::Request<super::DeleteEntryRequest>,
@@ -544,7 +547,8 @@ pub mod entry_service_server {
             tonic::Response<super::LookupContextByKeyResponse>,
             tonic::Status,
         >;
-        /// LookupKeysByContext retrieves all keys for a given context
+        /// LookupKeysByContext retrieves the single key for a given context, if one exists.
+        /// Returns an empty key field when no entry matches the context hash.
         async fn lookup_keys_by_context(
             &self,
             request: tonic::Request<super::LookupKeysByContextRequest>,

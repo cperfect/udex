@@ -55,9 +55,7 @@ where
         self.inner.create_entry(request).await
     }
 
-    /// DeleteEntry removes a key-context entry
-    /// if the entry deleted is the last one for the context,
-    /// the context is also deleted
+    /// DeleteEntry removes an entry by key.
     async fn delete_entry(
         &self,
         request: tonic::Request<DeleteEntryRequest>,
@@ -95,7 +93,7 @@ where
         self.inner.lookup_context_by_key(request).await
     }
 
-    /// LookupKeysByContext retrieves all keys for a given context
+    /// LookupKeysByContext retrieves the single key for a given context, if one exists.
     async fn lookup_keys_by_context(
         &self,
         request: tonic::Request<LookupKeysByContextRequest>,
@@ -394,7 +392,7 @@ mod tests {
         mock_service
             .expect_lookup_keys_by_context()
             .times(1)
-            .returning(|_| Ok(Response::new(LookupKeysByContextResponse { keys: vec![] })));
+            .returning(|_| Ok(Response::new(LookupKeysByContextResponse { key: None })));
 
         let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
         let claims = create_test_claims_with_permissions(vec![format!(

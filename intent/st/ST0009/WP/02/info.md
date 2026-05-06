@@ -3,7 +3,7 @@ verblock: "06 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Update proto/API definitions for 1:1 semantics"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-02: Update proto/API definitions for 1:1 semantics
