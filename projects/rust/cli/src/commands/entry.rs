@@ -7,7 +7,7 @@ use tabled::{Table, Tabled};
 use udex_api::entry::entry_service_client::EntryServiceClient;
 use udex_api::entry::{
     value, ContextInput, CreateEntryRequest, DeleteEntryRequest, KeyValuePair,
-    LookupContextByKeyRequest, LookupKeysByContextRequest, Value,
+    LookupContextByKeyRequest, LookupKeyByContextRequest, Value,
 };
 use udex_api::hash::xxh3_context_hash;
 
@@ -172,12 +172,12 @@ pub async fn lookup(
     let mut grpc = EntryServiceClient::with_interceptor(channel, client.interceptor());
 
     let resp = grpc
-        .lookup_keys_by_context(LookupKeysByContextRequest {
+        .lookup_key_by_context(LookupKeyByContextRequest {
             index_name: args.index,
             context_hash,
         })
         .await
-        .context("lookup_keys_by_context RPC failed")?
+        .context("lookup_key_by_context RPC failed")?
         .into_inner();
 
     match resp.key {

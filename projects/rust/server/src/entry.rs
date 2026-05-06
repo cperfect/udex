@@ -10,7 +10,7 @@ use udex_api::{
         BulkWriteEntryOperationRequest, BulkWriteEntryOperationResponse,
         BulkWriteEntryOperationResult, Context, ContextInput, CreateEntryRequest,
         CreateEntryResponse, DeleteEntryRequest, DeleteEntryResponse, LookupContextByKeyRequest,
-        LookupContextByKeyResponse, LookupKeysByContextRequest, LookupKeysByContextResponse,
+        LookupContextByKeyResponse, LookupKeyByContextRequest, LookupKeyByContextResponse,
     },
     hash::{xxh3_context_hash, ContextHasher},
     index::{index_service_server::IndexService, ListIndicesRequest},
@@ -287,10 +287,10 @@ where
     }
 
     /// Looks up the single key associated with a context hash, if one exists.
-    async fn lookup_keys_by_context(
+    async fn lookup_key_by_context(
         &self,
-        request: Request<LookupKeysByContextRequest>,
-    ) -> Result<Response<LookupKeysByContextResponse>, Status> {
+        request: Request<LookupKeyByContextRequest>,
+    ) -> Result<Response<LookupKeyByContextResponse>, Status> {
         let req = request.into_inner();
 
         // Validate index_name
@@ -311,7 +311,7 @@ where
 
         let key = entry.map(|e| e.key.to_string());
 
-        let response = LookupKeysByContextResponse { key };
+        let response = LookupKeyByContextResponse { key };
         Ok(Response::new(response))
     }
 
@@ -492,7 +492,7 @@ where
                 }
                 EntryReadResult::EntryByContext(opt_entry) => {
                     let key = opt_entry.map(|e| e.key.to_string());
-                    let keys_response = LookupKeysByContextResponse { key };
+                    let keys_response = LookupKeyByContextResponse { key };
 
                     response_results.push(BulkReadEntryOperationResult {
                         result: Some(

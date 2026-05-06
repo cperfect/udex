@@ -276,10 +276,10 @@ async fn test_lookup_context_by_key() {
 /// calls return the same key. A subsequent lookup returns that single key.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_lookup_keys_by_context() {
+async fn test_lookup_key_by_context() {
     use tonic::Request;
     use udex_api::entry::{
-        ContextInput, CreateEntryRequest, KeyValuePair, LookupKeysByContextRequest, Value,
+        ContextInput, CreateEntryRequest, KeyValuePair, LookupKeyByContextRequest, Value,
     };
 
     let data = data(false).await;
@@ -328,7 +328,7 @@ async fn test_lookup_keys_by_context() {
 
     // Lookup by context hash — returns the single stored key.
     let lookup = entry_server
-        .lookup_keys_by_context(Request::new(LookupKeysByContextRequest {
+        .lookup_key_by_context(Request::new(LookupKeyByContextRequest {
             index_name: index_name.clone(),
             context_hash,
         }))
@@ -479,7 +479,7 @@ async fn test_bulk_read_entry_operation() {
         },
         BulkReadEntryOperation {
             operation: Some(Operation::LookupKeys(
-                udex_api::entry::LookupKeysByContextRequest {
+                udex_api::entry::LookupKeyByContextRequest {
                     index_name: index_name.clone(),
                     context_hash,
                 },

@@ -122,21 +122,21 @@ pub struct LookupContextByKeyResponse {
     #[prost(message, optional, tag = "2")]
     pub context: ::core::option::Option<Context>,
 }
-/// LookupKeysByContextRequest retrieves keys for a context
+/// LookupKeyByContextRequest retrieves keys for a context
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct LookupKeysByContextRequest {
+pub struct LookupKeyByContextRequest {
     /// Name of the index to which this entry belongs
     #[prost(string, tag = "1")]
     pub index_name: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
     pub context_hash: ::prost::alloc::string::String,
 }
-/// LookupKeysByContextResponse returns the single key for the context, if found.
+/// LookupKeyByContextResponse returns the single key for the context, if found.
 /// The key field is absent when no entry exists for the given context hash.
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct LookupKeysByContextResponse {
+pub struct LookupKeyByContextResponse {
     #[prost(string, optional, tag = "1")]
     pub key: ::core::option::Option<::prost::alloc::string::String>,
 }
@@ -208,7 +208,7 @@ pub mod bulk_read_entry_operation {
         #[prost(message, tag = "1")]
         LookupContext(super::LookupContextByKeyRequest),
         #[prost(message, tag = "2")]
-        LookupKeys(super::LookupKeysByContextRequest),
+        LookupKeys(super::LookupKeyByContextRequest),
     }
 }
 /// BulkReadEntryOperationRequest performs multiple read operations
@@ -243,7 +243,7 @@ pub mod bulk_read_entry_operation_result {
         #[prost(message, tag = "1")]
         LookupContext(super::LookupContextByKeyResponse),
         #[prost(message, tag = "2")]
-        LookupKeys(super::LookupKeysByContextResponse),
+        LookupKeys(super::LookupKeyByContextResponse),
     }
 }
 /// Generated client implementations.
@@ -417,13 +417,13 @@ pub mod entry_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
-        /// LookupKeysByContext retrieves the single key for a given context, if one exists.
+        /// LookupKeyByContext retrieves the single key for a given context, if one exists.
         /// Returns an empty key field when no entry matches the context hash.
-        pub async fn lookup_keys_by_context(
+        pub async fn lookup_key_by_context(
             &mut self,
-            request: impl tonic::IntoRequest<super::LookupKeysByContextRequest>,
+            request: impl tonic::IntoRequest<super::LookupKeyByContextRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::LookupKeysByContextResponse>,
+            tonic::Response<super::LookupKeyByContextResponse>,
             tonic::Status,
         > {
             self.inner
@@ -436,12 +436,12 @@ pub mod entry_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/udex.entry.v1.EntryService/LookupKeysByContext",
+                "/udex.entry.v1.EntryService/LookupKeyByContext",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new("udex.entry.v1.EntryService", "LookupKeysByContext"),
+                    GrpcMethod::new("udex.entry.v1.EntryService", "LookupKeyByContext"),
                 );
             self.inner.unary(req, path, codec).await
         }
@@ -547,13 +547,13 @@ pub mod entry_service_server {
             tonic::Response<super::LookupContextByKeyResponse>,
             tonic::Status,
         >;
-        /// LookupKeysByContext retrieves the single key for a given context, if one exists.
+        /// LookupKeyByContext retrieves the single key for a given context, if one exists.
         /// Returns an empty key field when no entry matches the context hash.
-        async fn lookup_keys_by_context(
+        async fn lookup_key_by_context(
             &self,
-            request: tonic::Request<super::LookupKeysByContextRequest>,
+            request: tonic::Request<super::LookupKeyByContextRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::LookupKeysByContextResponse>,
+            tonic::Response<super::LookupKeyByContextResponse>,
             tonic::Status,
         >;
         /// BulkWriteEntryOperation performs multiple write operations in a single transaction
@@ -787,25 +787,25 @@ pub mod entry_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/udex.entry.v1.EntryService/LookupKeysByContext" => {
+                "/udex.entry.v1.EntryService/LookupKeyByContext" => {
                     #[allow(non_camel_case_types)]
-                    struct LookupKeysByContextSvc<T: EntryService>(pub Arc<T>);
+                    struct LookupKeyByContextSvc<T: EntryService>(pub Arc<T>);
                     impl<
                         T: EntryService,
-                    > tonic::server::UnaryService<super::LookupKeysByContextRequest>
-                    for LookupKeysByContextSvc<T> {
-                        type Response = super::LookupKeysByContextResponse;
+                    > tonic::server::UnaryService<super::LookupKeyByContextRequest>
+                    for LookupKeyByContextSvc<T> {
+                        type Response = super::LookupKeyByContextResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::LookupKeysByContextRequest>,
+                            request: tonic::Request<super::LookupKeyByContextRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as EntryService>::lookup_keys_by_context(&inner, request)
+                                <T as EntryService>::lookup_key_by_context(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -817,7 +817,7 @@ pub mod entry_service_server {
                     let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
-                        let method = LookupKeysByContextSvc(inner);
+                        let method = LookupKeyByContextSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

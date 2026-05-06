@@ -15,7 +15,7 @@ use std::time::Duration;
 use udex_api::entry::{
     bulk_read_entry_operation::Operation as ReadOp, BulkReadEntryOperation,
     BulkReadEntryOperationRequest, CreateEntryRequest, DeleteEntryRequest,
-    LookupContextByKeyRequest, LookupKeysByContextRequest,
+    LookupContextByKeyRequest, LookupKeyByContextRequest,
 };
 
 /// `grpc/entry/create` — insert one entry through the full gRPC stack.
@@ -87,12 +87,12 @@ fn bench_get_by_context(c: &mut Criterion) {
         b.to_async(fix.rt()).iter(|| async {
             let mut client = fix.entry_client();
             client
-                .lookup_keys_by_context(fix.authed(LookupKeysByContextRequest {
+                .lookup_key_by_context(fix.authed(LookupKeyByContextRequest {
                     index_name: fix.index_name.clone(),
                     context_hash: dedicated_context_hash.clone(),
                 }))
                 .await
-                .expect("lookup_keys_by_context failed");
+                .expect("lookup_key_by_context failed");
         });
     });
 }
