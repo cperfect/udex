@@ -6,7 +6,7 @@
 -- The same context may appear in different indexes with independent keys.
 -- The unique constraint also serves as the B-tree index for context lookups.
 
-CREATE TABLE IF NOT EXISTS index (
+CREATE TABLE IF NOT EXISTS "index" (
     name                    TEXT        PRIMARY KEY,
     description             TEXT        NOT NULL,
     max_bulk_operations     INTEGER     NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS index (
 
 CREATE TABLE IF NOT EXISTS entry_context (
     key             UUID        PRIMARY KEY,
-    index_name      TEXT        NOT NULL REFERENCES index(name) ON DELETE RESTRICT,
+    index_name      TEXT        NOT NULL REFERENCES "index"(name) ON DELETE RESTRICT,
     context_hash    TEXT        NOT NULL,
     pairs           JSONB       NOT NULL,
     dek             TEXT,

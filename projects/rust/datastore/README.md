@@ -27,13 +27,13 @@ udex-datastore = { path = "../datastore" }
 
 ## Data Model
 
-Two tables make up the schema. `index` holds policy configuration for a named index; `entry_context` is a merged table that stores both the UUID entry key and its content-addressed context in a single row. The composite `UNIQUE(index_name, context_hash)` constraint enforces a strict 1:1 mapping: one context fingerprint maps to exactly one entry key **within a given index**. The same context hash may exist in different indexes and will produce independent keys.
+Two tables make up the schema. `"index"` holds policy configuration for a named index; `entry_context` is a merged table that stores both the UUID entry key and its content-addressed context in a single row. The composite `UNIQUE(index_name, context_hash)` constraint enforces a strict 1:1 mapping: one context fingerprint maps to exactly one entry key **within a given index**. The same context hash may exist in different indexes and will produce independent keys.
 
 `create_entry` is idempotent on duplicate context: if an entry already exists for the submitted `context_hash`, the existing key is returned and no new row is written.
 
 ### Tables
 
-**`index`** — Named index definitions. Each index declares the operational limits and hashing algorithm applied to entries stored under it.
+**`"index"`** — Named index definitions. Each index declares the operational limits and hashing algorithm applied to entries stored under it.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -54,7 +54,7 @@ Two tables make up the schema. `index` holds policy configuration for a named in
 | Column | Type | Notes |
 |---|---|---|
 | `key` | `UUID` | Primary key — server-generated |
-| `index_name` | `TEXT` | Foreign key → `index.name` |
+| `index_name` | `TEXT` | Foreign key → `"index".name` |
 | `context_hash` | `TEXT` | Hash of `pairs`; unique per `index_name` — one context, one key within an index |
 | `pairs` | `JSONB` | Serialised key-value pairs |
 | `dek` | `TEXT` | Optional Data Encryption Key reference |

@@ -40,7 +40,7 @@ impl PostgresDatastore {
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<Uuid, Error> {
         let hash_algorithm_str =
-            sqlx::query_scalar::<_, String>("SELECT hash_algorithm FROM index WHERE name = $1")
+            sqlx::query_scalar::<_, String>("SELECT hash_algorithm FROM \"index\" WHERE name = $1")
                 .bind(&entry.index_name)
                 .fetch_optional(&mut **tx)
                 .await
@@ -300,7 +300,7 @@ impl Datastore for PostgresDatastore {
 
         sqlx::query(
             r#"
-            INSERT INTO index (
+            INSERT INTO "index" (
                 name,
                 description,
                 max_bulk_operations,
@@ -425,7 +425,7 @@ impl Datastore for PostgresDatastore {
 
         sqlx::query(
             r#"
-            UPDATE index
+            UPDATE "index"
             SET
                 description = COALESCE($1, description),
                 max_bulk_operations = COALESCE($2, max_bulk_operations),
