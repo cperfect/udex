@@ -3,7 +3,7 @@ verblock: "06 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-05
 title: "Update server entry service"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-05: Update server entry service
