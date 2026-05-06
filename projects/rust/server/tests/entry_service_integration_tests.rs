@@ -588,6 +588,24 @@ async fn test_create_entry_idempotent_for_same_pairs_different_dek() {
         second.key, key1,
         "Idempotent create with different dek must return the same key"
     );
+
+    // Verify the stored context still carries dek_v1 (the winner), not dek_v2.
+    let stored = entry_server
+        .lookup_context_by_key(Request::new(udex_api::entry::LookupContextByKeyRequest {
+            index_name: index_name.clone(),
+            key: key1.clone(),
+        }))
+        .await
+        .expect("lookup_context_by_key should succeed")
+        .into_inner()
+        .context
+        .expect("context must be present");
+
+    assert_eq!(
+        stored.dek.as_deref(),
+        Some("dek_v1"),
+        "First-writer DEK must win; second create must not overwrite it"
+    );
 }
 
 /// Tests error handling for invalid operations

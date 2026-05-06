@@ -151,6 +151,10 @@ type HydraFixtureType = (
 );
 
 async fn init_server_hydra() -> HydraFixtureType {
+    // Load the workspace .env before reading HYDRA_* env vars. dotenv_override()
+    // ensures the file values (e.g. http://hydra:4444) win over shell-level defaults
+    // (e.g. http://localhost:4444) that may differ inside the devcontainer.
+    dotenvy::dotenv_override().ok();
     let admin_url =
         std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string());
     let public_url =
@@ -1925,6 +1929,11 @@ async fn test_hydra_scope_subset() {
 ///
 #[tokio_shared_rt::test]
 async fn test_hydra_non_udex_scopes_denied() {
+    // Re-load .env here because this test reads HYDRA_ADMIN_URL directly before
+    // calling data_using_hydra(). The shared fixture (init_server_hydra) loaded
+    // the env once on first call, but subsequent tests that read env vars themselves
+    // must also call dotenv_override() to get the correct compose-service hostname.
+    dotenvy::dotenv_override().ok();
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let admin_url =
@@ -2002,6 +2011,9 @@ async fn test_hydra_non_udex_scopes_denied() {
 /// behaviour is already covered by the static-PEM test suite.
 #[tokio_shared_rt::test]
 async fn test_hydra_wrong_audience_rejected() {
+    // Re-load .env here because this test reads HYDRA_ADMIN_URL directly before
+    // calling data_using_hydra(). See test_hydra_non_udex_scopes_denied for context.
+    dotenvy::dotenv_override().ok();
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let admin_url =

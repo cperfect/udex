@@ -395,7 +395,8 @@ where
                             udex_api::entry::bulk_write_entry_operation_result::Result::CreateEntry(
                                 CreateEntryResponse {
                                     key: key.to_string(),
-                                    context_hash: context_hash.unwrap_or_default(),
+                                    context_hash: context_hash
+                                        .expect("Created result must have context_hash"),
                                 },
                             ),
                         ),

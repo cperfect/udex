@@ -97,6 +97,12 @@ fn cleanup_on_exit() {
 /// Creates a new database in an existing PostgreSQL instance for testing.
 /// The database will have a unique name and will be isolated from other test runs.
 pub async fn init_postgres() -> MaybeOnceType {
+    // Load the workspace .env before reading any env vars. dotenv_override() is used
+    // (not dotenv()) so the file wins over any shell-level values that may have been
+    // set differently (e.g. localhost vs. the compose service hostname). .ok() is
+    // intentional — if no .env is present the call is a no-op, not an error.
+    dotenvy::dotenv_override().ok();
+
     // Get the base database URL from environment variable
     let base_database_url = std::env::var("DATABASE_URL")
         .expect("DATABASE_URL environment variable must be set for integration tests");

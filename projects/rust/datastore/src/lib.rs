@@ -54,7 +54,7 @@ pub enum Error {
 /// Type of error that occurs when a bulk operation fails
 /// derived as a separate type so it can reference the Error enum without causing a circular dependency
 #[derive(Debug, Error)]
-#[error("Bulk operation failed: {0}", msg)]
+#[error("Bulk operation failed: {msg}")]
 pub struct BulkOperationError {
     msg: String,
     #[source]
@@ -111,6 +111,7 @@ pub enum EntryWriteOperation {
 }
 
 /// Result of a single write operation in a bulk write.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EntryWriteResult {
     /// The key that was stored — either newly created or the pre-existing key
     /// for this context (idempotent create).
@@ -118,6 +119,7 @@ pub enum EntryWriteResult {
     Deleted,
 }
 
+#[derive(Debug, Clone)]
 pub enum EntryReadOperation {
     GetByKey(Uuid),
     GetByContext {
@@ -126,6 +128,7 @@ pub enum EntryReadOperation {
     },
 }
 
+#[derive(Debug, Clone)]
 pub enum EntryReadResult {
     /// Result of a `GetByKey` operation.
     Entry(Entry),

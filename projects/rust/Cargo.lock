@@ -3941,6 +3941,7 @@ dependencies = [
  "async-trait",
  "criterion",
  "ctor",
+ "dotenvy",
  "maybe-once",
  "rstest",
  "secrets-rs",
@@ -3967,6 +3968,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "criterion",
+ "dotenvy",
  "jsonwebtoken",
  "maybe-once",
  "mockall",

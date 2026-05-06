@@ -412,7 +412,6 @@ impl Datastore for PostgresDatastore {
             return Err(Error::InvalidIndexUpdate("No fields to update".to_string()));
         }
 
-        use time::OffsetDateTime;
         let now = OffsetDateTime::now_utc();
 
         sqlx::query(
@@ -617,10 +616,6 @@ impl Datastore for PostgresDatastore {
             match result {
                 Ok(r) => results.push(r),
                 Err(e) => {
-                    tx.rollback().await.map_err(|err| BulkOperationError {
-                        msg: "Failed to rollback transaction".to_string(),
-                        source: Error::Database(err),
-                    })?;
                     return Err(BulkOperationError {
                         msg: "Bulk operation failed".to_string(),
                         source: e,

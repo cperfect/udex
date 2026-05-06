@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS index (
 
 CREATE TABLE IF NOT EXISTS entry_context (
     key             UUID        PRIMARY KEY,
-    index_name      TEXT        NOT NULL REFERENCES index(name),
+    index_name      TEXT        NOT NULL REFERENCES index(name) ON DELETE RESTRICT,
     context_hash    TEXT        NOT NULL,
     pairs           JSONB       NOT NULL,
     dek             TEXT,
