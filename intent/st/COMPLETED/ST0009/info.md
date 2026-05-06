@@ -1,10 +1,10 @@
 ---
 verblock: "06 May 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: Not Started
+status: Completed
 slug: one-to-one-entry-context-model
 created: 20260506
-completed:
+completed: 20260506
 ---
 
 # ST0009: One-to-one entry-context model
