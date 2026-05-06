@@ -181,9 +181,11 @@ pub async fn lookup(
         .into_inner();
 
     match resp.key {
-        None => {
-            eprintln!("not found");
-        }
+        None => match output {
+            OutputFormat::Table => eprintln!("not found"),
+            OutputFormat::Json => println!("null"),
+            OutputFormat::Yaml => println!("~"),
+        },
         Some(key) => match output {
             OutputFormat::Table => {
                 println!("{}", Table::new(vec![EntryKeyRow { key }]));
