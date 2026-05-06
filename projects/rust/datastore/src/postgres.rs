@@ -158,9 +158,10 @@ impl PostgresDatastore {
             "#,
         )
         .bind(key)
-        .fetch_one(executor)
+        .fetch_optional(executor)
         .await
-        .map_err(Error::Database)?;
+        .map_err(Error::Database)?
+        .ok_or_else(|| Error::EntryForKeyNotFound(key.to_string()))?;
 
         row_to_entry(&row)
     }
