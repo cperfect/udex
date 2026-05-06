@@ -25,6 +25,79 @@ Add to your `Cargo.toml`:
 udex-datastore = { path = "../datastore" }
 ```
 
+## Data Model
+
+Two tables make up the schema. `"index"` holds policy configuration for a named index; `entry_context` is a merged table that stores both the UUID entry key and its content-addressed context in a single row. The composite `UNIQUE(index_name, context_hash)` constraint enforces a strict 1:1 mapping: one context fingerprint maps to exactly one entry key **within a given index**. The same context hash may exist in different indexes and will produce independent keys.
+
+`create_entry` is idempotent on duplicate context: if an entry already exists for the submitted `context_hash`, the existing key is returned and no new row is written.
+
+### Tables
+
+**`"index"`** — Named index definitions. Each index declares the operational limits and hashing algorithm applied to entries stored under it.
+
+| Column | Type | Notes |
+|---|---|---|
+| `name` | `TEXT` | Primary key — unique index name |
+| `description` | `TEXT` | Human-readable description |
+| `max_bulk_operations` | `INTEGER` | Maximum operations per bulk request |
+| `max_key_length` | `INTEGER` | Maximum entry key length (bytes) |
+| `max_value_length` | `INTEGER` | Maximum context value length (bytes) |
+| `max_kv_pairs_per_context` | `INTEGER` | Maximum key-value pairs per context |
+| `hash_algorithm` | `TEXT` | Algorithm used to hash contexts (e.g. `Xxh3`) |
+| `created_at` | `TIMESTAMPTZ` | Set on insert |
+| `created_by` | `TEXT` | Subject of the creating request |
+| `updated_at` | `TIMESTAMPTZ` | Set on update; null until first update |
+| `updated_by` | `TEXT` | Subject of the last updating request |
+
+**`entry_context`** — A server-generated UUID key paired with its content-addressed context. `UNIQUE(index_name, context_hash)` enforces the 1:1 contract at the database level — uniqueness is scoped per index, not system-wide.
+
+| Column | Type | Notes |
+|---|---|---|
+| `key` | `UUID` | Primary key — server-generated |
+| `index_name` | `TEXT` | Foreign key → `"index".name` |
+| `context_hash` | `TEXT` | Hash of `pairs`; unique per `index_name` — one context, one key within an index |
+| `pairs` | `JSONB` | Serialised key-value pairs |
+| `dek` | `TEXT` | Optional Data Encryption Key reference |
+| `kek_id` | `TEXT` | Optional Key Encryption Key ID |
+| `hash_algorithm` | `TEXT` | Algorithm used to compute `context_hash` |
+
+### Indexes
+
+| Name | Columns | Purpose |
+|---|---|---|
+| `uq_entry_context_index_hash` | `entry_context(index_name, context_hash)` | Unique constraint + B-tree for index-scoped context lookups |
+
+### Diagram
+
+```mermaid
+erDiagram
+    index {
+        text name PK
+        text description
+        integer max_bulk_operations
+        integer max_key_length
+        integer max_value_length
+        integer max_kv_pairs_per_context
+        text hash_algorithm
+        timestamptz created_at
+        text created_by
+        timestamptz updated_at
+        text updated_by
+    }
+
+    entry_context {
+        uuid key PK
+        text index_name FK
+        text context_hash "UNIQUE per index_name"
+        jsonb pairs
+        text dek
+        text kek_id
+        text hash_algorithm
+    }
+
+    index ||--o{ entry_context : "scopes"
+```
+
 ## Development
 
 ### Running Tests

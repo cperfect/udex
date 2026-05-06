@@ -10,13 +10,13 @@ use udex_api::{
         BulkWriteEntryOperationRequest, BulkWriteEntryOperationResponse,
         BulkWriteEntryOperationResult, Context, ContextInput, CreateEntryRequest,
         CreateEntryResponse, DeleteEntryRequest, DeleteEntryResponse, LookupContextByKeyRequest,
-        LookupContextByKeyResponse, LookupKeysByContextRequest, LookupKeysByContextResponse,
+        LookupContextByKeyResponse, LookupKeyByContextRequest, LookupKeyByContextResponse,
     },
     hash::{xxh3_context_hash, ContextHasher},
     index::{index_service_server::IndexService, ListIndicesRequest},
 };
 use udex_datastore::{
-    Datastore, Entry, EntryReadOperation, EntryReadResult, EntryWriteOperation,
+    Datastore, Entry, EntryReadOperation, EntryReadResult, EntryWriteOperation, EntryWriteResult,
     Error as DatastoreError,
 };
 use uuid::Uuid;
@@ -132,9 +132,6 @@ where
             DatastoreError::EntryForContextNotFound(context) => {
                 Status::not_found(format!("Entry not found for context: {}", context))
             }
-            DatastoreError::DuplicateKey(key) => {
-                Status::already_exists(format!("Entry already exists for key: {}", key))
-            }
             DatastoreError::InvalidContext(msg) => {
                 Status::invalid_argument(format!("Invalid context: {}", msg))
             }
@@ -172,10 +169,6 @@ where
                 tracing::error!(error = %msg, "Migration error");
                 Status::internal("Internal server error")
             }
-            DatastoreError::ContextEncryptionConflict(hash) => Status::already_exists(format!(
-                "Context {} already exists with different encryption metadata",
-                hash
-            )),
         }
     }
 }
@@ -220,14 +213,15 @@ where
             index_name,
         };
 
-        // Store in datastore
-        self.datastore
+        // Store in datastore — returns actual key (new or pre-existing on idempotent create)
+        let stored_key = self
+            .datastore
             .create_entry(entry)
             .await
             .map_err(|e| self.datastore_error_to_status(e))?;
 
         let response = CreateEntryResponse {
-            key: key.to_string(),
+            key: stored_key.to_string(),
             context_hash,
         };
 
@@ -235,7 +229,6 @@ where
     }
 
     /// Deletes an entry by key.
-    /// If this is the last entry for the context, the context is also deleted.
     async fn delete_entry(
         &self,
         request: Request<DeleteEntryRequest>,
@@ -251,9 +244,10 @@ where
         let key = Uuid::parse_str(&req.key)
             .map_err(|_| Status::invalid_argument("Invalid key format"))?;
 
-        // Delete entry
+        // Delete entry — index_name is included in the WHERE clause so a caller with
+        // scope for index_a cannot delete a key that belongs to index_b.
         self.datastore
-            .delete_entry(key)
+            .delete_entry(&req.index_name, key)
             .await
             .map_err(|e| self.datastore_error_to_status(e))?;
 
@@ -293,12 +287,11 @@ where
         Ok(Response::new(response))
     }
 
-    /// Looks up keys by context hash.
-    /// Returns all keys associated with the given context hash.
-    async fn lookup_keys_by_context(
+    /// Looks up the single key associated with a context hash, if one exists.
+    async fn lookup_key_by_context(
         &self,
-        request: Request<LookupKeysByContextRequest>,
-    ) -> Result<Response<LookupKeysByContextResponse>, Status> {
+        request: Request<LookupKeyByContextRequest>,
+    ) -> Result<Response<LookupKeyByContextResponse>, Status> {
         let req = request.into_inner();
 
         // Validate index_name
@@ -310,19 +303,16 @@ where
             return Err(Status::invalid_argument("context_hash cannot be empty"));
         }
 
-        // Get entries by context hash
-        let entries = self
+        // Get entry by context hash within the named index — returns None when no entry exists
+        let entry = self
             .datastore
-            .get_entries_by_context(&req.context_hash)
+            .get_entry_by_context(&req.index_name, &req.context_hash)
             .await
             .map_err(|e| self.datastore_error_to_status(e))?;
 
-        let keys: Vec<String> = entries
-            .into_iter()
-            .map(|entry| entry.key.to_string())
-            .collect();
+        let key = entry.map(|e| e.key.to_string());
 
-        let response = LookupKeysByContextResponse { keys };
+        let response = LookupKeyByContextResponse { key };
         Ok(Response::new(response))
     }
 
@@ -343,9 +333,9 @@ where
             return Err(Status::invalid_argument("operations cannot be empty"));
         }
 
-        // Convert API operations to datastore operations
-        let mut datastore_operations = Vec::new();
-        let mut response_results = Vec::new();
+        // Convert API operations into (datastore_op, context_hash) pairs kept together
+        // so the two can never diverge in length — eliminating the zip-truncation risk.
+        let mut ops_with_meta: Vec<(EntryWriteOperation, Option<String>)> = Vec::new();
 
         for op in req.operations {
             match op.operation {
@@ -356,9 +346,6 @@ where
                         .context
                         .ok_or_else(|| Status::invalid_argument("context is required"))?;
 
-                    // Generate UUIDv4 key
-                    let key = Uuid::new_v4();
-
                     // Convert context input to context with hash
                     let context =
                         self.context_input_to_context(req.index_name.clone(), context_input)?;
@@ -368,26 +355,12 @@ where
 
                     // Create entry with the specified index name
                     let entry = Entry {
-                        key,
+                        key: Uuid::new_v4(),
                         context,
                         index_name: req.index_name.clone(),
                     };
 
-                    datastore_operations.push(EntryWriteOperation::Create(entry));
-
-                    // Prepare response result
-                    let create_response = CreateEntryResponse {
-                        key: key.to_string(),
-                        context_hash,
-                    };
-
-                    response_results.push(BulkWriteEntryOperationResult {
-                        result: Some(
-                            udex_api::entry::bulk_write_entry_operation_result::Result::CreateEntry(
-                                create_response,
-                            ),
-                        ),
-                    });
+                    ops_with_meta.push((EntryWriteOperation::Create(entry), Some(context_hash)));
                 }
                 Some(udex_api::entry::bulk_write_entry_operation::Operation::DeleteEntry(
                     delete_op,
@@ -395,18 +368,13 @@ where
                     let key = Uuid::parse_str(&delete_op.key)
                         .map_err(|_| Status::invalid_argument("Invalid key format"))?;
 
-                    datastore_operations.push(EntryWriteOperation::Delete(key));
-
-                    // Prepare response result
-                    let delete_response = DeleteEntryResponse {};
-
-                    response_results.push(BulkWriteEntryOperationResult {
-                        result: Some(
-                            udex_api::entry::bulk_write_entry_operation_result::Result::DeleteEntry(
-                                delete_response,
-                            ),
-                        ),
-                    });
+                    ops_with_meta.push((
+                        EntryWriteOperation::Delete {
+                            index_name: req.index_name.clone(),
+                            key,
+                        },
+                        None,
+                    ));
                 }
                 None => {
                     return Err(Status::invalid_argument("operation is required"));
@@ -414,11 +382,55 @@ where
             }
         }
 
-        // Execute bulk write operations
-        self.datastore
+        let (datastore_operations, context_hashes): (Vec<_>, Vec<_>) =
+            ops_with_meta.into_iter().unzip();
+
+        // Execute bulk write — use returned results for actual keys (idempotent creates
+        // may return a pre-existing key rather than the candidate key above).
+        let write_results = self
+            .datastore
             .bulk_entry_write(datastore_operations)
             .await
-            .map_err(|e| Status::internal(format!("Bulk write operation failed: {}", e)))?;
+            .map_err(|e| self.datastore_error_to_status(e.into_source()))?;
+
+        // Validate the datastore upheld the contract of one result per operation.
+        if write_results.len() != context_hashes.len() {
+            return Err(Status::internal(format!(
+                "bulk write result count mismatch: expected {}, got {}",
+                context_hashes.len(),
+                write_results.len(),
+            )));
+        }
+
+        let mut response_results = Vec::new();
+        for (write_result, context_hash) in write_results.into_iter().zip(context_hashes) {
+            match write_result {
+                EntryWriteResult::Created(key) => {
+                    let context_hash = context_hash.ok_or_else(|| {
+                        Status::internal("bulk write Created result missing context_hash")
+                    })?;
+                    response_results.push(BulkWriteEntryOperationResult {
+                        result: Some(
+                            udex_api::entry::bulk_write_entry_operation_result::Result::CreateEntry(
+                                CreateEntryResponse {
+                                    key: key.to_string(),
+                                    context_hash,
+                                },
+                            ),
+                        ),
+                    });
+                }
+                EntryWriteResult::Deleted => {
+                    response_results.push(BulkWriteEntryOperationResult {
+                        result: Some(
+                            udex_api::entry::bulk_write_entry_operation_result::Result::DeleteEntry(
+                                DeleteEntryResponse {},
+                            ),
+                        ),
+                    });
+                }
+            }
+        }
 
         let response = BulkWriteEntryOperationResponse {
             results: response_results,
@@ -457,15 +469,17 @@ where
 
                     datastore_operations.push(EntryReadOperation::GetByKey(key));
                 }
-                Some(udex_api::entry::bulk_read_entry_operation::Operation::LookupKeys(
+                Some(udex_api::entry::bulk_read_entry_operation::Operation::LookupKey(
                     lookup_op,
                 )) => {
                     if lookup_op.context_hash.is_empty() {
                         return Err(Status::invalid_argument("context_hash cannot be empty"));
                     }
 
-                    datastore_operations
-                        .push(EntryReadOperation::GetByContext(lookup_op.context_hash));
+                    datastore_operations.push(EntryReadOperation::GetByContext {
+                        index_name: req.index_name.clone(),
+                        context_hash: lookup_op.context_hash,
+                    });
                 }
                 None => {
                     return Err(Status::invalid_argument("operation is required"));
@@ -478,14 +492,14 @@ where
             .datastore
             .bulk_entry_read(datastore_operations)
             .await
-            .map_err(|e| Status::internal(format!("Bulk read operation failed: {}", e)))?;
+            .map_err(|e| self.datastore_error_to_status(e.into_source()))?;
 
         // Convert results to API format
         let mut response_results = Vec::new();
 
         for result in results {
             match result {
-                EntryReadResult::Entry(entry) => {
+                EntryReadResult::ByKey(entry) => {
                     let context_response = LookupContextByKeyResponse {
                         index_name: req.index_name.clone(),
                         context: Some(self.datastore_entry_to_context(&entry)),
@@ -495,14 +509,13 @@ where
                         result: Some(udex_api::entry::bulk_read_entry_operation_result::Result::LookupContext(context_response)),
                     });
                 }
-                EntryReadResult::Entries(entries) => {
-                    let keys: Vec<String> =
-                        entries.into_iter().map(|e| e.key.to_string()).collect();
-                    let keys_response = LookupKeysByContextResponse { keys };
+                EntryReadResult::EntryByContext(opt_entry) => {
+                    let key = opt_entry.map(|e| e.key.to_string());
+                    let keys_response = LookupKeyByContextResponse { key };
 
                     response_results.push(BulkReadEntryOperationResult {
                         result: Some(
-                            udex_api::entry::bulk_read_entry_operation_result::Result::LookupKeys(
+                            udex_api::entry::bulk_read_entry_operation_result::Result::LookupKey(
                                 keys_response,
                             ),
                         ),

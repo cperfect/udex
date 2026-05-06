@@ -141,6 +141,17 @@ pub async fn data(serial: bool) -> Data<'static, MaybeOnceType> {
 // endpoint. Tests that depend on this fixture skip gracefully when the env vars
 // are absent.
 
+/// Load the workspace .env and return the Hydra admin URL.
+///
+/// dotenv_override() is called here (rather than relying solely on init_server_hydra)
+/// because some tests read HYDRA_ADMIN_URL directly before awaiting data_using_hydra().
+/// The shared fixture only runs once, so any test that reads Hydra env vars itself must
+/// also ensure the .env is loaded first.
+fn hydra_admin_url() -> String {
+    dotenvy::dotenv_override().ok();
+    std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string())
+}
+
 type HydraFixtureType = (
     String,                         // 0: index name
     SocketAddr,                     // 1: bind address
@@ -151,8 +162,7 @@ type HydraFixtureType = (
 );
 
 async fn init_server_hydra() -> HydraFixtureType {
-    let admin_url =
-        std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string());
+    let admin_url = hydra_admin_url();
     let public_url =
         std::env::var("HYDRA_PUBLIC_URL").unwrap_or_else(|_| "http://localhost:4444".to_string());
     // URLS_SELF_ISSUER in the docker-compose config has a trailing slash.
@@ -1925,10 +1935,8 @@ async fn test_hydra_scope_subset() {
 ///
 #[tokio_shared_rt::test]
 async fn test_hydra_non_udex_scopes_denied() {
+    let admin_url = hydra_admin_url();
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-    let admin_url =
-        std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string());
 
     let data = data_using_hydra(false).await;
     let bind_address = data.1;
@@ -2002,10 +2010,8 @@ async fn test_hydra_non_udex_scopes_denied() {
 /// behaviour is already covered by the static-PEM test suite.
 #[tokio_shared_rt::test]
 async fn test_hydra_wrong_audience_rejected() {
+    let admin_url = hydra_admin_url();
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-    let admin_url =
-        std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string());
 
     let data = data_using_hydra(false).await;
     let bind_address = data.1;

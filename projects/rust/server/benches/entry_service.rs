@@ -15,14 +15,14 @@ use std::time::Duration;
 use udex_api::entry::{
     bulk_read_entry_operation::Operation as ReadOp, BulkReadEntryOperation,
     BulkReadEntryOperationRequest, CreateEntryRequest, DeleteEntryRequest,
-    LookupContextByKeyRequest, LookupKeysByContextRequest,
+    LookupContextByKeyRequest, LookupKeyByContextRequest,
 };
 
 /// `grpc/entry/create` — insert one entry through the full gRPC stack.
 ///
-/// Each iteration produces a new server-generated UUID entry row against a
-/// shared context (the context is reused by hash — see schema). This
-/// measures the hot path: auth, routing, context lookup, and entry insert.
+/// Each iteration produces a unique context (via `fix.unique_context()`) so
+/// every call is a genuine insert, not an idempotent return of an existing key.
+/// This measures the hot path: auth, routing, context lookup, and entry insert.
 fn bench_create_entry(c: &mut Criterion) {
     let fix = common::fixture();
 
@@ -32,7 +32,7 @@ fn bench_create_entry(c: &mut Criterion) {
             client
                 .create_entry(fix.authed(CreateEntryRequest {
                     index_name: fix.index_name.clone(),
-                    context: Some(common::BenchFixture::bench_context()),
+                    context: Some(fix.unique_context()),
                 }))
                 .await
                 .expect("create_entry failed");
@@ -87,12 +87,12 @@ fn bench_get_by_context(c: &mut Criterion) {
         b.to_async(fix.rt()).iter(|| async {
             let mut client = fix.entry_client();
             client
-                .lookup_keys_by_context(fix.authed(LookupKeysByContextRequest {
+                .lookup_key_by_context(fix.authed(LookupKeyByContextRequest {
                     index_name: fix.index_name.clone(),
                     context_hash: dedicated_context_hash.clone(),
                 }))
                 .await
-                .expect("lookup_keys_by_context failed");
+                .expect("lookup_key_by_context failed");
         });
     });
 }
@@ -116,7 +116,7 @@ fn bench_delete_entry(c: &mut Criterion) {
                     client
                         .create_entry(fix.authed(CreateEntryRequest {
                             index_name: fix.index_name.clone(),
-                            context: Some(common::BenchFixture::bench_context()),
+                            context: Some(fix.unique_context()),
                         }))
                         .await
                         .expect("create entry for delete bench setup")

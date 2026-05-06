@@ -9,7 +9,7 @@ use crate::entry::{
     BulkReadEntryOperationResponse, BulkWriteEntryOperationRequest,
     BulkWriteEntryOperationResponse, CreateEntryRequest, CreateEntryResponse, DeleteEntryRequest,
     DeleteEntryResponse, LookupContextByKeyRequest, LookupContextByKeyResponse,
-    LookupKeysByContextRequest, LookupKeysByContextResponse,
+    LookupKeyByContextRequest, LookupKeyByContextResponse,
 };
 
 /// Authorizor for EntryService that checks permissions based on Claims for each method call.
@@ -55,9 +55,7 @@ where
         self.inner.create_entry(request).await
     }
 
-    /// DeleteEntry removes a key-context entry
-    /// if the entry deleted is the last one for the context,
-    /// the context is also deleted
+    /// DeleteEntry removes an entry by key.
     async fn delete_entry(
         &self,
         request: tonic::Request<DeleteEntryRequest>,
@@ -95,11 +93,11 @@ where
         self.inner.lookup_context_by_key(request).await
     }
 
-    /// LookupKeysByContext retrieves all keys for a given context
-    async fn lookup_keys_by_context(
+    /// LookupKeyByContext retrieves the single key for a given context, if one exists.
+    async fn lookup_key_by_context(
         &self,
-        request: tonic::Request<LookupKeysByContextRequest>,
-    ) -> std::result::Result<tonic::Response<LookupKeysByContextResponse>, tonic::Status> {
+        request: tonic::Request<LookupKeyByContextRequest>,
+    ) -> std::result::Result<tonic::Response<LookupKeyByContextResponse>, tonic::Status> {
         // Extract claims from request extensions
         let claims = request
             .extensions()
@@ -111,7 +109,7 @@ where
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
         }
 
-        self.inner.lookup_keys_by_context(request).await
+        self.inner.lookup_key_by_context(request).await
     }
 
     /// BulkWriteEntryOperation performs multiple write operations in a single transaction
@@ -172,7 +170,7 @@ impl Permissable<LookupContextByKeyRequest> for LookupContextByKeyRequest {
     }
 }
 
-impl Permissable<LookupKeysByContextRequest> for LookupKeysByContextRequest {
+impl Permissable<LookupKeyByContextRequest> for LookupKeyByContextRequest {
     fn required_permissions(&self) -> Vec<String> {
         vec![format!("udex:entry:v1:{}:read", self.index_name)]
     }
@@ -218,10 +216,10 @@ mod tests {
                 request: Request<LookupContextByKeyRequest>,
             ) -> Result<Response<LookupContextByKeyResponse>, Status>;
 
-            async fn lookup_keys_by_context(
+            async fn lookup_key_by_context(
                 &self,
-                request: Request<LookupKeysByContextRequest>,
-            ) -> Result<Response<LookupKeysByContextResponse>, Status>;
+                request: Request<LookupKeyByContextRequest>,
+            ) -> Result<Response<LookupKeyByContextResponse>, Status>;
 
             async fn bulk_write_entry_operation(
                 &self,
@@ -389,12 +387,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_lookup_keys_by_context_with_valid_permissions() {
+    async fn test_lookup_key_by_context_with_valid_permissions() {
         let mut mock_service = MockEntryServiceImpl::new();
         mock_service
-            .expect_lookup_keys_by_context()
+            .expect_lookup_key_by_context()
             .times(1)
-            .returning(|_| Ok(Response::new(LookupKeysByContextResponse { keys: vec![] })));
+            .returning(|_| Ok(Response::new(LookupKeyByContextResponse { key: None })));
 
         let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
         let claims = create_test_claims_with_permissions(vec![format!(
@@ -403,13 +401,13 @@ mod tests {
         )
         .as_str()]);
 
-        let mut request = Request::new(LookupKeysByContextRequest {
+        let mut request = Request::new(LookupKeyByContextRequest {
             index_name: "test-index".to_string(),
             context_hash: "test-hash".to_string(),
         });
         request.extensions_mut().insert(claims);
 
-        let result = authorizor.lookup_keys_by_context(request).await;
+        let result = authorizor.lookup_key_by_context(request).await;
         assert!(result.is_ok());
     }
 

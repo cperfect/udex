@@ -270,20 +270,22 @@ async fn test_lookup_context_by_key() {
     }
 }
 
-/// Tests looking up keys by context hash through the gRPC service
+/// Tests looking up the key by context hash through the gRPC service.
+///
+/// Under the 1:1 model, creating twice with the same context is idempotent — both
+/// calls return the same key. A subsequent lookup returns that single key.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_lookup_keys_by_context() {
+async fn test_lookup_key_by_context() {
     use tonic::Request;
     use udex_api::entry::{
-        ContextInput, CreateEntryRequest, KeyValuePair, LookupKeysByContextRequest, Value,
+        ContextInput, CreateEntryRequest, KeyValuePair, LookupKeyByContextRequest, Value,
     };
 
     let data = data(false).await;
     let entry_server = &data.0;
     let index_name = &data.1;
 
-    // Create context input
     let context_input = ContextInput {
         pairs: vec![KeyValuePair {
             key: "shared_context".to_string(),
@@ -298,45 +300,45 @@ async fn test_lookup_keys_by_context() {
         kek_id: None,
     };
 
-    // Create first entry
-    let create_request1 = Request::new(CreateEntryRequest {
-        index_name: index_name.clone(),
-        context: Some(context_input.clone()),
-    });
-    let create_response1 = entry_server
-        .create_entry(create_request1)
+    // First create — establishes the entry.
+    let resp1 = entry_server
+        .create_entry(Request::new(CreateEntryRequest {
+            index_name: index_name.clone(),
+            context: Some(context_input.clone()),
+        }))
         .await
-        .expect("Create entry 1 failed");
-    let context_hash = create_response1.into_inner().context_hash;
+        .expect("Create entry 1 failed")
+        .into_inner();
+    let key1 = resp1.key;
+    let context_hash = resp1.context_hash;
 
-    // Create second entry with same context
-    let create_request2 = Request::new(CreateEntryRequest {
-        index_name: index_name.clone(),
-        context: Some(context_input),
-    });
-    let _create_response2 = entry_server
-        .create_entry(create_request2)
+    // Second create with the same context — idempotent, must return the same key.
+    let resp2 = entry_server
+        .create_entry(Request::new(CreateEntryRequest {
+            index_name: index_name.clone(),
+            context: Some(context_input),
+        }))
         .await
-        .expect("Create entry 2 failed");
+        .expect("Create entry 2 failed")
+        .into_inner();
+    assert_eq!(
+        resp2.key, key1,
+        "Idempotent create must return the same key"
+    );
 
-    // Lookup keys by context hash
-    let lookup_request = Request::new(LookupKeysByContextRequest {
-        index_name: index_name.clone(),
-        context_hash: context_hash.clone(),
-    });
-    let lookup_response = entry_server
-        .lookup_keys_by_context(lookup_request)
+    // Lookup by context hash — returns the single stored key.
+    let lookup = entry_server
+        .lookup_key_by_context(Request::new(LookupKeyByContextRequest {
+            index_name: index_name.clone(),
+            context_hash,
+        }))
         .await
-        .expect("Lookup keys failed");
-    let keys = lookup_response.into_inner().keys;
+        .expect("Lookup keys failed")
+        .into_inner();
 
-    // Should have 2 keys for the same context
-    assert_eq!(keys.len(), 2, "Should have 2 keys for the same context");
-
-    // Verify all keys are valid UUIDs
-    for key in &keys {
-        let _uuid = Uuid::parse_str(key).expect("Each key should be valid UUID");
-    }
+    let returned_key = lookup.key.expect("Expected a key for known context");
+    assert_eq!(returned_key, key1, "Lookup must return the stored key");
+    let _uuid = Uuid::parse_str(&returned_key).expect("Returned key should be a valid UUID");
 }
 
 /// Tests bulk write operations through the gRPC service
@@ -476,8 +478,8 @@ async fn test_bulk_read_entry_operation() {
             )),
         },
         BulkReadEntryOperation {
-            operation: Some(Operation::LookupKeys(
-                udex_api::entry::LookupKeysByContextRequest {
+            operation: Some(Operation::LookupKey(
+                udex_api::entry::LookupKeyByContextRequest {
                     index_name: index_name.clone(),
                     context_hash,
                 },
@@ -511,30 +513,31 @@ async fn test_bulk_read_entry_operation() {
         panic!("Expected lookup context result");
     }
 
-    // Second result should be keys lookup
-    if let Some(udex_api::entry::bulk_read_entry_operation_result::Result::LookupKeys(
+    // Second result should be a keys lookup returning the single stored key.
+    if let Some(udex_api::entry::bulk_read_entry_operation_result::Result::LookupKey(
         keys_response,
     )) = &results[1].result
     {
-        assert!(!keys_response.keys.is_empty(), "Keys should not be empty");
-        assert!(
-            keys_response.keys.contains(&key),
-            "Should contain our created key"
-        );
+        let returned_key = keys_response
+            .key
+            .as_deref()
+            .expect("Expected a key for known context");
+        assert_eq!(returned_key, key, "Lookup must return the stored key");
     } else {
         panic!("Expected lookup keys result");
     }
 }
 
-/// Verifies that creating two entries with identical pairs but a different dek is rejected.
+/// Verifies that creating two entries with identical pairs but different dek values is idempotent.
 ///
-/// Contexts are immutable: the server is responsible for hashing, so the same pairs must always
-/// map to the same stored context. Accepting a second create with different encryption metadata
-/// (dek/kek_id) for the same pair set would silently discard the caller's dek — a silent data
-/// loss for message-level encryption. The second call must return an error.
+/// The context hash is computed from `pairs` only — `dek`/`kek_id` are stored fields but are
+/// not part of the hash. A second create with the same pairs (regardless of dek) therefore
+/// resolves to the same context hash and returns the first entry's key with status OK.
+/// Callers that need DEK consistency must read the stored context back via
+/// `lookup_context_by_key` before assuming their DEK was accepted.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_entry_rejects_conflicting_dek_for_same_pairs() {
+async fn test_create_entry_idempotent_for_same_pairs_different_dek() {
     use tonic::Request;
     use udex_api::entry::{ContextInput, CreateEntryRequest, KeyValuePair, Value};
 
@@ -563,12 +566,12 @@ async fn test_create_entry_rejects_conflicting_dek_for_same_pairs() {
             }),
         }))
         .await
-        .expect("first create_entry should succeed");
-    first.into_inner(); // consume the response; hash not needed for this assertion
+        .expect("first create_entry should succeed")
+        .into_inner();
+    let key1 = first.key;
 
-    // Second create: same pairs but different dek — must be rejected because the stored
-    // context already has dek_v1 and silently substituting dek_v2 would lose data.
-    let second_result = entry_server
+    // Second create: same pairs but different dek — idempotent; must return the same key.
+    let second = entry_server
         .create_entry(Request::new(CreateEntryRequest {
             index_name: index_name.clone(),
             context: Some(ContextInput {
@@ -577,16 +580,31 @@ async fn test_create_entry_rejects_conflicting_dek_for_same_pairs() {
                 kek_id: Some("kek_001".to_string()),
             }),
         }))
-        .await;
+        .await
+        .expect("second create_entry should succeed (idempotent)")
+        .into_inner();
 
-    assert!(
-        second_result.is_err(),
-        "create_entry with same pairs but different dek must be rejected; \
-         got context_hash {} instead of an error",
-        second_result
-            .as_ref()
-            .map(|r| r.get_ref().context_hash.clone())
-            .unwrap_or_default()
+    assert_eq!(
+        second.key, key1,
+        "Idempotent create with different dek must return the same key"
+    );
+
+    // Verify the stored context still carries dek_v1 (the winner), not dek_v2.
+    let stored = entry_server
+        .lookup_context_by_key(Request::new(udex_api::entry::LookupContextByKeyRequest {
+            index_name: index_name.clone(),
+            key: key1.clone(),
+        }))
+        .await
+        .expect("lookup_context_by_key should succeed")
+        .into_inner()
+        .context
+        .expect("context must be present");
+
+    assert_eq!(
+        stored.dek.as_deref(),
+        Some("dek_v1"),
+        "First-writer DEK must win; second create must not overwrite it"
     );
 }
 

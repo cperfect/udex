@@ -8,6 +8,7 @@
 use jsonwebtoken::{encode, EncodingKey, Header};
 use secrets_rs::{sources::file::FileSource, Secret, SourceRegistry};
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 use time::OffsetDateTime;
 use tokio::time::{sleep, Duration, Instant};
@@ -47,6 +48,8 @@ pub struct BenchFixture {
     /// Keys of `BULK_SEED_COUNT` pre-created entries — used by bulk read benchmarks.
     /// The first N keys cover bulk reads at N = 10, 100, and 1000.
     pub bulk_seed_keys: Vec<String>,
+    /// Monotonic counter used to produce a unique context per `bench_create_entry` iteration.
+    pub iter_counter: AtomicU64,
     // Held to prevent the server task and database from being dropped.
     _server_handle: tokio::task::JoinHandle<()>,
     _db_name: String,
@@ -94,6 +97,26 @@ impl BenchFixture {
         }
     }
 
+    /// Returns a unique context input per call, suitable for `bench_create_entry`.
+    ///
+    /// Uses a monotonic counter so each iteration produces a distinct context
+    /// fingerprint. Required for a valid baseline under 1:1 semantics (where
+    /// reusing the same context would make all but the first iteration a no-op).
+    pub fn unique_context(&self) -> ContextInput {
+        let n = self.iter_counter.fetch_add(1, Ordering::Relaxed);
+        ContextInput {
+            pairs: vec![KeyValuePair {
+                key: "bench_iter".to_string(),
+                value: Some(Value {
+                    value: Some(udex_api::entry::value::Value::StringValue(n.to_string())),
+                }),
+                kek_id: None,
+            }],
+            dek: None,
+            kek_id: None,
+        }
+    }
+
     /// Returns a context input used exclusively by `bench_get_by_context`.
     ///
     /// Distinct from `bench_context()` so the lookup always measures a
@@ -115,12 +138,15 @@ impl BenchFixture {
     }
 
     /// Builds a bulk write request creating `n` new entries.
+    ///
+    /// Each entry gets a unique context so all `n` operations are genuine inserts
+    /// rather than idempotent returns of a single pre-existing key.
     pub fn bulk_create_request(&self, n: usize) -> BulkWriteEntryOperationRequest {
         let operations = (0..n)
             .map(|_| BulkWriteEntryOperation {
                 operation: Some(WriteOp::CreateEntry(CreateEntryRequest {
                     index_name: self.index_name.clone(),
-                    context: Some(Self::bench_context()),
+                    context: Some(self.unique_context()),
                 })),
             })
             .collect();
@@ -162,6 +188,7 @@ pub fn fixture() -> &'static BenchFixture {
             bearer_token,
             seed_entry_key,
             bulk_seed_keys,
+            iter_counter: AtomicU64::new(0),
             _server_handle: server_handle,
             _db_name: db_name,
         }
@@ -303,12 +330,22 @@ async fn start_server_and_connect() -> (
         .into_inner();
 
     // Seed BULK_SEED_COUNT entries for bulk read benchmarks via a single bulk write.
-    // All entries share the same context (reused by hash) — unique keys are server-generated.
+    // Each entry gets a unique context so all BULK_SEED_COUNT inserts land as distinct rows.
     let bulk_ops: Vec<BulkWriteEntryOperation> = (0..BULK_SEED_COUNT)
-        .map(|_| BulkWriteEntryOperation {
+        .map(|i| BulkWriteEntryOperation {
             operation: Some(WriteOp::CreateEntry(CreateEntryRequest {
                 index_name: index_name.clone(),
-                context: Some(BenchFixture::bench_context()),
+                context: Some(ContextInput {
+                    pairs: vec![KeyValuePair {
+                        key: "bench_seed_iter".to_string(),
+                        value: Some(Value {
+                            value: Some(udex_api::entry::value::Value::StringValue(i.to_string())),
+                        }),
+                        kek_id: None,
+                    }],
+                    dek: None,
+                    kek_id: None,
+                }),
             })),
         })
         .collect();

@@ -9,19 +9,20 @@ import "google/protobuf/timestamp.proto";
 
 // EntryService provides operations for managing context-key entries
 service EntryService {
-  // CreateEntry creates a new entry between a key and context
+  // CreateEntry creates a new entry for a context. Idempotent: if an entry
+  // already exists for the given context within the index, the existing key
+  // is returned unchanged (no duplicate is created).
   rpc CreateEntry(CreateEntryRequest) returns (CreateEntryResponse);
-  
-  // DeleteEntry removes a key-context entry
-  // if the entrye deleted is the last one for the context,
-  // the context is also deleted
+
+  // DeleteEntry removes an entry by key.
   rpc DeleteEntry(DeleteEntryRequest) returns (DeleteEntryResponse);
-  
+
   // LookupContextByKey retrieves the context for a given key
   rpc LookupContextByKey(LookupContextByKeyRequest) returns (LookupContextByKeyResponse);
-  
-  // LookupKeysByContext retrieves all keys for a given context
-  rpc LookupKeysByContext(LookupKeysByContextRequest) returns (LookupKeysByContextResponse);
+
+  // LookupKeyByContext retrieves the single key for a given context, if one exists.
+  // Returns an empty key field when no entry matches the context hash.
+  rpc LookupKeyByContext(LookupKeyByContextRequest) returns (LookupKeyByContextResponse);
   
   // BulkWriteEntryOperation performs multiple write operations in a single transaction
   // If any operation fails, all operations are rolled back
@@ -73,7 +74,8 @@ message CreateEntryRequest {
   ContextInput context = 2;
 }
 
-// CreateEntryResponse returns the created entry
+// CreateEntryResponse returns the entry key — either newly created or the
+// existing key if the context was already registered in this index.
 message CreateEntryResponse {
   string key = 1; // Server-generated UUIDv4 globally unique key
   string context_hash = 2; // Server-generated context hash
@@ -100,15 +102,16 @@ message LookupContextByKeyResponse {
   Context context = 2;
 }
 
-// LookupKeysByContextRequest retrieves keys for a context
-message LookupKeysByContextRequest {
+// LookupKeyByContextRequest retrieves key for a context
+message LookupKeyByContextRequest {
   string index_name = 1; // Name of the index to which this entry belongs
   string context_hash = 2;
 }
 
-// LookupKeysByContextResponse returns the keys
-message LookupKeysByContextResponse {
-  repeated string keys = 1;
+// LookupKeyByContextResponse returns the single key for the context, if found.
+// The key field is absent when no entry exists for the given context hash.
+message LookupKeyByContextResponse {
+  optional string key = 1;
 }
 
 // BulkWriteEntryOperation represents a single write operation in a bulk write request
@@ -142,7 +145,7 @@ message BulkWriteEntryOperationResult {
 message BulkReadEntryOperation {
   oneof operation {
     LookupContextByKeyRequest lookup_context = 1;
-    LookupKeysByContextRequest lookup_keys = 2;
+    LookupKeyByContextRequest lookup_key = 2;
   }
 }
 
@@ -161,6 +164,6 @@ message BulkReadEntryOperationResponse {
 message BulkReadEntryOperationResult {
   oneof result {
     LookupContextByKeyResponse lookup_context = 1;
-    LookupKeysByContextResponse lookup_keys = 2;
+    LookupKeyByContextResponse lookup_key = 2;
   }
 } 
