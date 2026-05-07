@@ -21,6 +21,11 @@
       "Bash(cargo clippy:*)",
       "Read(//home/vscode/.claude/skills/**)",
       "WebFetch(domain:docs.rs)"
+    ],
+    "deny": [ 
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/.env*)" 
     ]
   }
 }
