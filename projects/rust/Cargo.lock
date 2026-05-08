@@ -3962,6 +3962,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "udex-sdk"
+version = "0.1.0"
+dependencies = [
+ "dotenvy",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tokio",
+ "tonic",
+ "tracing",
+ "tracing-subscriber",
+ "udex-api",
+]
+
+[[package]]
 name = "udex-server"
 version = "0.1.0"
 dependencies = [

@@ -46,12 +46,23 @@ The workspace has three crates. New code goes in the crate that owns its layer �
 | Datastore configuration | `udex_datastore::config` | `DatastoreConfig` |
 | Integration test helpers | `udex_datastore::integration_test` | Feature-gated (`integration_test`); shared fixtures for integration tests |
 
+### `udex-sdk` — Rust client library for Udex
+
+| Concern | Module | Notes |
+| ------- | ------ | ----- |
+| SDK public API surface | `udex_sdk` (lib.rs) | Re-exports `UdexClient`, `ClientOptions`, `Error`; crate-level rustdoc overview |
+| Client connection and TLS | `udex_sdk::client` | `UdexClient` + `ClientOptions` — builds tonic channel with TLS |
+| OAuth2 token lifecycle | `udex_sdk::auth` | `TokenManager` — client-credentials fetch + in-memory cache + tonic interceptor |
+| Entry service wrappers | `udex_sdk::entry` | High-level async methods over the entry gRPC stubs |
+| Index service wrappers | `udex_sdk::index` | High-level async methods over the index gRPC stubs |
+| SDK error types | `udex_sdk::error` | `Error` enum with `thiserror`; never exposes raw tonic/reqwest errors |
+
 ### `udex-cli` — Command-line interface binary
 
 | Concern | Module | Notes |
 | ------- | ------ | ----- |
 | CLI arg parsing & top-level dispatch | `udex_cli::cli` + `src/main.rs` | Clap types; `run()` dispatches to command handlers |
-| gRPC client connection setup | `udex_cli::client` | `ClientConfig` — TLS + token injection |
+| gRPC client connection setup | `udex_cli::client` | `ClientConfig` — TLS + token injection; **will be deleted** in ST0010/WP-07, replaced by `udex-sdk` |
 | `serve` command | `udex_cli::commands::serve` | Starts the embedded server |
 | `config` commands | `udex_cli::commands::config` | Init/validate config file |
 | `index` commands | `udex_cli::commands::index` | CRUD over the index gRPC service |
