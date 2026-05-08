@@ -3,7 +3,7 @@ verblock: "08 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-03
 title: "OAuth2 client-credentials token lifecycle"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: OAuth2 client-credentials token lifecycle

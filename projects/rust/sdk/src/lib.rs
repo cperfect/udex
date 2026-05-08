@@ -36,3 +36,11 @@ pub mod index;
 
 pub use client::{ClientOptions, ClientOptionsBuilder, UdexClient};
 pub use error::Error;
+
+// Re-export the proto types callers need to build requests and read responses.
+pub use udex_api::entry::{
+    bulk_read_entry_operation, bulk_write_entry_operation, BulkReadEntryOperation,
+    BulkReadEntryOperationResult, BulkWriteEntryOperation, BulkWriteEntryOperationResult, Context,
+    ContextInput, CreateEntryResponse, KeyValuePair, Value,
+};
+pub use udex_api::index::{CreateIndexRequest, Index, IndexUpdate};

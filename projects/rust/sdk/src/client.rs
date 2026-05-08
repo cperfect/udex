@@ -121,10 +121,7 @@ impl ClientOptionsBuilder {
 /// Instantiate with [`UdexClient::connect`].
 #[derive(Clone)]
 pub struct UdexClient {
-    // Used by entry/index service wrappers added in WP-04.
-    #[allow(dead_code)]
     pub(crate) channel: Channel,
-    #[allow(dead_code)]
     pub(crate) token_manager: Option<TokenManager>,
 }
 
@@ -171,5 +168,13 @@ impl UdexClient {
             channel,
             token_manager,
         })
+    }
+
+    /// Returns the current bearer token string, or `None` if no credentials are configured.
+    pub(crate) async fn bearer_token(&self) -> Result<Option<String>, Error> {
+        match &self.token_manager {
+            Some(tm) => Ok(Some(tm.token().await?)),
+            None => Ok(None),
+        }
     }
 }

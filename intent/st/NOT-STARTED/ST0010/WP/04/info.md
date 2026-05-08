@@ -3,7 +3,7 @@ verblock: "08 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-04
 title: "Entry and index service wrappers"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-04: Entry and index service wrappers
