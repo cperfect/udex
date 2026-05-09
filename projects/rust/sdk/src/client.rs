@@ -12,7 +12,7 @@ use crate::error::Error;
 pub struct ClientOptions {
     pub(crate) endpoint: String,
     pub(crate) ca_cert: CaCert,
-    pub(crate) credentials: Option<ClientCredentials>,
+    pub(crate) auth: AuthConfig,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -24,6 +24,18 @@ pub(crate) enum CaCert {
     PemFile(PathBuf),
     /// PEM bytes provided directly.
     PemBytes(Vec<u8>),
+}
+
+/// Authentication configuration supplied via [`ClientOptionsBuilder`].
+#[derive(Debug, Clone, Default)]
+pub(crate) enum AuthConfig {
+    /// No `Authorization` header injected.
+    #[default]
+    None,
+    /// A pre-fetched bearer token injected verbatim on every request.
+    StaticToken(String),
+    /// OAuth2 client-credentials: tokens fetched and refreshed transparently.
+    ClientCredentials(ClientCredentials),
 }
 
 /// OAuth2 client-credentials configuration.
@@ -48,7 +60,7 @@ impl ClientOptions {
 pub struct ClientOptionsBuilder {
     endpoint: Option<String>,
     ca_cert: CaCert,
-    credentials: Option<ClientCredentials>,
+    auth: AuthConfig,
 }
 
 impl ClientOptionsBuilder {
@@ -70,14 +82,27 @@ impl ClientOptionsBuilder {
         self
     }
 
+    /// Injects a pre-fetched bearer token on every request.
+    ///
+    /// Use this when you manage token acquisition externally (e.g. in tests or
+    /// when integrating with an existing auth library). For automatic OAuth2
+    /// client-credentials, prefer [`Self::client_credentials`] instead.
+    pub fn static_bearer_token(mut self, token: impl Into<String>) -> Self {
+        self.auth = AuthConfig::StaticToken(token.into());
+        self
+    }
+
     /// Configures OAuth2 client-credentials authentication.
+    ///
+    /// Tokens are fetched from `token_url` and refreshed automatically.
+    /// Chain [`Self::audience`] and [`Self::scope`] to add those parameters.
     pub fn client_credentials(
         mut self,
         token_url: impl Into<String>,
         client_id: impl Into<String>,
         client_secret: impl Into<String>,
     ) -> Self {
-        self.credentials = Some(ClientCredentials {
+        self.auth = AuthConfig::ClientCredentials(ClientCredentials {
             token_url: token_url.into(),
             client_id: client_id.into(),
             client_secret: client_secret.into(),
@@ -87,17 +112,21 @@ impl ClientOptionsBuilder {
         self
     }
 
-    /// Adds an `audience` claim to the token request.
+    /// Adds an `audience` claim to the OAuth2 token request.
+    ///
+    /// Has no effect if [`Self::client_credentials`] has not been called.
     pub fn audience(mut self, audience: impl Into<String>) -> Self {
-        if let Some(creds) = &mut self.credentials {
+        if let AuthConfig::ClientCredentials(creds) = &mut self.auth {
             creds.audience = Some(audience.into());
         }
         self
     }
 
-    /// Adds a `scope` to the token request.
+    /// Adds a `scope` to the OAuth2 token request.
+    ///
+    /// Has no effect if [`Self::client_credentials`] has not been called.
     pub fn scope(mut self, scope: impl Into<String>) -> Self {
-        if let Some(creds) = &mut self.credentials {
+        if let AuthConfig::ClientCredentials(creds) = &mut self.auth {
             creds.scope = Some(scope.into());
         }
         self
@@ -111,18 +140,36 @@ impl ClientOptionsBuilder {
         Ok(ClientOptions {
             endpoint,
             ca_cert: self.ca_cert,
-            credentials: self.credentials,
+            auth: self.auth,
         })
     }
+}
+
+/// Runtime auth state held by a connected [`UdexClient`].
+#[derive(Debug)]
+pub(crate) enum AuthState {
+    None,
+    Static(String),
+    Dynamic(TokenManager),
 }
 
 /// A connected Udex client.
 ///
 /// Instantiate with [`UdexClient::connect`].
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UdexClient {
     pub(crate) channel: Channel,
-    pub(crate) token_manager: Option<TokenManager>,
+    pub(crate) auth: std::sync::Arc<AuthState>,
+}
+
+impl Clone for AuthState {
+    fn clone(&self) -> Self {
+        match self {
+            AuthState::None => AuthState::None,
+            AuthState::Static(t) => AuthState::Static(t.clone()),
+            AuthState::Dynamic(tm) => AuthState::Dynamic(tm.clone()),
+        }
+    }
 }
 
 impl UdexClient {
@@ -148,8 +195,10 @@ impl UdexClient {
             .connect()
             .await?;
 
-        let token_manager = match opts.credentials {
-            Some(creds) => {
+        let auth = match opts.auth {
+            AuthConfig::None => AuthState::None,
+            AuthConfig::StaticToken(t) => AuthState::Static(t),
+            AuthConfig::ClientCredentials(creds) => {
                 let tm = TokenManager::new(
                     creds.token_url,
                     creds.client_id,
@@ -157,24 +206,24 @@ impl UdexClient {
                     creds.audience,
                     creds.scope,
                 );
-                // Eagerly fetch so first RPC is not delayed.
+                // Eagerly fetch so the first RPC does not pay the token-fetch latency.
                 tm.token().await?;
-                Some(tm)
+                AuthState::Dynamic(tm)
             }
-            None => None,
         };
 
         Ok(UdexClient {
             channel,
-            token_manager,
+            auth: std::sync::Arc::new(auth),
         })
     }
 
-    /// Returns the current bearer token string, or `None` if no credentials are configured.
+    /// Returns the current bearer token string, or `None` if unauthenticated.
     pub(crate) async fn bearer_token(&self) -> Result<Option<String>, Error> {
-        match &self.token_manager {
-            Some(tm) => Ok(Some(tm.token().await?)),
-            None => Ok(None),
+        match self.auth.as_ref() {
+            AuthState::None => Ok(None),
+            AuthState::Static(t) => Ok(Some(t.clone())),
+            AuthState::Dynamic(tm) => Ok(Some(tm.token().await?)),
         }
     }
 }

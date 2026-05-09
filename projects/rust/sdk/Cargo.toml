@@ -18,6 +18,16 @@ serde_json = { workspace = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 [dev-dependencies]
+udex-server = { path = "../server" }
+udex-datastore = { path = "../datastore", features = ["integration_test"] }
 tokio = { workspace = true }
+tokio-shared-rt = { workspace = true }
+maybe-once = { workspace = true }
+rstest = { workspace = true }
 dotenvy = { workspace = true }
 tracing-subscriber = { workspace = true }
+jsonwebtoken = { workspace = true }
+time = { workspace = true }
+rustls = { workspace = true }
+secrets-rs = { workspace = true }
+ory-hydra-client = { version = "26.2", default-features = false, features = ["rustls-tls"] }
