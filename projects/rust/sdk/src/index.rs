@@ -11,7 +11,9 @@ use crate::error::Error;
 impl UdexClient {
     /// Retrieves the [`Index`] definition for `name`.
     ///
-    /// Returns [`Error::Rpc`] with status `NOT_FOUND` if the index does not exist.
+    /// Returns [`Error::Rpc`] with status `NOT_FOUND` if the index does not
+    /// exist, or [`Error::InvalidResponse`] if the server omits the index
+    /// payload in a successful response.
     pub async fn describe_index(&self, name: &str) -> Result<Index, Error> {
         let mut client = self.index_client().await?;
         let resp = client
@@ -21,18 +23,24 @@ impl UdexClient {
             .await?
             .into_inner();
         resp.index
-            .ok_or_else(|| tonic::Status::internal("server returned empty index").into())
+            .ok_or_else(|| Error::InvalidResponse("server returned empty index".to_owned()))
     }
 
     /// Creates a new index from `req` and returns the created [`Index`].
+    ///
+    /// Returns [`Error::InvalidResponse`] if the server omits the index payload
+    /// in a successful response.
     pub async fn create_index(&self, req: CreateIndexRequest) -> Result<Index, Error> {
         let mut client = self.index_client().await?;
         let resp: CreateIndexResponse = client.create_index(req).await?.into_inner();
         resp.index
-            .ok_or_else(|| tonic::Status::internal("server returned empty index").into())
+            .ok_or_else(|| Error::InvalidResponse("server returned empty index".to_owned()))
     }
 
     /// Applies `update` to the index named `name` and returns the updated [`Index`].
+    ///
+    /// Returns [`Error::InvalidResponse`] if the server omits the index payload
+    /// in a successful response.
     pub async fn update_index(&self, name: &str, update: IndexUpdate) -> Result<Index, Error> {
         let mut client = self.index_client().await?;
         let resp = client
@@ -43,7 +51,7 @@ impl UdexClient {
             .await?
             .into_inner();
         resp.index
-            .ok_or_else(|| tonic::Status::internal("server returned empty index").into())
+            .ok_or_else(|| Error::InvalidResponse("server returned empty index".to_owned()))
     }
 
     /// Lists all indices accessible to the caller.

@@ -60,6 +60,11 @@ pub enum Error {
     #[error("RPC error: {0}")]
     Rpc(RpcStatus),
 
+    /// The server returned a well-formed gRPC response with a missing or
+    /// unexpected payload (client-side protocol violation detection).
+    #[error("invalid server response: {0}")]
+    InvalidResponse(String),
+
     /// An I/O error (e.g. reading a certificate file).
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),

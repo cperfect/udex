@@ -47,7 +47,9 @@ impl UdexClient {
 
     /// Retrieves the [`Context`] associated with `key` in `index_name`.
     ///
-    /// Returns [`Error::Rpc`] with status `NOT_FOUND` if no entry exists.
+    /// Returns [`Error::Rpc`] with status `NOT_FOUND` if no entry exists for
+    /// `key`, or [`Error::InvalidResponse`] if the server omits the context
+    /// payload in a successful response.
     pub async fn lookup_context_by_key(
         &self,
         index_name: &str,
@@ -62,7 +64,7 @@ impl UdexClient {
             .await?
             .into_inner();
         resp.context
-            .ok_or_else(|| tonic::Status::internal("server returned empty context").into())
+            .ok_or_else(|| Error::InvalidResponse("server returned empty context".to_owned()))
     }
 
     /// Reverse-looks up the entry key for the given pre-computed `context_hash` in `index_name`.
