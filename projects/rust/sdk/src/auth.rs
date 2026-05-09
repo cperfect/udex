@@ -97,8 +97,16 @@ impl TokenManager {
         }
         // Fetch a new token.
         let response = self.fetch_token().await?;
-        let expires_at = Instant::now()
-            + Duration::from_secs(response.expires_in.saturating_sub(REFRESH_MARGIN_SECS));
+        // Apply the refresh margin only when the token lives long enough to
+        // accommodate it; otherwise cache for the full expires_in so a short-
+        // lived token doesn't produce a zero-duration cache and a fetch loop.
+        // The .max(1) floor prevents a tight loop if the server returns 0.
+        let cache_secs = if response.expires_in > REFRESH_MARGIN_SECS {
+            response.expires_in - REFRESH_MARGIN_SECS
+        } else {
+            response.expires_in.max(1)
+        };
+        let expires_at = Instant::now() + Duration::from_secs(cache_secs);
         *guard = Some(CachedToken {
             value: response.access_token.clone(),
             expires_at,
