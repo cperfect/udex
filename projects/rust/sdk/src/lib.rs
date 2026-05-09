@@ -33,9 +33,11 @@ pub mod client;
 pub mod entry;
 pub mod error;
 pub mod index;
+pub mod json;
 
 pub use client::{ClientOptions, ClientOptionsBuilder, UdexClient};
 pub use error::Error;
+pub use json::context_input_from_json;
 
 // Re-export the proto types callers need to build requests and read responses.
 pub use udex_api::entry::{

@@ -29,15 +29,16 @@
 //!     cargo run --example bulk_write
 //! ```
 //!
-//! Each line must be a flat JSON object whose string values become the
-//! context key-value pairs.
+//! Each line must be a flat JSON object. String, number, and boolean values
+//! are mapped to the corresponding SDK [`Value`] type; objects, arrays, and
+//! null are rejected.
+//!
+//! [`Value`]: udex_sdk::Value
 
 use std::io::{self, BufRead};
 
 use udex_api::entry::{bulk_write_entry_operation, bulk_write_entry_operation_result};
-use udex_sdk::{
-    BulkWriteEntryOperation, ClientOptions, ContextInput, KeyValuePair, UdexClient, Value,
-};
+use udex_sdk::{context_input_from_json, BulkWriteEntryOperation, ClientOptions, UdexClient};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -57,28 +58,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         }
         let obj: serde_json::Map<String, serde_json::Value> = serde_json::from_str(line)?;
-        let pairs: Vec<KeyValuePair> = obj
-            .into_iter()
-            .map(|(k, v)| KeyValuePair {
-                key: k,
-                value: Some(Value {
-                    value: Some(udex_sdk::value::Value::StringValue(
-                        v.as_str().unwrap_or(&v.to_string()).to_owned(),
-                    )),
-                }),
-                kek_id: None,
-            })
-            .collect();
+        let context = context_input_from_json(obj)?;
 
         operations.push(BulkWriteEntryOperation {
             operation: Some(bulk_write_entry_operation::Operation::CreateEntry(
-                udex_api::entry::CreateEntryRequest {
+                udex_sdk::CreateEntryRequest {
                     index_name: index.clone(),
-                    context: Some(ContextInput {
-                        pairs,
-                        dek: None,
-                        kek_id: None,
-                    }),
+                    context: Some(context),
                 },
             )),
         });
