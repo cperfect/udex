@@ -63,7 +63,6 @@ fn bind_file_secret(abs_path: &str) -> Secret<String> {
 type JwtFixture = (
     UdexClient,
     String, // index name
-    String, // db name (held for cleanup)
 );
 
 async fn init_jwt_fixture() -> JwtFixture {
@@ -72,7 +71,6 @@ async fn init_jwt_fixture() -> JwtFixture {
 
     let datastore_fixtures = init_postgres().await;
     let datastore = datastore_fixtures.0;
-    let db_name = datastore_fixtures.2;
 
     let index_name = format!("{ID_PREFIX}-index");
     let jwt_issuer = format!("{ID_PREFIX}-issuer");
@@ -139,7 +137,7 @@ async fn init_jwt_fixture() -> JwtFixture {
     .await
     .expect("SDK connect failed");
 
-    (client, index_name, db_name)
+    (client, index_name)
 }
 
 pub async fn data(serial: bool) -> Data<'static, JwtFixture> {
@@ -154,7 +152,6 @@ pub async fn data(serial: bool) -> Data<'static, JwtFixture> {
 type HydraFixture = (
     UdexClient,
     String, // index name
-    String, // db name
 );
 
 fn hydra_public_url() -> String {
@@ -185,7 +182,6 @@ async fn init_hydra_fixture() -> HydraFixture {
 
     let datastore_fixtures = init_postgres().await;
     let datastore = datastore_fixtures.0;
-    let db_name = datastore_fixtures.2;
 
     let server_config = udex_server::config::ServerConfig {
         bind_address,
@@ -260,7 +256,7 @@ async fn init_hydra_fixture() -> HydraFixture {
     .await
     .expect("SDK hydra connect failed");
 
-    (client, index_name, db_name)
+    (client, index_name)
 }
 
 pub async fn data_hydra(serial: bool) -> Data<'static, HydraFixture> {
