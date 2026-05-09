@@ -94,7 +94,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Written {n} entries:");
     for (i, result) in results.iter().enumerate() {
-        match result.result.as_ref().expect("missing result") {
+        let inner = result
+            .result
+            .as_ref()
+            .ok_or_else(|| format!("result[{i}]: server returned empty result"))?;
+        match inner {
             bulk_write_entry_operation_result::Result::CreateEntry(r) => {
                 println!("  [{i}] key={} hash={}", r.key, r.context_hash);
             }
