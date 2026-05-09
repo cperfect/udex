@@ -20,6 +20,8 @@ use rstest::*;
 use secrets_rs::{sources::file::FileSource, Secret, SourceRegistry};
 use time::OffsetDateTime;
 use tokio::time::{sleep, Duration};
+use tonic::transport::{Certificate, Channel, ClientTlsConfig};
+use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzRequest};
 use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
 use udex_sdk::{ClientOptions, ContextInput, KeyValuePair, UdexClient, Value};
@@ -56,6 +58,35 @@ fn bind_file_secret(abs_path: &str) -> Secret<String> {
         .expect("register file source");
     s.bind(&reg).expect("bind file secret");
     s
+}
+
+// ── Server readiness ──────────────────────────────────────────────────────────
+
+/// Poll the healthz endpoint over TLS until the server responds or 3 seconds elapse.
+async fn wait_for_server(addr: &str, ca_pem: &[u8]) {
+    let tls = ClientTlsConfig::new()
+        .ca_certificate(Certificate::from_pem(ca_pem))
+        .domain_name("localhost");
+    for _ in 0..30 {
+        sleep(Duration::from_millis(100)).await;
+        let Ok(ch) = Channel::from_shared(format!("https://{addr}"))
+            .unwrap()
+            .tls_config(tls.clone())
+            .unwrap()
+            .connect()
+            .await
+        else {
+            continue;
+        };
+        if HealthzServiceClient::new(ch)
+            .healthz(tonic::Request::new(HealthzRequest {}))
+            .await
+            .is_ok()
+        {
+            return;
+        }
+    }
+    panic!("server at {addr} did not become ready within 3 seconds");
 }
 
 // ── JWT fixture ───────────────────────────────────────────────────────────────
@@ -107,13 +138,17 @@ async fn init_jwt_fixture() -> JwtFixture {
         },
     };
 
+    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
+        .await
+        .expect("read CA cert");
+
     tokio::spawn(async move {
         udex_server::server::serve(server_config, datastore)
             .await
             .expect("server failed");
     });
 
-    sleep(Duration::from_millis(200)).await;
+    wait_for_server(SDK_JWT_BIND_ADDR, &ca_pem).await;
 
     // Sign a JWT that grants full access to the test index.
     let private_key_pem = tokio::fs::read_to_string(jwt_key_path("signing_private_key.pem"))
@@ -121,10 +156,6 @@ async fn init_jwt_fixture() -> JwtFixture {
         .expect("read JWT private key");
     let signing_key = EncodingKey::from_ec_pem(private_key_pem.as_bytes()).expect("EncodingKey");
     let token = make_token(&signing_key, &jwt_issuer, &jwt_audience, &index_name, None);
-
-    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
-        .await
-        .expect("read CA cert");
 
     let client = UdexClient::connect(
         ClientOptions::builder()
@@ -213,13 +244,17 @@ async fn init_hydra_fixture() -> HydraFixture {
         },
     };
 
+    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
+        .await
+        .expect("read CA cert");
+
     tokio::spawn(async move {
         udex_server::server::serve(server_config, datastore)
             .await
             .expect("hydra server failed");
     });
 
-    sleep(Duration::from_millis(500)).await;
+    wait_for_server(SDK_HYDRA_BIND_ADDR, &ca_pem).await;
 
     // Register a Hydra client that has all the scopes needed by the test index.
     register_hydra_client(
@@ -232,9 +267,6 @@ async fn init_hydra_fixture() -> HydraFixture {
     .await;
 
     let token_url = format!("{public_url}/oauth2/token");
-    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
-        .await
-        .expect("read CA cert");
 
     let client = UdexClient::connect(
         ClientOptions::builder()
