@@ -14,6 +14,7 @@ pub struct ClientOptions {
     pub(crate) endpoint: String,
     pub(crate) ca_cert: CaCert,
     pub(crate) auth: AuthConfig,
+    pub(crate) danger_allow_non_tls: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -86,6 +87,7 @@ pub struct ClientOptionsBuilder {
     endpoint: Option<String>,
     ca_cert: CaCert,
     auth: AuthConfig,
+    danger_allow_non_tls: bool,
 }
 
 impl ClientOptionsBuilder {
@@ -163,15 +165,47 @@ impl ClientOptionsBuilder {
         self
     }
 
-    /// Builds [`ClientOptions`], returning an error if required fields are missing.
+    /// Permits plain `http://` endpoints and `http://` OAuth2 token URLs.
+    ///
+    /// **Development only.** By default the SDK rejects any non-TLS URL so that
+    /// credentials and tokens are never transmitted in plaintext. Set this flag
+    /// only when connecting to a local dev or test server that does not have TLS.
+    pub fn danger_allow_non_tls(mut self) -> Self {
+        self.danger_allow_non_tls = true;
+        self
+    }
+
+    /// Builds [`ClientOptions`], returning an error if required fields are missing
+    /// or if a non-TLS URL is used without [`Self::danger_allow_non_tls`].
     pub fn build(self) -> Result<ClientOptions, Error> {
         let endpoint = self
             .endpoint
             .ok_or_else(|| Error::InvalidOptions("endpoint is required".into()))?;
+
+        if !self.danger_allow_non_tls {
+            if !endpoint.starts_with("https://") {
+                return Err(Error::InvalidOptions(
+                    "endpoint must use HTTPS; call danger_allow_non_tls() to allow plain HTTP \
+                     (development only)"
+                        .into(),
+                ));
+            }
+            if let AuthConfig::ClientCredentials(ref creds) = self.auth {
+                if !creds.token_url.starts_with("https://") {
+                    return Err(Error::InvalidOptions(
+                        "token_url must use HTTPS; call danger_allow_non_tls() to allow plain \
+                         HTTP (development only)"
+                            .into(),
+                    ));
+                }
+            }
+        }
+
         Ok(ClientOptions {
             endpoint,
             ca_cert: self.ca_cert,
             auth: self.auth,
+            danger_allow_non_tls: self.danger_allow_non_tls, // retained for Debug output
         })
     }
 }
@@ -218,22 +252,26 @@ impl UdexClient {
     /// Builds a TLS channel and, if OAuth2 credentials are configured, performs
     /// the initial token fetch so the first RPC does not pay the latency cost.
     pub async fn connect(opts: ClientOptions) -> Result<Self, Error> {
-        let tls = match &opts.ca_cert {
-            CaCert::System => ClientTlsConfig::new(),
-            CaCert::PemFile(path) => {
-                let pem = tokio::fs::read(path).await?;
-                ClientTlsConfig::new().ca_certificate(Certificate::from_pem(pem))
-            }
-            CaCert::PemBytes(bytes) => {
-                ClientTlsConfig::new().ca_certificate(Certificate::from_pem(bytes))
-            }
-        };
+        let shared = Channel::from_shared(opts.endpoint.clone()).map_err(|_| {
+            Error::InvalidOptions(format!("invalid endpoint URL: {}", opts.endpoint))
+        })?;
 
-        let channel = Channel::from_shared(opts.endpoint.clone())
-            .map_err(|_| Error::InvalidOptions(format!("invalid endpoint URL: {}", opts.endpoint)))?
-            .tls_config(tls)?
-            .connect()
-            .await?;
+        let channel = if opts.danger_allow_non_tls && opts.endpoint.starts_with("http://") {
+            // Plain HTTP — permitted only when danger_allow_non_tls is set (enforced in build()).
+            shared.connect().await?
+        } else {
+            let tls = match &opts.ca_cert {
+                CaCert::System => ClientTlsConfig::new(),
+                CaCert::PemFile(path) => {
+                    let pem = tokio::fs::read(path).await?;
+                    ClientTlsConfig::new().ca_certificate(Certificate::from_pem(pem))
+                }
+                CaCert::PemBytes(bytes) => {
+                    ClientTlsConfig::new().ca_certificate(Certificate::from_pem(bytes))
+                }
+            };
+            shared.tls_config(tls)?.connect().await?
+        };
 
         let auth = match opts.auth {
             AuthConfig::None => AuthState::None,
@@ -245,6 +283,7 @@ impl UdexClient {
                     creds.client_secret,
                     creds.audience,
                     creds.scope,
+                    opts.danger_allow_non_tls,
                 );
                 // Eagerly fetch so the first RPC does not pay the token-fetch latency.
                 tm.token().await?;

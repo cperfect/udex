@@ -83,6 +83,30 @@ ClientOptions::builder()
     .build()?
 ```
 
+#### Development only — plain HTTP endpoints
+
+By default the SDK enforces TLS for both the gRPC endpoint and the OAuth2
+token URL: `build()` returns an error if either starts with `http://`, and the
+underlying transports (tonic channel and reqwest HTTP client) also enforce TLS
+independently.
+
+For local dev environments where the server or auth service does not have TLS
+(e.g. a Hydra instance running on `http://localhost:4444`), call
+`danger_allow_non_tls()` to opt out:
+
+```rust
+// Development only — never use against a production environment.
+ClientOptions::builder()
+    .endpoint("http://localhost:50051")
+    .client_credentials(
+        "http://localhost:4444/oauth2/token",
+        "my-client-id",
+        "my-client-secret",
+    )
+    .danger_allow_non_tls()
+    .build()?
+```
+
 ## Entry operations
 
 ```rust

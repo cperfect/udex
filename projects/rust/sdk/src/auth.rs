@@ -69,9 +69,11 @@ impl TokenManager {
         client_secret: String,
         audience: Option<String>,
         scope: Option<String>,
+        danger_allow_non_tls: bool,
     ) -> Self {
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(TOKEN_REQUEST_TIMEOUT_SECS))
+            .https_only(!danger_allow_non_tls)
             .build()
             .expect("failed to build HTTP client");
         TokenManager {

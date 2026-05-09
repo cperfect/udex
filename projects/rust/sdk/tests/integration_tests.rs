@@ -282,6 +282,7 @@ async fn init_hydra_fixture() -> HydraFixture {
                  udex:entry:v1:{index_name}:write \
                  udex:entry:v1:{index_name}:delete"
             ))
+            .danger_allow_non_tls() // Hydra token endpoint is plain HTTP in the dev environment
             .build()
             .unwrap(),
     )
@@ -858,6 +859,7 @@ async fn test_hydra_sdk_invalid_credentials_return_auth_error() {
             .ca_cert_pem_bytes(ca_pem)
             .client_credentials(&token_url, "nonexistent-client-id", "wrong-secret")
             .audience("wrong-audience")
+            .danger_allow_non_tls() // Hydra token endpoint is plain HTTP in the dev environment
             .build()
             .unwrap(),
     )
