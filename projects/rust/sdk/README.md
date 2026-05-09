@@ -86,7 +86,7 @@ ClientOptions::builder()
 ## Entry operations
 
 ```rust
-use udex_sdk::{ContextInput, KeyValuePair, Value, value};
+use udex_sdk::{xxh3_context_hash, ContextInput, KeyValuePair, Value, value};
 
 // Build a context — a set of key-value pairs that identify an entity.
 fn kv(key: &str, val: &str) -> KeyValuePair {
@@ -99,22 +99,23 @@ fn kv(key: &str, val: &str) -> KeyValuePair {
     }
 }
 
-let ctx = ContextInput {
+let context_input = ContextInput {
     pairs: vec![kv("user_id", "42"), kv("region", "eu")],
     dek: None,
     kek_id: None,
 };
 
+// Pre-compute the hash before context_input is consumed by create_entry.
+let hash = xxh3_context_hash(&context_input)?;
+
 // Create (idempotent — returns the existing entry if context already exists).
-let resp = client.create_entry("my-index", ctx).await?;
+let resp = client.create_entry("my-index", context_input).await?;
 println!("key: {}", resp.key);
 
 // Look up context for a known key (UUID).
 let ctx = client.lookup_context_by_key("my-index", &resp.key).await?;
 
 // Reverse lookup: find the key for a context hash.
-use udex_api::hash::xxh3_context_hash;
-let hash = xxh3_context_hash(&context_input)?;
 let key: Option<String> = client.lookup_key_by_context("my-index", &hash).await?;
 
 // Delete an entry.
@@ -124,8 +125,7 @@ client.delete_entry("my-index", &resp.key).await?;
 ### Bulk operations
 
 ```rust
-use udex_sdk::{BulkWriteEntryOperation, bulk_write_entry_operation};
-use udex_api::entry::CreateEntryRequest;
+use udex_sdk::{BulkWriteEntryOperation, CreateEntryRequest, bulk_write_entry_operation};
 
 let operations = vec![
     BulkWriteEntryOperation {

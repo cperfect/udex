@@ -41,6 +41,7 @@ pub use error::Error;
 pub use udex_api::entry::{
     bulk_read_entry_operation, bulk_write_entry_operation, value, BulkReadEntryOperation,
     BulkReadEntryOperationResult, BulkWriteEntryOperation, BulkWriteEntryOperationResult, Context,
-    ContextInput, CreateEntryResponse, KeyValuePair, Value,
+    ContextInput, CreateEntryRequest, CreateEntryResponse, KeyValuePair, Value,
 };
+pub use udex_api::hash::xxh3_context_hash;
 pub use udex_api::index::{CreateIndexRequest, Index, IndexUpdate};
