@@ -8,6 +8,7 @@ repository.workspace = true
 description.workspace = true
 
 [dependencies]
+udex-sdk = { path = "../sdk" }
 udex-api = { path = "../api" }
 udex-datastore = { path = "../datastore" }
 udex-server = { path = "../server" }

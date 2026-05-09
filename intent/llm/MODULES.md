@@ -61,8 +61,7 @@ The workspace has three crates. New code goes in the crate that owns its layer â
 
 | Concern | Module | Notes |
 | ------- | ------ | ----- |
-| CLI arg parsing & top-level dispatch | `udex_cli::cli` + `src/main.rs` | Clap types; `run()` dispatches to command handlers |
-| gRPC client connection setup | `udex_cli::client` | `ClientConfig` â€” TLS + token injection; **will be deleted** in ST0010/WP-07, replaced by `udex-sdk` |
+| CLI arg parsing & top-level dispatch | `udex_cli::cli` + `src/main.rs` | Clap types; `run()` dispatches to command handlers; `build_client()` builds a `UdexClient` from CLI flags + env vars |
 | `serve` command | `udex_cli::commands::serve` | Starts the embedded server |
 | `config` commands | `udex_cli::commands::config` | Init/validate config file |
 | `index` commands | `udex_cli::commands::index` | CRUD over the index gRPC service |

@@ -3930,6 +3930,7 @@ dependencies = [
  "tracing-subscriber",
  "udex-api",
  "udex-datastore",
+ "udex-sdk",
  "udex-server",
 ]
 

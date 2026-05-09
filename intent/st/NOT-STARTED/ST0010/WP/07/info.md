@@ -3,7 +3,7 @@ verblock: "08 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-07
 title: "CLI migration to SDK"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-07: CLI migration to SDK
