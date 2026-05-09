@@ -153,6 +153,10 @@ pub async fn update(
 }
 
 /// Delete an index.
-pub async fn delete(_client: &UdexClient, _args: IndexDeleteArgs) -> Result<()> {
+pub async fn delete(
+    _client: &UdexClient,
+    _args: IndexDeleteArgs,
+    _output: &OutputFormat,
+) -> Result<()> {
     anyhow::bail!("index delete is not yet implemented by the server")
 }

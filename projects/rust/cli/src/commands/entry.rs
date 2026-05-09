@@ -170,11 +170,19 @@ pub async fn lookup(
 }
 
 /// Delete an entry by key.
-pub async fn delete(client: &UdexClient, args: EntryDeleteArgs) -> Result<()> {
+pub async fn delete(
+    client: &UdexClient,
+    args: EntryDeleteArgs,
+    output: &OutputFormat,
+) -> Result<()> {
     client
         .delete_entry(&args.index, &args.key)
         .await
         .context("delete_entry RPC failed")?;
-    println!("deleted");
+    match output {
+        OutputFormat::Table => println!("deleted"),
+        OutputFormat::Json => println!("null"),
+        OutputFormat::Yaml => println!("~"),
+    }
     Ok(())
 }

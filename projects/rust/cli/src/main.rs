@@ -162,7 +162,9 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
                 IndexCommands::Update(args) => {
                     commands::index::update(&client, args, &output).await
                 }
-                IndexCommands::Delete(args) => commands::index::delete(&client, args).await,
+                IndexCommands::Delete(args) => {
+                    commands::index::delete(&client, args, &output).await
+                }
             }
         }
 
@@ -176,7 +178,9 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
                 EntryCommands::Lookup(args) => {
                     commands::entry::lookup(&client, args, &output).await
                 }
-                EntryCommands::Delete(args) => commands::entry::delete(&client, args).await,
+                EntryCommands::Delete(args) => {
+                    commands::entry::delete(&client, args, &output).await
+                }
             }
         }
     }
