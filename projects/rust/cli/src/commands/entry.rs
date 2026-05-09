@@ -84,8 +84,14 @@ pub async fn create(
     match output {
         OutputFormat::Table => {
             let rows = vec![
-                KvRow { key: "key".to_string(), value: resp.key },
-                KvRow { key: "context_hash".to_string(), value: resp.context_hash },
+                KvRow {
+                    key: "key".to_string(),
+                    value: resp.key,
+                },
+                KvRow {
+                    key: "context_hash".to_string(),
+                    value: resp.context_hash,
+                },
             ];
             println!("{}", Table::new(rows));
         }

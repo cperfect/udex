@@ -61,11 +61,8 @@ impl UdexClient {
             })
             .await?
             .into_inner();
-        resp.context.ok_or_else(|| {
-            Error::Rpc(Box::new(tonic::Status::internal(
-                "server returned empty context",
-            )))
-        })
+        resp.context
+            .ok_or_else(|| tonic::Status::internal("server returned empty context").into())
     }
 
     /// Reverse-looks up the entry key for the given pre-computed `context_hash` in `index_name`.

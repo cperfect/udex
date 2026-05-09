@@ -77,12 +77,19 @@ fn print_indices(indices: Vec<Index>, output: &OutputFormat) -> Result<()> {
 
 /// List all indices.
 pub async fn list(client: &UdexClient, output: &OutputFormat) -> Result<()> {
-    let indices = client.list_indices().await.context("list_indices RPC failed")?;
+    let indices = client
+        .list_indices()
+        .await
+        .context("list_indices RPC failed")?;
     print_indices(indices, output)
 }
 
 /// Create a new index.
-pub async fn create(client: &UdexClient, args: IndexCreateArgs, output: &OutputFormat) -> Result<()> {
+pub async fn create(
+    client: &UdexClient,
+    args: IndexCreateArgs,
+    output: &OutputFormat,
+) -> Result<()> {
     use std::convert::TryFrom;
     let max_bulk_operations = i32::try_from(args.bulk_limit)
         .map_err(|_| anyhow::anyhow!("bulk_limit too large (must fit in i32)"))?;

@@ -20,22 +20,16 @@ impl UdexClient {
             })
             .await?
             .into_inner();
-        resp.index.ok_or_else(|| {
-            Error::Rpc(Box::new(tonic::Status::internal(
-                "server returned empty index",
-            )))
-        })
+        resp.index
+            .ok_or_else(|| tonic::Status::internal("server returned empty index").into())
     }
 
     /// Creates a new index from `req` and returns the created [`Index`].
     pub async fn create_index(&self, req: CreateIndexRequest) -> Result<Index, Error> {
         let mut client = self.index_client().await?;
         let resp: CreateIndexResponse = client.create_index(req).await?.into_inner();
-        resp.index.ok_or_else(|| {
-            Error::Rpc(Box::new(tonic::Status::internal(
-                "server returned empty index",
-            )))
-        })
+        resp.index
+            .ok_or_else(|| tonic::Status::internal("server returned empty index").into())
     }
 
     /// Applies `update` to the index named `name` and returns the updated [`Index`].
@@ -48,11 +42,8 @@ impl UdexClient {
             })
             .await?
             .into_inner();
-        resp.index.ok_or_else(|| {
-            Error::Rpc(Box::new(tonic::Status::internal(
-                "server returned empty index",
-            )))
-        })
+        resp.index
+            .ok_or_else(|| tonic::Status::internal("server returned empty index").into())
     }
 
     /// Lists all indices accessible to the caller.

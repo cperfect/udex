@@ -38,8 +38,8 @@ fn main() {
 
 /// Map an error to a distinct exit code.
 ///
-/// Walks the `anyhow` source chain looking for a `tonic::Status` (gRPC-level
-/// errors), a `udex_sdk::Error` (SDK-wrapped gRPC errors), or a
+/// Walks the `anyhow` source chain looking for a `udex_sdk::Error` (SDK errors),
+/// a bare `tonic::Status` (gRPC errors surfaced outside the SDK), or a
 /// `tonic::transport::Error` (transport-level failures). Falls back to 1 for
 /// anything else.
 ///
@@ -59,33 +59,33 @@ fn grpc_exit_code(e: &anyhow::Error) -> i32 {
     let root: &(dyn StdError + 'static) = e.as_ref();
     let mut src: Option<&(dyn StdError + 'static)> = Some(root);
     while let Some(cause) = src {
-        if let Some(status) = cause.downcast_ref::<tonic::Status>() {
-            return status_exit_code(status);
-        }
-        if cause.downcast_ref::<tonic::transport::Error>().is_some() {
-            return 8;
-        }
         if let Some(sdk_err) = cause.downcast_ref::<udex_sdk::Error>() {
             return match sdk_err {
-                udex_sdk::Error::Rpc(status) => status_exit_code(status),
+                udex_sdk::Error::Rpc(s) => exit_code_for_rpc(s.code()),
                 udex_sdk::Error::Transport(_) => 8,
                 _ => 1,
             };
+        }
+        if let Some(status) = cause.downcast_ref::<tonic::Status>() {
+            return exit_code_for_rpc(i32::from(status.code()) as u32);
+        }
+        if cause.downcast_ref::<tonic::transport::Error>().is_some() {
+            return 8;
         }
         src = cause.source();
     }
     1
 }
 
-fn status_exit_code(status: &tonic::Status) -> i32 {
-    use tonic::Code;
-    match status.code() {
-        Code::NotFound => 2,
-        Code::AlreadyExists => 3,
-        Code::InvalidArgument | Code::FailedPrecondition | Code::OutOfRange => 4,
-        Code::Unauthenticated => 5,
-        Code::PermissionDenied => 6,
-        Code::Unavailable | Code::DeadlineExceeded => 7,
+fn exit_code_for_rpc(code: u32) -> i32 {
+    use udex_sdk::grpc_code;
+    match code {
+        grpc_code::NOT_FOUND => 2,
+        grpc_code::ALREADY_EXISTS => 3,
+        grpc_code::INVALID_ARGUMENT | grpc_code::FAILED_PRECONDITION | grpc_code::OUT_OF_RANGE => 4,
+        grpc_code::UNAUTHENTICATED => 5,
+        grpc_code::PERMISSION_DENIED => 6,
+        grpc_code::UNAVAILABLE | grpc_code::DEADLINE_EXCEEDED => 7,
         _ => 1,
     }
 }
@@ -126,7 +126,13 @@ async fn build_client(
 }
 
 async fn run(cli: Cli) -> anyhow::Result<()> {
-    let Cli { command, server, ca_cert, output, .. } = cli;
+    let Cli {
+        command,
+        server,
+        ca_cert,
+        output,
+        ..
+    } = cli;
 
     match command {
         Commands::Serve(args) => commands::serve::run(args).await,
