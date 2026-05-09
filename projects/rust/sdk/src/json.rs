@@ -115,11 +115,11 @@ mod tests {
 
     #[test]
     fn float_value() {
-        let ctx = parse(r#"{"score":3.14}"#).unwrap();
+        let ctx = parse(r#"{"score":1.5}"#).unwrap();
         let value::Value::FloatValue(f) = value_of(&ctx, "score") else {
             panic!("expected FloatValue");
         };
-        assert!((f - 3.14).abs() < 1e-10, "unexpected float: {f}");
+        assert!((f - 1.5).abs() < 1e-10, "unexpected float: {f}");
     }
 
     #[test]
