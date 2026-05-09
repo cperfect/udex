@@ -71,12 +71,18 @@ impl ClientOptionsBuilder {
     }
 
     /// Reads the CA certificate from a PEM file at the given path.
+    ///
+    /// **Development only.** In production the system trust store is used. Set
+    /// this only when connecting to a dev/test deployment with a self-signed or
+    /// private-CA certificate.
     pub fn ca_cert_pem_file(mut self, path: impl Into<PathBuf>) -> Self {
         self.ca_cert = CaCert::PemFile(path.into());
         self
     }
 
     /// Uses the provided PEM-encoded CA certificate bytes directly.
+    ///
+    /// **Development only.** See [`Self::ca_cert_pem_file`] for guidance.
     pub fn ca_cert_pem_bytes(mut self, pem: impl Into<Vec<u8>>) -> Self {
         self.ca_cert = CaCert::PemBytes(pem.into());
         self
@@ -84,9 +90,9 @@ impl ClientOptionsBuilder {
 
     /// Injects a pre-fetched bearer token on every request.
     ///
-    /// Use this when you manage token acquisition externally (e.g. in tests or
-    /// when integrating with an existing auth library). For automatic OAuth2
-    /// client-credentials, prefer [`Self::client_credentials`] instead.
+    /// **Development only.** Use this in tests or local scripts where bypassing
+    /// the auth server is intentional. For production workloads use
+    /// [`Self::client_credentials`] instead.
     pub fn static_bearer_token(mut self, token: impl Into<String>) -> Self {
         self.auth = AuthConfig::StaticToken(token.into());
         self

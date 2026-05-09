@@ -3966,15 +3966,25 @@ name = "udex-sdk"
 version = "0.1.0"
 dependencies = [
  "dotenvy",
+ "jsonwebtoken",
+ "maybe-once",
+ "ory-hydra-client",
  "reqwest",
+ "rstest",
+ "rustls",
+ "secrets-rs",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
+ "time",
  "tokio",
+ "tokio-shared-rt",
  "tonic",
  "tracing",
  "tracing-subscriber",
  "udex-api",
+ "udex-datastore",
+ "udex-server",
 ]
 
 [[package]]

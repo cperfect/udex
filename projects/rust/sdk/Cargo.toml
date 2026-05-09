@@ -17,6 +17,18 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
+[[example]]
+name = "create_entry"
+path = "examples/create_entry.rs"
+
+[[example]]
+name = "get_entry"
+path = "examples/get_entry.rs"
+
+[[example]]
+name = "bulk_write"
+path = "examples/bulk_write.rs"
+
 [dev-dependencies]
 udex-server = { path = "../server" }
 udex-datastore = { path = "../datastore", features = ["integration_test"] }
