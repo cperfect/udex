@@ -6,7 +6,7 @@
 
 ## Rust Workspace: `projects/rust/`
 
-The workspace has three crates. New code goes in the crate that owns its layer — see DECISION_TREE.md.
+The workspace has five crates. New code goes in the crate that owns its layer — see DECISION_TREE.md.
 
 ### `udex-api` — Schema, generated types, and cross-cutting auth logic
 

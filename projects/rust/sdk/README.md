@@ -13,7 +13,7 @@ Add the crate to your `Cargo.toml`:
 ```toml
 [dependencies]
 udex-sdk = "0.1.0"
-tokio    = { version = "1", features = ["rt-macro"] }
+tokio    = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
 For local development against an unreleased checkout, use a path dependency

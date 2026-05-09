@@ -619,6 +619,9 @@ async fn test_sdk_bulk_write_and_read() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_sdk_invalid_token_returns_rpc_error() {
+    // Ensure the JWT fixture server is started before connecting.
+    let _d = data(false).await;
+
     // Connect with a deliberately wrong static token; server should reject it.
     let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
         .await
@@ -634,10 +637,6 @@ async fn test_sdk_invalid_token_returns_rpc_error() {
     )
     .await
     .expect("connect should succeed even with a bad token");
-
-    // The test index must already exist (from the JWT fixture which starts the server).
-    // We just need data() to have initialised the server first.
-    let _d = data(false).await;
 
     let err = client.list_indices().await.unwrap_err();
     assert!(
