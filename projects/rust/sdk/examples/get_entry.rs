@@ -87,10 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         let context_hash = xxh3_context_hash(&context_input)?;
 
-        match client
-            .lookup_key_by_context(&index, &context_hash)
-            .await?
-        {
+        match client.lookup_key_by_context(&index, &context_hash).await? {
             Some(key) => println!("key: {key}"),
             None => println!("not found"),
         }

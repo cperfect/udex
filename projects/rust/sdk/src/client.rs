@@ -1,3 +1,4 @@
+use std::fmt;
 use std::path::PathBuf;
 
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
@@ -27,7 +28,7 @@ pub(crate) enum CaCert {
 }
 
 /// Authentication configuration supplied via [`ClientOptionsBuilder`].
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub(crate) enum AuthConfig {
     /// No `Authorization` header injected.
     #[default]
@@ -38,14 +39,38 @@ pub(crate) enum AuthConfig {
     ClientCredentials(ClientCredentials),
 }
 
+impl fmt::Debug for AuthConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AuthConfig::None => write!(f, "None"),
+            AuthConfig::StaticToken(_) => write!(f, "StaticToken([REDACTED])"),
+            AuthConfig::ClientCredentials(creds) => {
+                f.debug_tuple("ClientCredentials").field(creds).finish()
+            }
+        }
+    }
+}
+
 /// OAuth2 client-credentials configuration.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct ClientCredentials {
     pub(crate) token_url: String,
     pub(crate) client_id: String,
     pub(crate) client_secret: String,
     pub(crate) audience: Option<String>,
     pub(crate) scope: Option<String>,
+}
+
+impl fmt::Debug for ClientCredentials {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ClientCredentials")
+            .field("token_url", &self.token_url)
+            .field("client_id", &"[REDACTED]")
+            .field("client_secret", &"[REDACTED]")
+            .field("audience", &self.audience)
+            .field("scope", &self.scope)
+            .finish()
+    }
 }
 
 impl ClientOptions {
@@ -152,11 +177,20 @@ impl ClientOptionsBuilder {
 }
 
 /// Runtime auth state held by a connected [`UdexClient`].
-#[derive(Debug)]
 pub(crate) enum AuthState {
     None,
     Static(String),
     Dynamic(TokenManager),
+}
+
+impl fmt::Debug for AuthState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AuthState::None => write!(f, "None"),
+            AuthState::Static(_) => write!(f, "Static([REDACTED])"),
+            AuthState::Dynamic(tm) => f.debug_tuple("Dynamic").field(tm).finish(),
+        }
+    }
 }
 
 /// A connected Udex client.

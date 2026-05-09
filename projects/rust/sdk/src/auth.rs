@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -5,19 +6,34 @@ use tokio::sync::Mutex;
 
 use crate::error::Error;
 
-#[derive(Debug)]
 struct CachedToken {
     value: String,
     expires_at: Instant,
 }
 
+impl fmt::Debug for CachedToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CachedToken")
+            .field("value", &"[REDACTED]")
+            .field("expires_at", &self.expires_at)
+            .finish()
+    }
+}
+
 /// Fetches and caches OAuth2 client-credentials tokens, refreshing transparently.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TokenManager {
     inner: Arc<Inner>,
 }
 
-#[derive(Debug)]
+impl fmt::Debug for TokenManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TokenManager")
+            .field("inner", &self.inner)
+            .finish()
+    }
+}
+
 struct Inner {
     http: reqwest::Client,
     token_url: String,
@@ -26,6 +42,18 @@ struct Inner {
     audience: Option<String>,
     scope: Option<String>,
     cached: Mutex<Option<CachedToken>>,
+}
+
+impl fmt::Debug for Inner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Inner")
+            .field("token_url", &self.token_url)
+            .field("client_id", &"[REDACTED]")
+            .field("client_secret", &"[REDACTED]")
+            .field("audience", &self.audience)
+            .field("scope", &self.scope)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Seconds before expiry at which the token is proactively refreshed.
