@@ -490,7 +490,7 @@ async fn test_sdk_delete_entry() {
         .await
         .unwrap_err();
     assert!(
-        matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == tonic::Code::NotFound),
+        matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::NOT_FOUND),
         "expected NOT_FOUND after delete, got: {err}"
     );
 }
@@ -613,7 +613,7 @@ async fn test_sdk_invalid_token_returns_rpc_error() {
     let err = client.list_indices().await.unwrap_err();
     assert!(
         matches!(&err, udex_sdk::Error::Rpc(s)
-            if s.code() == tonic::Code::Unauthenticated || s.code() == tonic::Code::PermissionDenied),
+            if s.code() == udex_sdk::grpc_code::UNAUTHENTICATED || s.code() == udex_sdk::grpc_code::PERMISSION_DENIED),
         "expected Unauthenticated/PermissionDenied, got: {err}"
     );
 }
@@ -716,7 +716,7 @@ async fn test_hydra_sdk_delete_entry() {
         .await
         .unwrap_err();
     assert!(
-        matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == tonic::Code::NotFound),
+        matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::NOT_FOUND),
         "expected NOT_FOUND after delete via Hydra, got: {err}"
     );
 }
