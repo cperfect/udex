@@ -12,8 +12,15 @@ Add the crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-udex-sdk = { path = "../sdk" }   # or version = "…" once published
+udex-sdk = "0.1.0"
 tokio    = { version = "1", features = ["rt-macro"] }
+```
+
+For local development against an unreleased checkout, use a path dependency
+relative to your own project:
+
+```toml
+udex-sdk = { path = "../udex/projects/rust/sdk" }
 ```
 
 ### Connect and authenticate
