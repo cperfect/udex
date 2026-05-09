@@ -53,8 +53,12 @@ fn json_value_to_proto(key: &str, v: serde_json::Value) -> Result<value::Value, 
         serde_json::Value::Number(n) => {
             if let Some(i) = n.as_i64() {
                 Ok(value::Value::IntValue(i))
+            } else if let Some(f) = n.as_f64() {
+                Ok(value::Value::FloatValue(f))
             } else {
-                Ok(value::Value::FloatValue(n.as_f64().unwrap_or(f64::NAN)))
+                Err(Error::InvalidOptions(format!(
+                    "key {key:?}: number {n:?} cannot be represented as a context value",
+                )))
             }
         }
         other => Err(Error::InvalidOptions(format!(
