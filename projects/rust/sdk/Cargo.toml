@@ -32,7 +32,6 @@ path = "examples/bulk_write.rs"
 [dev-dependencies]
 udex-server = { path = "../server" }
 udex-datastore = { path = "../datastore", features = ["integration_test"] }
-tokio = { workspace = true }
 tokio-shared-rt = { workspace = true }
 maybe-once = { workspace = true }
 rstest = { workspace = true }
