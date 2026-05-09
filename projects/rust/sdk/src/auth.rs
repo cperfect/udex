@@ -59,6 +59,9 @@ impl fmt::Debug for Inner {
 /// Seconds before expiry at which the token is proactively refreshed.
 const REFRESH_MARGIN_SECS: u64 = 30;
 
+/// Total timeout for a single token-endpoint request (connect + response body).
+const TOKEN_REQUEST_TIMEOUT_SECS: u64 = 10;
+
 impl TokenManager {
     pub(crate) fn new(
         token_url: String,
@@ -67,9 +70,13 @@ impl TokenManager {
         audience: Option<String>,
         scope: Option<String>,
     ) -> Self {
+        let http = reqwest::Client::builder()
+            .timeout(Duration::from_secs(TOKEN_REQUEST_TIMEOUT_SECS))
+            .build()
+            .expect("failed to build HTTP client");
         TokenManager {
             inner: Arc::new(Inner {
-                http: reqwest::Client::new(),
+                http,
                 token_url,
                 client_id,
                 client_secret,
