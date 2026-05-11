@@ -85,7 +85,7 @@ fn test_index_list_fails_without_server() {
         .args(["index", "list"])
         .assert()
         .code(8)
-        .stderr(predicate::str::contains("failed to connect"));
+        .stderr(predicate::str::contains("transport error"));
 }
 
 #[test]

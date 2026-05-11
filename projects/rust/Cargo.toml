@@ -4,6 +4,7 @@ members = [
     "datastore",
     "server",
     "cli",
+    "sdk",
 ]
 resolver = "2"
 
