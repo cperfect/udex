@@ -29,6 +29,10 @@ path = "examples/get_entry.rs"
 name = "bulk_write"
 path = "examples/bulk_write.rs"
 
+[[example]]
+name = "envelope_write"
+path = "examples/envelope_write.rs"
+
 [dev-dependencies]
 udex-server = { path = "../server" }
 udex-datastore = { path = "../datastore", features = ["integration_test"] }
@@ -42,3 +46,5 @@ time = { workspace = true }
 rustls = { workspace = true }
 secrets-rs = { workspace = true }
 ory-hydra-client = { version = "26.2", default-features = false, features = ["rustls-tls"] }
+aes-gcm = "0.10"
+base64 = "0.22"

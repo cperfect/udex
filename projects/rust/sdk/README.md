@@ -166,6 +166,118 @@ let operations = vec![
 let results = client.bulk_write("my-index", operations).await?;
 ```
 
+### Envelope encryption
+
+Udex supports client-side envelope encryption for sensitive context values. The
+server treats all encryption fields as opaque blobs — it stores and returns them
+verbatim and never inspects, validates, or decrypts them. **Encryption and
+decryption are entirely the client's responsibility.**
+
+The pattern uses two keys:
+
+- **KEK (Key Encryption Key)** — a long-lived master key held securely by the
+  client (e.g. in a key vault). Identified by a `kek_id` string you choose.
+- **DEK (Data Encryption Key)** — a short-lived key generated fresh for each
+  context. Encrypted with the KEK and stored alongside the context so that any
+  authorised holder of the KEK can recover it.
+
+Individual key-value pairs carry a `kek_id` to signal that their `value` field
+contains ciphertext rather than plaintext. Pairs without `kek_id` are stored in
+plaintext.
+
+**Wire format.** The SDK uses no built-in encoding for ciphertext. The snippets
+below adopt the convention `base64(nonce || ciphertext)` stored as a
+`StringValue`, which is compact and self-contained. You may use any format your
+application requires, as long as you apply it consistently on read and write.
+
+**Critical: the ciphertext is part of the context identity.** The server hashes
+the context exactly as submitted — encrypted values included. If you later
+re-encrypt a value (for example because a KEK was rotated and the DEK was
+re-wrapped), the ciphertext changes, the context hash changes, and the server
+will create a new entry. The old entry remains under its original key and the
+old context hash. Plan for this when designing key-rotation procedures: either
+accept two entries during the transition, or delete the old entry and create the
+new one atomically.
+
+```rust
+use aes_gcm::{
+    aead::{Aead, AeadCore, KeyInit, OsRng},
+    Aes256Gcm, Key, Nonce,
+};
+use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+use udex_sdk::{ContextInput, KeyValuePair, Value, value};
+
+// ── Setup ─────────────────────────────────────────────────────────────────────
+
+// KEK: held in a key vault; loaded here from wherever you store it.
+// The kek_id is an opaque label the server stores and echoes back.
+let kek_id = "my-kek-v1";
+let kek_bytes: [u8; 32] = /* load from vault */;
+let kek = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&kek_bytes));
+
+// ── Encrypt ───────────────────────────────────────────────────────────────────
+
+// Generate a fresh DEK for this context.
+let dek_bytes = Aes256Gcm::generate_key(OsRng);
+let dek = Aes256Gcm::new(&dek_bytes);
+
+// Encrypt the sensitive value with the DEK.
+// Wire format: base64(nonce || ciphertext).
+let plaintext = "alice@example.com";
+let value_nonce = Aes256Gcm::generate_nonce(OsRng);
+let value_ct = dek.encrypt(&value_nonce, plaintext.as_bytes())?;
+let encrypted_value = B64.encode([value_nonce.as_slice(), &value_ct].concat());
+
+// Wrap the DEK with the KEK (same wire format).
+let dek_nonce = Aes256Gcm::generate_nonce(OsRng);
+let dek_ct = kek.encrypt(&dek_nonce, dek_bytes.as_slice())?;
+let wrapped_dek = B64.encode([dek_nonce.as_slice(), &dek_ct].concat());
+
+// Build the context: mix plaintext and encrypted pairs freely.
+let ctx = ContextInput {
+    pairs: vec![
+        KeyValuePair {                                          // plaintext
+            key: "user_id".into(),
+            value: Some(Value { value: Some(value::Value::StringValue("42".into())) }),
+            kek_id: None,
+        },
+        KeyValuePair {                                          // encrypted
+            key: "email".into(),
+            value: Some(Value { value: Some(value::Value::StringValue(encrypted_value)) }),
+            kek_id: Some(kek_id.into()),
+        },
+    ],
+    dek: Some(wrapped_dek),
+    kek_id: Some(kek_id.into()),
+};
+
+let created = client.create_entry("my-index", ctx).await?;
+
+// ── Decrypt ───────────────────────────────────────────────────────────────────
+
+let found_ctx = client.lookup_context_by_key("my-index", &created.key).await?;
+
+// Unwrap the DEK using the KEK identified by found_ctx.kek_id.
+let wrapped = B64.decode(found_ctx.dek.as_deref().unwrap())?;
+let (dek_nonce_bytes, dek_ct_bytes) = wrapped.split_at(12);
+let recovered_dek = kek.decrypt(Nonce::from_slice(dek_nonce_bytes), dek_ct_bytes)?;
+let dek_dec = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&recovered_dek));
+
+// Decrypt each pair whose kek_id is set.
+for pair in &found_ctx.pairs {
+    if pair.kek_id.is_some() {
+        if let Some(value::Value::StringValue(enc)) = pair.value.as_ref()
+            .and_then(|v| v.value.as_ref())
+        {
+            let enc_bytes = B64.decode(enc)?;
+            let (nonce_bytes, ct_bytes) = enc_bytes.split_at(12);
+            let decrypted = dek_dec.decrypt(Nonce::from_slice(nonce_bytes), ct_bytes)?;
+            println!("{}: {}", pair.key, String::from_utf8(decrypted)?);
+        }
+    }
+}
+```
+
 ## Index operations
 
 ```rust
@@ -204,6 +316,7 @@ Place these in a `.env` file (loaded via `dotenvy`) or export them:
 | [`create_entry`](examples/create_entry.rs) | Connect, authenticate, and create an entry from CLI `KEY=VALUE` arguments |
 | [`get_entry`](examples/get_entry.rs) | Look up an entry by UUID key or by context (`KEY=VALUE` arguments) |
 | [`bulk_write`](examples/bulk_write.rs) | Batch-create entries from newline-delimited JSON on stdin |
+| [`envelope_write`](examples/envelope_write.rs) | Create an entry with one AES-256-GCM envelope-encrypted value, then retrieve and decrypt it |
 
 Run any example with the environment variables set:
 
@@ -220,4 +333,11 @@ cargo run --example get_entry -- user_id=42 region=eu-west
 # Bulk-create entries from JSON.
 printf '{"user_id":"1","region":"eu"}\n{"user_id":"2","region":"us"}\n' |
     cargo run --example bulk_write
+
+# Create an entry with one encrypted context value.
+export UDEX_KEK=$(openssl rand -base64 32)
+export UDEX_KEK_ID=my-kek-v1
+export UDEX_ENCRYPTED_KEY=email
+export UDEX_ENCRYPTED_VALUE=alice@example.com
+cargo run --example envelope_write -- user_id=42 region=eu-west
 ```

@@ -646,6 +646,125 @@ async fn test_sdk_invalid_token_returns_rpc_error() {
     );
 }
 
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_envelope_encrypted_entry() {
+    use aes_gcm::{
+        aead::{Aead, AeadCore, KeyInit, OsRng},
+        Aes256Gcm, Key, Nonce,
+    };
+    use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+
+    let d = data(false).await;
+    let client = &d.0;
+    let index_name = &d.1;
+
+    // The KEK id is an opaque label the client uses to identify which key was
+    // used to wrap the DEK; the server stores and echoes it back verbatim.
+    let kek_id = "test-kek-v1";
+
+    // KEK: the client's master key (in production, stored in a key vault).
+    let kek_bytes = Aes256Gcm::generate_key(OsRng);
+    let kek = Aes256Gcm::new(&kek_bytes);
+
+    // DEK: a fresh data-encryption key scoped to this context.
+    let dek_bytes = Aes256Gcm::generate_key(OsRng);
+    let dek = Aes256Gcm::new(&dek_bytes);
+
+    // Encrypt the sensitive value with the DEK.
+    // Wire format: nonce (12 B) || ciphertext, base64-encoded.
+    let plaintext_email = "alice@example.com";
+    let value_nonce = Aes256Gcm::generate_nonce(OsRng);
+    let value_ct = dek
+        .encrypt(&value_nonce, plaintext_email.as_bytes())
+        .expect("encrypt value");
+    let encrypted_value = B64.encode([value_nonce.as_slice(), &value_ct].concat());
+
+    // Wrap the DEK with the KEK.
+    let dek_nonce = Aes256Gcm::generate_nonce(OsRng);
+    let dek_ct = kek
+        .encrypt(&dek_nonce, dek_bytes.as_slice())
+        .expect("encrypt DEK");
+    let encrypted_dek = B64.encode([dek_nonce.as_slice(), &dek_ct].concat());
+
+    // Build a context with one plaintext pair and one envelope-encrypted pair.
+    let ctx = ContextInput {
+        pairs: vec![
+            KeyValuePair {
+                key: "user_id".to_string(),
+                value: Some(Value {
+                    value: Some(udex_sdk::value::Value::StringValue("42".to_string())),
+                }),
+                kek_id: None,
+            },
+            KeyValuePair {
+                key: "email".to_string(),
+                value: Some(Value {
+                    value: Some(udex_sdk::value::Value::StringValue(encrypted_value)),
+                }),
+                kek_id: Some(kek_id.to_string()),
+            },
+        ],
+        dek: Some(encrypted_dek),
+        kek_id: Some(kek_id.to_string()),
+    };
+
+    let created = client
+        .create_entry(index_name, ctx)
+        .await
+        .expect("create_entry failed");
+    assert!(!created.key.is_empty());
+
+    // Retrieve the stored context.
+    let found_ctx = client
+        .lookup_context_by_key(index_name, &created.key)
+        .await
+        .expect("lookup_context_by_key failed");
+
+    // The server must echo back kek_id and the wrapped DEK unchanged.
+    assert_eq!(found_ctx.kek_id.as_deref(), Some(kek_id));
+    let returned_encrypted_dek = found_ctx.dek.as_deref().expect("missing dek");
+
+    // Unwrap the DEK using the KEK.
+    let dek_bytes_enc = B64
+        .decode(returned_encrypted_dek)
+        .expect("base64 decode DEK");
+    let (dek_nonce_bytes, dek_ct_bytes) = dek_bytes_enc.split_at(12);
+    let unwrapped_dek = kek
+        .decrypt(Nonce::from_slice(dek_nonce_bytes), dek_ct_bytes)
+        .expect("decrypt DEK");
+    let dek_dec = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&unwrapped_dek));
+
+    // Find the encrypted pair and verify the kek_id was echoed back.
+    let email_pair = found_ctx
+        .pairs
+        .iter()
+        .find(|p| p.key == "email")
+        .expect("email pair missing");
+    assert_eq!(email_pair.kek_id.as_deref(), Some(kek_id));
+
+    // Decrypt the value.
+    let enc_value = match email_pair
+        .value
+        .as_ref()
+        .and_then(|v| v.value.as_ref())
+        .expect("missing value")
+    {
+        udex_sdk::value::Value::StringValue(s) => s.clone(),
+        v => panic!("unexpected value type: {v:?}"),
+    };
+    let enc_bytes = B64.decode(&enc_value).expect("base64 decode value");
+    let (val_nonce_bytes, val_ct_bytes) = enc_bytes.split_at(12);
+    let decrypted = dek_dec
+        .decrypt(Nonce::from_slice(val_nonce_bytes), val_ct_bytes)
+        .expect("decrypt value");
+
+    assert_eq!(
+        String::from_utf8(decrypted).expect("UTF-8"),
+        plaintext_email
+    );
+}
+
 // ── Hydra-backed tests ────────────────────────────────────────────────────────
 //
 // These tests mirror the JWT-fixture tests above but drive the full OAuth2
