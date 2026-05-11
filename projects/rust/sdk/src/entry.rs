@@ -1,6 +1,3 @@
-use tonic::metadata::MetadataValue;
-use tonic::Request;
-
 use udex_api::entry::entry_service_client::EntryServiceClient;
 use udex_api::entry::{
     BulkReadEntryOperation, BulkReadEntryOperationRequest, BulkReadEntryOperationResult,
@@ -9,7 +6,7 @@ use udex_api::entry::{
     LookupContextByKeyRequest, LookupKeyByContextRequest,
 };
 
-use crate::client::UdexClient;
+use crate::client::{make_auth_interceptor, UdexClient};
 use crate::error::Error;
 
 impl UdexClient {
@@ -141,23 +138,5 @@ impl UdexClient {
             make_auth_interceptor(token),
         );
         Ok(client)
-    }
-}
-
-/// Builds an interceptor that injects `Authorization: Bearer <token>` when `token` is `Some`.
-// tonic requires the closure to return Result<_, tonic::Status>; the 176-byte Status is
-// unavoidable here since it is the fixed error type for the interceptor signature.
-#[allow(clippy::result_large_err)]
-pub(crate) fn make_auth_interceptor(
-    token: Option<String>,
-) -> impl Fn(Request<()>) -> Result<Request<()>, tonic::Status> + Clone {
-    move |mut req: Request<()>| {
-        if let Some(t) = &token {
-            let val: MetadataValue<_> = format!("Bearer {t}")
-                .parse()
-                .map_err(|_| tonic::Status::internal("invalid bearer token"))?;
-            req.metadata_mut().insert("authorization", val);
-        }
-        Ok(req)
     }
 }

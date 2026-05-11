@@ -4,8 +4,7 @@ use udex_api::index::{
     ListIndicesRequest, UpdateIndexRequest,
 };
 
-use crate::client::UdexClient;
-use crate::entry::make_auth_interceptor;
+use crate::client::{make_auth_interceptor, UdexClient};
 use crate::error::Error;
 
 impl UdexClient {

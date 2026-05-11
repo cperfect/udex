@@ -1,7 +1,9 @@
 use std::fmt;
 use std::path::PathBuf;
 
+use tonic::metadata::MetadataValue;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
+use tonic::Request;
 
 use crate::auth::TokenManager;
 use crate::error::Error;
@@ -304,5 +306,23 @@ impl UdexClient {
             AuthState::Static(t) => Ok(Some(t.clone())),
             AuthState::Dynamic(tm) => Ok(Some(tm.token().await?)),
         }
+    }
+}
+
+/// Builds an interceptor that injects `Authorization: Bearer <token>` when `token` is `Some`.
+// tonic requires the closure to return Result<_, tonic::Status>; the 176-byte Status is
+// unavoidable here since it is the fixed error type for the interceptor signature.
+#[allow(clippy::result_large_err)]
+pub(crate) fn make_auth_interceptor(
+    token: Option<String>,
+) -> impl Fn(Request<()>) -> Result<Request<()>, tonic::Status> + Clone {
+    move |mut req: Request<()>| {
+        if let Some(t) = &token {
+            let val: MetadataValue<_> = format!("Bearer {t}")
+                .parse()
+                .map_err(|_| tonic::Status::internal("invalid bearer token"))?;
+            req.metadata_mut().insert("authorization", val);
+        }
+        Ok(req)
     }
 }
