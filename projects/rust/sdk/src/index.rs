@@ -1,7 +1,7 @@
 use udex_api::index::index_service_client::IndexServiceClient;
 use udex_api::index::{
-    CreateIndexRequest, CreateIndexResponse, DescribeRequest, Index, IndexUpdate,
-    ListIndicesRequest, UpdateIndexRequest,
+    CreateIndexRequest, CreateIndexResponse, DeleteIndexRequest, DescribeRequest, Index,
+    IndexUpdate, ListIndicesRequest, UpdateIndexRequest,
 };
 
 use crate::client::{make_auth_interceptor, UdexClient};
@@ -51,6 +51,20 @@ impl UdexClient {
             .into_inner();
         resp.index
             .ok_or_else(|| Error::InvalidResponse("server returned empty index".to_owned()))
+    }
+
+    /// Deletes the index named `name`.
+    ///
+    /// Returns [`Error::Rpc`] with status `FAILED_PRECONDITION` if the index
+    /// still has entries, or `NOT_FOUND` if the index does not exist.
+    pub async fn delete_index(&self, name: &str) -> Result<(), Error> {
+        let mut client = self.index_client().await?;
+        client
+            .delete_index(DeleteIndexRequest {
+                name: name.to_owned(),
+            })
+            .await?;
+        Ok(())
     }
 
     /// Lists all indices accessible to the caller.
