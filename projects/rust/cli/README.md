@@ -76,8 +76,10 @@ export UDEX_CLIENT_SECRET=my-secret
 udex token fetch --url http://localhost:4444/oauth2/token
 
 # Request a specific subset of the client's registered scopes.
+# Use --audience to match the server's jwt_audience setting.
 udex token fetch \
   --url http://localhost:4444/oauth2/token \
+  --audience udex \
   --scope udex:index:v1:my-index:read \
   --scope udex:entry:v1:my-index:create
 
@@ -145,10 +147,14 @@ These flags apply only to `udex token fetch` and have no effect on other subcomm
 |------|---------|-------------|
 | `--url URL` | `UDEX_TOKEN_URL` | Full token endpoint URL (e.g. `http://localhost:4444/oauth2/token`) |
 | `--scope SCOPE` | — | Scope to request; may be repeated for multiple scopes |
+| `--audience AUD` | `UDEX_TOKEN_AUDIENCE` | Audience to request in the token (must match the server's `jwt_audience`) |
 
 `UDEX_CLIENT_ID` and `UDEX_CLIENT_SECRET` are read exclusively from the
 environment. Passing credentials as flags is intentionally unsupported — flags
 appear in process listings and shell history, which would expose secrets.
+
+> **Note:** `udex token fetch` currently only supports the posting of client secret in the body
+> for authentication. OAuth2 servers must be configured to support this for the client being used.
 
 ## Output formats
 

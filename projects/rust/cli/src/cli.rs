@@ -264,6 +264,9 @@ pub struct TokenFetchArgs {
     /// Scopes to request (may be repeated)
     #[arg(long = "scope", value_name = "SCOPE")]
     pub scopes: Vec<String>,
+    /// Audience to request in the token (e.g. the server's configured jwt_audience) [env: UDEX_TOKEN_AUDIENCE]
+    #[arg(long, env = "UDEX_TOKEN_AUDIENCE")]
+    pub audience: Option<String>,
 }
 
 // --- context ---

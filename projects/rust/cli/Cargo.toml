@@ -36,7 +36,14 @@ assert_cmd = { workspace = true }
 predicates = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
+tokio-shared-rt = { workspace = true }
+maybe-once = { workspace = true }
+rstest = { workspace = true }
+dotenvy = { workspace = true }
+serde_json = { workspace = true }
 udex-datastore = { path = "../datastore", features = ["integration_test"] }
+ory-hydra-client = { version = "26.2", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 
 [[bin]]
 name = "udex"
