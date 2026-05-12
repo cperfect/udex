@@ -186,6 +186,9 @@ impl AuthzInterceptor {
         let mut validation = Validation::new(alg);
         validation.set_issuer(&[&self.expected_issuer]);
         validation.set_audience(&[&self.expected_audience]);
+        // Require sub in addition to the library's default (exp).
+        // An empty sub is caught later by custom_validate_public().
+        validation.required_spec_claims.insert("sub".to_string());
 
         // Decode as a raw JSON map so we can extract scope from the configured
         // claim name without being coupled to a fixed field name in Claims.
@@ -550,5 +553,67 @@ mod tests {
         let result = interceptor.validate_jwt(&token);
         assert!(result.is_err());
         assert!(logs_contain("JWT validation error"));
+    }
+
+    #[test]
+    fn test_jwt_empty_sub_is_rejected() {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize;
+        let claims = Claims::new(
+            "".to_string(),
+            "test-issuer".to_string(),
+            "test-audience".to_string(),
+            now + 3600,
+            now,
+        );
+        let key_pem =
+            std::fs::read_to_string("tests/jwt/signing_private_key.pem").expect("read private key");
+        let encoding_key =
+            EncodingKey::from_ec_pem(key_pem.as_bytes()).expect("create EncodingKey");
+        let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
+        header.typ = Some("JWT".to_string());
+        let token = encode(&header, &claims, &encoding_key).expect("encode JWT");
+
+        let result = test_interceptor().validate_jwt(&token);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
+    }
+
+    #[test]
+    fn test_jwt_missing_sub_is_rejected() {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        #[derive(serde::Serialize)]
+        struct NoSubClaims {
+            iss: String,
+            aud: String,
+            exp: usize,
+            iat: usize,
+        }
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize;
+        let claims = NoSubClaims {
+            iss: "test-issuer".to_string(),
+            aud: "test-audience".to_string(),
+            exp: now + 3600,
+            iat: now,
+        };
+        let key_pem =
+            std::fs::read_to_string("tests/jwt/signing_private_key.pem").expect("read private key");
+        let encoding_key =
+            EncodingKey::from_ec_pem(key_pem.as_bytes()).expect("create EncodingKey");
+        let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
+        header.typ = Some("JWT".to_string());
+        let token = encode(&header, &claims, &encoding_key).expect("encode JWT");
+
+        let result = test_interceptor().validate_jwt(&token);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
     }
 }

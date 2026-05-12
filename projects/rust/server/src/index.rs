@@ -217,7 +217,10 @@ where
             .extensions()
             .get::<Claims>()
             .map(|c| c.sub().to_string())
-            .unwrap_or_else(|| "unknown".to_string());
+            .ok_or_else(|| {
+                tracing::error!("Claims missing from request extensions — auth middleware not applied to create_index");
+                Status::internal("Internal server error")
+            })?;
         let req = request.into_inner();
 
         // Validate input

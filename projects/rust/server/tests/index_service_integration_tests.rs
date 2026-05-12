@@ -3,6 +3,7 @@ use maybe_once::tokio::{Data, MaybeOnceAsync};
 use rstest::*;
 use std::sync::{Arc, OnceLock};
 use tonic::Request;
+use udex_api::authz::claims::Claims;
 use udex_api::index::{
     index_service_server::IndexService as IndexServiceTrait, CreateIndexRequest, DescribeRequest,
     HashAlgorithm, IndexUpdate, ListIndicesRequest, UpdateIndexRequest,
@@ -56,6 +57,21 @@ pub async fn data(serial: bool) -> Data<'static, MaybeOnceType> {
     DATA.get_or_init(|| MaybeOnceAsync::new(|| Box::pin(init_index_service())))
         .data(serial)
         .await
+}
+
+/// Inserts a synthetic Claims into a request's extensions, simulating what the
+/// auth interceptor would do. Required because create_index now rejects requests
+/// without Claims rather than defaulting to an "unknown" subject.
+fn with_test_claims<T>(mut request: Request<T>) -> Request<T> {
+    let claims = Claims::new(
+        "test-subject".to_string(),
+        "test-issuer".to_string(),
+        "test-audience".to_string(),
+        9999999999, // exp far in the future
+        0,          // iat
+    );
+    request.extensions_mut().insert(claims);
+    request
 }
 
 /// Tests that the index server can be initialized successfully.
@@ -140,7 +156,7 @@ async fn test_create_index_valid_input() {
         max_kv_pairs_per_context: 20,
         hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
-    let result = index_server.create_index(request).await;
+    let result = index_server.create_index(with_test_claims(request)).await;
 
     assert!(
         result.is_ok(),
@@ -179,7 +195,7 @@ async fn test_create_index_unsupported_hash_algorithm() {
         max_kv_pairs_per_context: 5,
         hash_algorithm: 99, // not a valid HashAlgorithm variant
     });
-    let result = index_server.create_index(request).await;
+    let result = index_server.create_index(with_test_claims(request)).await;
 
     assert!(
         result.is_err(),
@@ -207,7 +223,7 @@ async fn test_create_index_duplicate_name() {
         max_kv_pairs_per_context: 5,
         hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
-    let result = index_server.create_index(request).await;
+    let result = index_server.create_index(with_test_claims(request)).await;
     assert!(
         result.is_ok(),
         "First create should succeed: {:?}",
@@ -224,7 +240,7 @@ async fn test_create_index_duplicate_name() {
         max_kv_pairs_per_context: 5,
         hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
-    let result = index_server.create_index(request).await;
+    let result = index_server.create_index(with_test_claims(request)).await;
     assert!(result.is_err(), "Duplicate create should fail");
     // Deliberately returns Internal rather than AlreadyExists: exposing AlreadyExists would
     // leak the existence of index names the caller may not have permission to know about.
@@ -247,7 +263,7 @@ async fn test_create_index_empty_name() {
         max_kv_pairs_per_context: 50,
         hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
-    let result = index_server.create_index(request).await;
+    let result = index_server.create_index(with_test_claims(request)).await;
 
     assert!(
         result.is_err(),
@@ -276,7 +292,7 @@ async fn test_create_index_invalid_max_bulk_operations() {
         max_kv_pairs_per_context: 50,
         hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
-    let result = index_server.create_index(request).await;
+    let result = index_server.create_index(with_test_claims(request)).await;
 
     assert!(
         result.is_err(),
@@ -307,7 +323,7 @@ async fn test_create_index_invalid_max_key_length() {
         max_kv_pairs_per_context: 50,
         hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
-    let result = index_server.create_index(request).await;
+    let result = index_server.create_index(with_test_claims(request)).await;
 
     assert!(
         result.is_err(),
@@ -336,7 +352,7 @@ async fn test_create_index_invalid_max_value_length() {
         max_kv_pairs_per_context: 50,
         hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
-    let result = index_server.create_index(request).await;
+    let result = index_server.create_index(with_test_claims(request)).await;
 
     assert!(
         result.is_err(),
@@ -365,7 +381,7 @@ async fn test_create_index_invalid_max_kv_pairs_per_context() {
         max_kv_pairs_per_context: 0, // Invalid: should be >= 1
         hash_algorithm: HashAlgorithm::Xxh3 as i32,
     });
-    let result = index_server.create_index(request).await;
+    let result = index_server.create_index(with_test_claims(request)).await;
 
     assert!(
         result.is_err(),
@@ -396,7 +412,7 @@ async fn test_create_index_invalid_hash_algorithm() {
         max_kv_pairs_per_context: 50,
         hash_algorithm: 99, // not a valid HashAlgorithm variant
     });
-    let result = index_server.create_index(request).await;
+    let result = index_server.create_index(with_test_claims(request)).await;
 
     assert!(
         result.is_err(),
@@ -604,7 +620,7 @@ async fn test_validation_error_consistency() {
 
     for invalid_request in invalid_requests {
         let request = Request::new(invalid_request);
-        let result = index_server.create_index(request).await;
+        let result = index_server.create_index(with_test_claims(request)).await;
 
         assert!(result.is_err(), "Invalid request should return an error");
 
