@@ -24,6 +24,7 @@ fn parse_context_pairs(args: &[String]) -> Result<Vec<KeyValuePair>> {
                     value: Some(value::Value::StringValue(v.to_string())),
                 }),
                 kek_id: None,
+                dek: None,
             })
         })
         .collect()
@@ -32,8 +33,6 @@ fn parse_context_pairs(args: &[String]) -> Result<Vec<KeyValuePair>> {
 fn build_context_input(args: &[String]) -> Result<ContextInput> {
     Ok(ContextInput {
         pairs: parse_context_pairs(args)?,
-        dek: None,
-        kek_id: None,
     })
 }
 

@@ -120,13 +120,12 @@ fn kv(key: &str, val: &str) -> KeyValuePair {
             value: Some(value::Value::StringValue(val.into())),
         }),
         kek_id: None,
+        dek: None,
     }
 }
 
 let context_input = ContextInput {
     pairs: vec![kv("user_id", "42"), kv("region", "eu")],
-    dek: None,
-    kek_id: None,
 };
 
 // Pre-compute the hash before context_input is consumed by create_entry.
@@ -177,27 +176,26 @@ The pattern uses two keys:
 
 - **KEK (Key Encryption Key)** — a long-lived master key held securely by the
   client (e.g. in a key vault). Identified by a `kek_id` string you choose.
-- **DEK (Data Encryption Key)** — a short-lived key generated fresh for each
-  context. Encrypted with the KEK and stored alongside the context so that any
-  authorised holder of the KEK can recover it.
+- **DEK (Data Encryption Key)** — a short-lived key generated fresh per context
+  (or per pair). Encrypted with the KEK and stored on each encrypted pair so
+  that any authorised holder of the KEK can recover it.
 
-Individual key-value pairs carry a `kek_id` to signal that their `value` field
-contains ciphertext rather than plaintext. Pairs without `kek_id` are stored in
-plaintext.
+Encryption is **per pair**: each `KeyValuePair` carries its own `kek_id` and
+`dek`. Pairs without these fields are stored as plaintext. You can use one DEK
+for all encrypted pairs in a context (wrapping it on each pair) or generate a
+separate DEK per pair.
 
 **Wire format.** The SDK uses no built-in encoding for ciphertext. The snippets
 below adopt the convention `base64(nonce || ciphertext)` stored as a
-`StringValue`, which is compact and self-contained. You may use any format your
-application requires, as long as you apply it consistently on read and write.
+`StringValue`. You may use any format as long as you apply it consistently.
 
-**Critical: the ciphertext is part of the context identity.** The server hashes
-the context exactly as submitted — encrypted values included. If you later
-re-encrypt a value (for example because a KEK was rotated and the DEK was
-re-wrapped), the ciphertext changes, the context hash changes, and the server
-will create a new entry. The old entry remains under its original key and the
-old context hash. Plan for this when designing key-rotation procedures: either
-accept two entries during the transition, or delete the old entry and create the
-new one atomically.
+**The ciphertext is part of the context identity.** The server hashes each pair
+by `(key, value)` only — `kek_id` and `dek` are not included (they are metadata
+and the ciphertext itself already encodes any encryption change). Re-encrypting a
+value produces a different ciphertext, a different hash, and a new entry. The old
+entry remains under its original key. Plan key-rotation accordingly: delete the
+old entry before or after creating the new one, or accept both existing during
+the transition window.
 
 ```rust
 use aes_gcm::{
@@ -210,7 +208,6 @@ use udex_sdk::{ContextInput, KeyValuePair, Value, value};
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 // KEK: held in a key vault; loaded here from wherever you store it.
-// The kek_id is an opaque label the server stores and echoes back.
 let kek_id = "my-kek-v1";
 let kek_bytes: [u8; 32] = /* load from vault */;
 let kek = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&kek_bytes));
@@ -234,21 +231,22 @@ let dek_ct = kek.encrypt(&dek_nonce, dek_bytes.as_slice())?;
 let wrapped_dek = B64.encode([dek_nonce.as_slice(), &dek_ct].concat());
 
 // Build the context: mix plaintext and encrypted pairs freely.
+// kek_id and dek travel with each encrypted pair.
 let ctx = ContextInput {
     pairs: vec![
         KeyValuePair {                                          // plaintext
             key: "user_id".into(),
             value: Some(Value { value: Some(value::Value::StringValue("42".into())) }),
             kek_id: None,
+            dek: None,
         },
         KeyValuePair {                                          // encrypted
             key: "email".into(),
             value: Some(Value { value: Some(value::Value::StringValue(encrypted_value)) }),
             kek_id: Some(kek_id.into()),
+            dek: Some(wrapped_dek),
         },
     ],
-    dek: Some(wrapped_dek),
-    kek_id: Some(kek_id.into()),
 };
 
 let created = client.create_entry("my-index", ctx).await?;
@@ -257,15 +255,14 @@ let created = client.create_entry("my-index", ctx).await?;
 
 let found_ctx = client.lookup_context_by_key("my-index", &created.key).await?;
 
-// Unwrap the DEK using the KEK identified by found_ctx.kek_id.
-let wrapped = B64.decode(found_ctx.dek.as_deref().unwrap())?;
-let (dek_nonce_bytes, dek_ct_bytes) = wrapped.split_at(12);
-let recovered_dek = kek.decrypt(Nonce::from_slice(dek_nonce_bytes), dek_ct_bytes)?;
-let dek_dec = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&recovered_dek));
-
-// Decrypt each pair whose kek_id is set.
+// Decrypt each pair that carries a dek — unwrap the DEK then decrypt the value.
 for pair in &found_ctx.pairs {
-    if pair.kek_id.is_some() {
+    if let (Some(wrapped), Some(_kek_id)) = (pair.dek.as_deref(), pair.kek_id.as_deref()) {
+        let wrapped_bytes = B64.decode(wrapped)?;
+        let (dek_nonce_bytes, dek_ct_bytes) = wrapped_bytes.split_at(12);
+        let recovered_dek = kek.decrypt(Nonce::from_slice(dek_nonce_bytes), dek_ct_bytes)?;
+        let dek_dec = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&recovered_dek));
+
         if let Some(value::Value::StringValue(enc)) = pair.value.as_ref()
             .and_then(|v| v.value.as_ref())
         {

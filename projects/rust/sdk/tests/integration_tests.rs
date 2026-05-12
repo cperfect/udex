@@ -353,10 +353,9 @@ fn context_input(pairs: &[(&str, &str)]) -> ContextInput {
                     value: Some(udex_sdk::value::Value::StringValue(v.to_string())),
                 }),
                 kek_id: None,
+                dek: None,
             })
             .collect(),
-        dek: None,
-        kek_id: None,
     }
 }
 
@@ -689,7 +688,8 @@ async fn test_sdk_envelope_encrypted_entry() {
         .expect("encrypt DEK");
     let encrypted_dek = B64.encode([dek_nonce.as_slice(), &dek_ct].concat());
 
-    // Build a context with one plaintext pair and one envelope-encrypted pair.
+    // Build a context: one plaintext pair and one encrypted pair.
+    // The encrypted pair carries kek_id and the wrapped DEK directly on the pair.
     let ctx = ContextInput {
         pairs: vec![
             KeyValuePair {
@@ -698,6 +698,7 @@ async fn test_sdk_envelope_encrypted_entry() {
                     value: Some(udex_sdk::value::Value::StringValue("42".to_string())),
                 }),
                 kek_id: None,
+                dek: None,
             },
             KeyValuePair {
                 key: "email".to_string(),
@@ -705,10 +706,9 @@ async fn test_sdk_envelope_encrypted_entry() {
                     value: Some(udex_sdk::value::Value::StringValue(encrypted_value)),
                 }),
                 kek_id: Some(kek_id.to_string()),
+                dek: Some(encrypted_dek),
             },
         ],
-        dek: Some(encrypted_dek),
-        kek_id: Some(kek_id.to_string()),
     };
 
     let created = client
@@ -723,9 +723,14 @@ async fn test_sdk_envelope_encrypted_entry() {
         .await
         .expect("lookup_context_by_key failed");
 
-    // The server must echo back kek_id and the wrapped DEK unchanged.
-    assert_eq!(found_ctx.kek_id.as_deref(), Some(kek_id));
-    let returned_encrypted_dek = found_ctx.dek.as_deref().expect("missing dek");
+    // Find the encrypted pair; verify kek_id and dek were echoed back unchanged.
+    let email_pair = found_ctx
+        .pairs
+        .iter()
+        .find(|p| p.key == "email")
+        .expect("email pair missing");
+    assert_eq!(email_pair.kek_id.as_deref(), Some(kek_id));
+    let returned_encrypted_dek = email_pair.dek.as_deref().expect("missing dek on pair");
 
     // Unwrap the DEK using the KEK.
     let dek_bytes_enc = B64
@@ -736,14 +741,6 @@ async fn test_sdk_envelope_encrypted_entry() {
         .decrypt(Nonce::from_slice(dek_nonce_bytes), dek_ct_bytes)
         .expect("decrypt DEK");
     let dek_dec = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&unwrapped_dek));
-
-    // Find the encrypted pair and verify the kek_id was echoed back.
-    let email_pair = found_ctx
-        .pairs
-        .iter()
-        .find(|p| p.key == "email")
-        .expect("email pair missing");
-    assert_eq!(email_pair.kek_id.as_deref(), Some(kek_id));
 
     // Decrypt the value.
     let enc_value = match email_pair

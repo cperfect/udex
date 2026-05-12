@@ -59,6 +59,7 @@ fn create_sample_context(hash: &str) -> UdexContext {
                     )),
                 }),
                 kek_id: None,
+                dek: None,
             },
             KeyValuePair {
                 key: "count".to_string(),
@@ -66,10 +67,9 @@ fn create_sample_context(hash: &str) -> UdexContext {
                     value: Some(udex_api::entry::value::Value::IntValue(42)),
                 }),
                 kek_id: None,
+                dek: None,
             },
         ],
-        dek: None,
-        kek_id: None,
     }
 }
 

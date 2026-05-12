@@ -105,6 +105,7 @@ async fn test_create_entry() {
                     )),
                 }),
                 kek_id: None,
+                dek: None,
             },
             KeyValuePair {
                 key: "session_id".to_string(),
@@ -114,10 +115,9 @@ async fn test_create_entry() {
                     )),
                 }),
                 kek_id: None,
+                dek: None,
             },
         ],
-        dek: None,
-        kek_id: None,
     };
 
     let request = Request::new(CreateEntryRequest {
@@ -165,9 +165,8 @@ async fn test_delete_entry() {
                 )),
             }),
             kek_id: None,
+            dek: None,
         }],
-        dek: None,
-        kek_id: None,
     };
 
     let create_request = Request::new(CreateEntryRequest {
@@ -226,9 +225,8 @@ async fn test_lookup_context_by_key() {
                 )),
             }),
             kek_id: None,
+            dek: None,
         }],
-        dek: None,
-        kek_id: None,
     };
 
     let create_request = Request::new(CreateEntryRequest {
@@ -295,9 +293,8 @@ async fn test_lookup_key_by_context() {
                 )),
             }),
             kek_id: None,
+            dek: None,
         }],
-        dek: None,
-        kek_id: None,
     };
 
     // First create — establishes the entry.
@@ -370,9 +367,8 @@ async fn test_bulk_write_entry_operation() {
                                 )),
                             }),
                             kek_id: None,
+                            dek: None,
                         }],
-                        dek: None,
-                        kek_id: None,
                     }),
                 },
             )),
@@ -390,9 +386,8 @@ async fn test_bulk_write_entry_operation() {
                                 )),
                             }),
                             kek_id: None,
+                            dek: None,
                         }],
-                        dek: None,
-                        kek_id: None,
                     }),
                 },
             )),
@@ -450,9 +445,8 @@ async fn test_bulk_read_entry_operation() {
                 )),
             }),
             kek_id: None,
+            dek: None,
         }],
-        dek: None,
-        kek_id: None,
     };
 
     let create_request = Request::new(CreateEntryRequest {
@@ -528,13 +522,11 @@ async fn test_bulk_read_entry_operation() {
     }
 }
 
-/// Verifies that creating two entries with identical pairs but different dek values is idempotent.
-///
-/// The context hash is computed from `pairs` only — `dek`/`kek_id` are stored fields but are
-/// not part of the hash. A second create with the same pairs (regardless of dek) therefore
-/// resolves to the same context hash and returns the first entry's key with status OK.
-/// Callers that need DEK consistency must read the stored context back via
-/// `lookup_context_by_key` before assuming their DEK was accepted.
+/// Verifies that the context hash is computed from (key, value) only — kek_id and dek on a
+/// pair are excluded. Two creates with the same (key, value) but different per-pair dek/kek_id
+/// resolve to the same context hash and return the first entry's key.
+/// Callers that need to read back the stored encryption metadata should use
+/// `lookup_context_by_key` and inspect the pairs.
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_create_entry_idempotent_for_same_pairs_different_dek() {
@@ -545,24 +537,23 @@ async fn test_create_entry_idempotent_for_same_pairs_different_dek() {
     let entry_server = &data.0;
     let index_name = &data.1;
 
-    let pairs = vec![KeyValuePair {
-        key: "user_id".to_string(),
-        value: Some(Value {
-            value: Some(udex_api::entry::value::Value::StringValue(
-                "dek_conflict_test_user".to_string(),
-            )),
-        }),
-        kek_id: None,
-    }];
+    let ciphertext = "encrypted_user_id_ciphertext";
 
-    // First create: pairs + dek_v1.
+    // First create: encrypted pair with dek_v1.
     let first = entry_server
         .create_entry(Request::new(CreateEntryRequest {
             index_name: index_name.clone(),
             context: Some(ContextInput {
-                pairs: pairs.clone(),
-                dek: Some("dek_v1".to_string()),
-                kek_id: Some("kek_001".to_string()),
+                pairs: vec![KeyValuePair {
+                    key: "user_id".to_string(),
+                    value: Some(Value {
+                        value: Some(udex_api::entry::value::Value::StringValue(
+                            ciphertext.to_string(),
+                        )),
+                    }),
+                    kek_id: Some("kek_001".to_string()),
+                    dek: Some("dek_v1".to_string()),
+                }],
             }),
         }))
         .await
@@ -570,14 +561,21 @@ async fn test_create_entry_idempotent_for_same_pairs_different_dek() {
         .into_inner();
     let key1 = first.key;
 
-    // Second create: same pairs but different dek — idempotent; must return the same key.
+    // Second create: same (key, value) but different dek — same hash, same entry returned.
     let second = entry_server
         .create_entry(Request::new(CreateEntryRequest {
             index_name: index_name.clone(),
             context: Some(ContextInput {
-                pairs: pairs.clone(),
-                dek: Some("dek_v2".to_string()),
-                kek_id: Some("kek_001".to_string()),
+                pairs: vec![KeyValuePair {
+                    key: "user_id".to_string(),
+                    value: Some(Value {
+                        value: Some(udex_api::entry::value::Value::StringValue(
+                            ciphertext.to_string(),
+                        )),
+                    }),
+                    kek_id: Some("kek_001".to_string()),
+                    dek: Some("dek_v2".to_string()),
+                }],
             }),
         }))
         .await
@@ -586,10 +584,10 @@ async fn test_create_entry_idempotent_for_same_pairs_different_dek() {
 
     assert_eq!(
         second.key, key1,
-        "Idempotent create with different dek must return the same key"
+        "Same (key, value) with different dek must return the same entry key"
     );
 
-    // Verify the stored context still carries dek_v1 (the winner), not dek_v2.
+    // The stored pair carries dek_v1 (the first writer wins).
     let stored = entry_server
         .lookup_context_by_key(Request::new(udex_api::entry::LookupContextByKeyRequest {
             index_name: index_name.clone(),
@@ -602,9 +600,9 @@ async fn test_create_entry_idempotent_for_same_pairs_different_dek() {
         .expect("context must be present");
 
     assert_eq!(
-        stored.dek.as_deref(),
+        stored.pairs[0].dek.as_deref(),
         Some("dek_v1"),
-        "First-writer DEK must win; second create must not overwrite it"
+        "First-writer dek must win; second create must not overwrite it"
     );
 }
 

@@ -76,15 +76,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         value: Some(udex_sdk::value::Value::StringValue(v.to_owned())),
                     }),
                     kek_id: None,
+                    dek: None,
                 }
             })
             .collect();
 
-        let context_input = ContextInput {
-            pairs,
-            dek: None,
-            kek_id: None,
-        };
+        let context_input = ContextInput { pairs };
         let context_hash = xxh3_context_hash(&context_input)?;
 
         match client.lookup_key_by_context(&index, &context_hash).await? {

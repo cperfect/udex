@@ -57,9 +57,8 @@ impl BenchFixture {
                     value: Some(udex_api::entry::value::Value::StringValue(n.to_string())),
                 }),
                 kek_id: None,
+                dek: None,
             }],
-            dek: None,
-            kek_id: None,
         }
     }
 
@@ -76,9 +75,8 @@ impl BenchFixture {
                     )),
                 }),
                 kek_id: None,
+                dek: None,
             }],
-            dek: None,
-            kek_id: None,
         }
     }
 }
@@ -157,9 +155,8 @@ async fn setup_datastore() -> (
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             },
             index_name: index_name.clone(),
         })
@@ -183,9 +180,8 @@ async fn setup_datastore() -> (
                             value: Some(udex_api::entry::value::Value::StringValue(i.to_string())),
                         }),
                         kek_id: None,
+                        dek: None,
                     }],
-                    dek: None,
-                    kek_id: None,
                 },
                 index_name: index_name.clone(),
             })

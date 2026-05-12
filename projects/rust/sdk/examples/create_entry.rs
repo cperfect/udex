@@ -54,16 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         vec![kv("example_key", "example_value")]
     };
 
-    let resp = client
-        .create_entry(
-            &index,
-            ContextInput {
-                pairs,
-                dek: None,
-                kek_id: None,
-            },
-        )
-        .await?;
+    let resp = client.create_entry(&index, ContextInput { pairs }).await?;
 
     println!("key:          {}", resp.key);
     println!("context_hash: {}", resp.context_hash);
@@ -77,6 +68,7 @@ fn kv(key: &str, value: &str) -> KeyValuePair {
             value: Some(udex_sdk::value::Value::StringValue(value.to_owned())),
         }),
         kek_id: None,
+        dek: None,
     }
 }
 

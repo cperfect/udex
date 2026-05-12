@@ -25,8 +25,6 @@ CREATE TABLE IF NOT EXISTS entry_context (
     index_name      TEXT        NOT NULL REFERENCES "index"(name) ON DELETE RESTRICT,
     context_hash    TEXT        NOT NULL,
     pairs           JSONB       NOT NULL,
-    dek             TEXT,
-    kek_id          TEXT,
     hash_algorithm  TEXT        NOT NULL,
     CONSTRAINT uq_entry_context_index_hash UNIQUE (index_name, context_hash)
 );

@@ -691,9 +691,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -770,9 +769,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -858,9 +856,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -953,9 +950,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -1062,9 +1058,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -1219,9 +1214,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -1368,9 +1362,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -1463,9 +1456,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -1523,9 +1515,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -1628,9 +1619,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -2005,9 +1995,8 @@ async fn test_hydra_scope_subset() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
         req.metadata_mut().insert(
