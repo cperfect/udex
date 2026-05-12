@@ -36,10 +36,12 @@ udex index create my-index [--description "..."] [--bulk-limit 100] \
     [--max-key-length 256] [--max-value-length 1024] [--max-context-pairs 32]
 udex index get my-index
 udex index update my-index [--description "..."] [--bulk-limit 200]
-```
 
-> **Note:** `udex index delete` is not yet available — the server-side RPC does not exist.
-> The subcommand is hidden from `--help` until it is implemented.
+# Delete an index — the index must have no entries.
+# Exit 4 (FAILED_PRECONDITION) if the index is not empty.
+# Exit 2 (NOT_FOUND) if the index does not exist.
+udex index delete my-index
+```
 
 ### Entry operations
 

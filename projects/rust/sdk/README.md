@@ -288,6 +288,9 @@ let idx = client.describe_index("my-index").await?;
 
 // Create an index.
 client.create_index(CreateIndexRequest { name: "my-index".into(), ..Default::default() }).await?;
+
+// Delete an index (the index must have no entries).
+client.delete_index("my-index").await?;
 ```
 
 ## Environment variable convention
@@ -314,6 +317,7 @@ Place these in a `.env` file (loaded via `dotenvy`) or export them:
 | [`get_entry`](examples/get_entry.rs) | Look up an entry by UUID key or by context (`KEY=VALUE` arguments) |
 | [`bulk_write`](examples/bulk_write.rs) | Batch-create entries from newline-delimited JSON on stdin |
 | [`envelope_write`](examples/envelope_write.rs) | Create an entry with one AES-256-GCM envelope-encrypted value, then retrieve and decrypt it |
+| [`delete_index`](examples/delete_index.rs) | Delete an empty index, with clear messages if it still has entries or is not found |
 
 Run any example with the environment variables set:
 
@@ -337,4 +341,7 @@ export UDEX_KEK_ID=my-kek-v1
 export UDEX_ENCRYPTED_KEY=email
 export UDEX_ENCRYPTED_VALUE=alice@example.com
 cargo run --example envelope_write -- user_id=42 region=eu-west
+
+# Delete an empty index.
+UDEX_INDEX=my-index cargo run --example delete_index
 ```
