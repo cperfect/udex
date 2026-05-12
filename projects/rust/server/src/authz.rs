@@ -225,6 +225,26 @@ impl AuthzInterceptor {
     }
 }
 
+/// Returns a masked representation of a JWT subject for audit logging.
+///
+/// Subjects of 6 or more characters expose the first 2 and last 2 characters;
+/// everything in between is replaced with asterisks. Subjects of 5 or fewer
+/// characters are replaced entirely with asterisks of the same length.
+///
+/// Operates on Unicode scalar values (chars), so multi-byte characters are
+/// counted correctly.
+fn mask_subject(sub: &str) -> String {
+    let chars: Vec<char> = sub.chars().collect();
+    let len = chars.len();
+    if len >= 6 {
+        let first: String = chars[..2].iter().collect();
+        let last: String = chars[len - 2..].iter().collect();
+        format!("{}{}{}", first, "*".repeat(len - 4), last)
+    } else {
+        "*".repeat(len)
+    }
+}
+
 #[tonic::async_trait]
 impl RequestInterceptor for AuthzInterceptor {
     async fn intercept(&self, mut req: Request<Body>) -> Result<Request<Body>, Status> {
@@ -237,7 +257,7 @@ impl RequestInterceptor for AuthzInterceptor {
                 let token = self.extract_bearer_token(auth_header)?;
                 let claims = self.validate_jwt(token)?;
                 let subject = if self.mask_subject_in_logs {
-                    "[masked]".to_string()
+                    mask_subject(claims.sub())
                 } else {
                     claims.sub().to_string()
                 };
@@ -436,7 +456,11 @@ mod tests {
             .unwrap()
             .block_on(async { interceptor.intercept(req).await })
             .expect("intercept ok");
-        assert!(logs_contain("[masked]"), "expected [masked] in log");
+        // "alice@example.com" (17 chars) → "al*************om"
+        assert!(
+            logs_contain("al*************om"),
+            "expected partial-masked subject in log"
+        );
         assert!(
             !logs_contain("alice@example.com"),
             "expected subject to be redacted"
@@ -456,7 +480,32 @@ mod tests {
             .block_on(async { interceptor.intercept(req).await })
             .expect("intercept ok");
         assert!(logs_contain("alice@example.com"), "expected subject in log");
-        assert!(!logs_contain("[masked]"), "expected no masking");
+        assert!(
+            !logs_contain("al*************om"),
+            "expected subject not masked"
+        );
+    }
+
+    #[test]
+    fn test_mask_subject_long() {
+        assert_eq!(mask_subject("alice@example.com"), "al*************om");
+        assert_eq!(mask_subject("abcdef"), "ab**ef");
+    }
+
+    #[test]
+    fn test_mask_subject_short() {
+        assert_eq!(mask_subject("alice"), "*****");
+        assert_eq!(mask_subject("ab"), "**");
+        assert_eq!(mask_subject("a"), "*");
+        assert_eq!(mask_subject(""), "");
+    }
+
+    #[test]
+    fn test_mask_subject_boundary() {
+        // exactly 6 chars: first 2 + 2 asterisks + last 2
+        assert_eq!(mask_subject("abcdef"), "ab**ef");
+        // exactly 5 chars: all asterisks
+        assert_eq!(mask_subject("abcde"), "*****");
     }
 
     #[traced_test]
