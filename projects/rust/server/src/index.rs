@@ -326,8 +326,31 @@ where
 
     async fn delete_index(
         &self,
-        _request: Request<DeleteIndexRequest>,
+        request: Request<DeleteIndexRequest>,
     ) -> Result<Response<DeleteIndexResponse>, Status> {
-        Err(Status::unimplemented("DeleteIndex not yet implemented"))
+        let _ = request
+            .extensions()
+            .get::<Claims>()
+            .ok_or_else(|| {
+                tracing::error!("Claims missing from request extensions — auth middleware not applied to delete_index");
+                Status::internal("Internal server error")
+            })?;
+        let req = request.into_inner();
+
+        if req.name.is_empty() {
+            return Err(Status::invalid_argument("index name is required"));
+        }
+
+        match self.datastore.delete_index(&req.name).await {
+            Ok(()) => Ok(Response::new(DeleteIndexResponse {})),
+            Err(udex_datastore::Error::IndexNotEmpty(msg)) => Err(Status::failed_precondition(msg)),
+            Err(udex_datastore::Error::InvalidIndex(_)) => {
+                Err(Status::not_found(format!("index '{}' not found", req.name)))
+            }
+            Err(e) => {
+                tracing::error!(error = %e, index = %req.name, "Failed to delete index");
+                Err(Status::internal("Internal server error"))
+            }
+        }
     }
 }
