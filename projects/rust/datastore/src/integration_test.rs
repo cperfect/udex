@@ -33,63 +33,68 @@ pub type MaybeOnceType = (
     String,
 );
 
-/// Static storage for database name to enable cleanup
-static TEST_DB_NAME: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+/// Tracks every database name created by `init_postgres()` in this process so
+/// the dtor can clean them all up, even when multiple fixtures run.
+static TEST_DB_NAMES: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 
-/// Register cleanup handler using ctor crate
-/// This runs when the test binary exits
+fn register_test_db(name: String) {
+    TEST_DB_NAMES
+        .get_or_init(|| Mutex::new(Vec::new()))
+        .lock()
+        .unwrap()
+        .push(name);
+}
+
+/// Runs when the test binary exits (normal exit or unwound panic).
+/// Drops every database registered by `init_postgres()` unless `KEEP_FIXTURES=true`.
 #[ctor::dtor]
 fn cleanup_on_exit() {
-    // Check if we should keep fixtures
     let keep_fixtures = std::env::var("KEEP_FIXTURES")
         .map(|v| v.to_lowercase() == "true" || v == "1")
         .unwrap_or(false);
 
+    let names: Vec<String> = TEST_DB_NAMES
+        .get()
+        .and_then(|m| m.lock().ok())
+        .map(|g| g.clone())
+        .unwrap_or_default();
+
+    if names.is_empty() {
+        return;
+    }
+
     if keep_fixtures {
-        if let Some(mutex) = TEST_DB_NAME.get() {
-            if let Ok(guard) = mutex.lock() {
-                if let Some(ref db_name) = *guard {
-                    println!("KEEP_FIXTURES=true: Preserving test database '{}'", db_name);
-                }
-            }
+        for name in &names {
+            println!("KEEP_FIXTURES=true: Preserving test database '{name}'");
         }
         return;
     }
 
-    // Perform cleanup
-    if let Some(mutex) = TEST_DB_NAME.get() {
-        if let Ok(guard) = mutex.lock() {
-            if let Some(ref db_name) = *guard {
-                println!("Cleaning up test database on exit: {}", db_name);
-
-                let db_name = db_name.clone();
-                // Spawn a fresh thread to create the Tokio runtime.
-                // Benchmarks call block_on() on the main thread, which marks Tokio's
-                // CONTEXT thread-local as Destroyed when it returns. A fresh thread
-                // has a clean CONTEXT, so Runtime::new() succeeds there.
-                let handle = std::thread::spawn(move || {
-                    let rt = tokio::runtime::Runtime::new()
-                        .expect("test cleanup: failed to create Tokio runtime");
-                    rt.block_on(async {
-                        cleanup_test_database_internal(&db_name)
-                            .await
-                            .unwrap_or_else(|e| {
-                                panic!("test cleanup: failed to drop database '{}': {}", db_name, e)
-                            });
-                        println!("Test database '{}' cleaned up successfully", db_name);
-                    });
-                });
-                handle.join().unwrap_or_else(|e| {
-                    panic!(
-                        "test cleanup thread panicked: {}",
-                        e.downcast_ref::<&str>()
-                            .copied()
-                            .or_else(|| e.downcast_ref::<String>().map(String::as_str))
-                            .unwrap_or("unknown panic payload")
-                    )
-                });
+    // Spawn a fresh thread to create the Tokio runtime.
+    // Benchmarks call block_on() on the main thread, which marks Tokio's
+    // CONTEXT thread-local as Destroyed when it returns. A fresh thread
+    // has a clean CONTEXT, so Runtime::new() succeeds there.
+    let handle = std::thread::spawn(move || {
+        let rt =
+            tokio::runtime::Runtime::new().expect("test cleanup: failed to create Tokio runtime");
+        rt.block_on(async {
+            for name in &names {
+                println!("Cleaning up test database on exit: {name}");
+                match cleanup_test_database_internal(name).await {
+                    Ok(()) => println!("Test database '{name}' cleaned up successfully"),
+                    Err(e) => eprintln!("test cleanup: failed to drop database '{name}': {e}"),
+                }
             }
-        }
+        });
+    });
+    if let Err(e) = handle.join() {
+        eprintln!(
+            "test cleanup thread panicked: {}",
+            e.downcast_ref::<&str>()
+                .copied()
+                .or_else(|| e.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("unknown panic payload")
+        );
     }
 }
 
@@ -175,11 +180,7 @@ pub async fn init_postgres() -> MaybeOnceType {
     println!("Migrations completed successfully");
 
     // Register database name for cleanup on exit
-    TEST_DB_NAME
-        .get_or_init(|| Mutex::new(None))
-        .lock()
-        .unwrap()
-        .replace(test_db_name.clone());
+    register_test_db(test_db_name.clone());
 
     (*datastore, pool_arc, test_db_name)
 }
