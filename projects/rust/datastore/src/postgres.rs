@@ -559,17 +559,30 @@ impl Datastore for PostgresDatastore {
     }
 
     async fn delete_index(&self, name: &str) -> Result<(), Error> {
-        let entry_count: i64 = sqlx::query_scalar(
-            r#"
-            SELECT COUNT(*)
-            FROM entry_context
-            WHERE index_name = $1
-            "#,
+        let mut tx = self.pool.begin().await.map_err(Error::Database)?;
+
+        // Lock the index row before counting entries. Any concurrent INSERT into
+        // entry_context that references this index must acquire FOR KEY SHARE on
+        // the "index" row, which blocks until our FOR UPDATE lock is released.
+        // This makes the count + delete atomic with respect to concurrent inserts.
+        let found = sqlx::query_scalar::<_, String>(
+            r#"SELECT name FROM "index" WHERE name = $1 FOR UPDATE"#,
         )
         .bind(name)
-        .fetch_one(&*self.pool)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(Error::Database)?;
+
+        if found.is_none() {
+            return Err(Error::InvalidIndex(format!("index '{}' not found", name)));
+        }
+
+        let entry_count: i64 =
+            sqlx::query_scalar(r#"SELECT COUNT(*) FROM entry_context WHERE index_name = $1"#)
+                .bind(name)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(Error::Database)?;
 
         if entry_count > 0 {
             return Err(Error::IndexNotEmpty(format!(
@@ -580,15 +593,13 @@ impl Datastore for PostgresDatastore {
             )));
         }
 
-        let result = sqlx::query(r#"DELETE FROM "index" WHERE name = $1"#)
+        sqlx::query(r#"DELETE FROM "index" WHERE name = $1"#)
             .bind(name)
-            .execute(&*self.pool)
+            .execute(&mut *tx)
             .await
             .map_err(Error::Database)?;
 
-        if result.rows_affected() == 0 {
-            return Err(Error::InvalidIndex(format!("index '{}' not found", name)));
-        }
+        tx.commit().await.map_err(Error::Database)?;
 
         Ok(())
     }
