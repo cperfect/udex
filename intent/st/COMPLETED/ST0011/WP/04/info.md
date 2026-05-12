@@ -24,11 +24,11 @@ Wire up and unhide the `udex index delete` CLI subcommand to call the new `Delet
 
 ## Acceptance Criteria
 
-- [ ] `udex index delete my-index` calls the server and prints confirmation
-- [ ] `udex index delete` appears in `udex index --help`
-- [ ] Integration tests (in `cli/tests/` using live server + Hydra, following `test_hydra_*` pattern) cover: happy path (empty index deleted), non-empty index (exit code 4), non-existent index (exit code 2)
-- [ ] All new integration tests pass (`cargo test -p udex-cli`)
-- [ ] README updates tracked in WP-06
+- [x] `udex index delete my-index` calls the server and prints confirmation
+- [x] `udex index delete` appears in `udex index --help`
+- [x] Integration tests (in `cli/tests/` using live server + Hydra, following `test_hydra_*` pattern) cover: happy path (empty index deleted), non-empty index (exit code 4), non-existent index (exit code 2)
+- [x] All new integration tests pass (`cargo test -p udex-cli`)
+- [x] README updates tracked in WP-06
 
 ## Dependencies
 

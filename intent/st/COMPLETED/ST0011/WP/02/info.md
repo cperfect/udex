@@ -20,11 +20,11 @@ Add `delete_index` to the `Datastore` trait and implement it in the PostgreSQL b
 
 ## Acceptance Criteria
 
-- [ ] `Datastore::delete_index` is in the trait
-- [ ] `Error::IndexNotEmpty` variant exists
-- [ ] PostgreSQL implementation deletes only when no entries exist
-- [ ] Integration tests cover: delete empty index (ok), delete non-empty index (IndexNotEmpty), delete non-existent index (InvalidIndex)
-- [ ] `cargo test -p udex-datastore` passes (including new integration tests)
+- [x] `Datastore::delete_index` is in the trait
+- [x] `Error::IndexNotEmpty` variant exists
+- [x] PostgreSQL implementation deletes only when no entries exist
+- [x] Integration tests cover: delete empty index (ok), delete non-empty index (IndexNotEmpty), delete non-existent index (InvalidIndex)
+- [x] `cargo test -p udex-datastore` passes (including new integration tests)
 
 ## Dependencies
 

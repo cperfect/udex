@@ -22,10 +22,10 @@ Add `rpc DeleteIndex` to the `IndexService` service definition in the proto and 
 
 ## Acceptance Criteria
 
-- [ ] `rpc DeleteIndex` appears in the proto service block
-- [ ] `IndexServiceClient::delete_index` is callable
-- [ ] The `IndexService` server trait requires `delete_index` to be implemented
-- [ ] `cargo build -p udex-api` passes
+- [x] `rpc DeleteIndex` appears in the proto service block
+- [x] `IndexServiceClient::delete_index` is callable
+- [x] The `IndexService` server trait requires `delete_index` to be implemented
+- [x] `cargo build -p udex-api` passes
 
 ## Dependencies
 

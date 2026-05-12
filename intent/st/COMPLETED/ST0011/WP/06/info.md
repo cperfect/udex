@@ -24,10 +24,10 @@ Add a `delete_index` SDK example and ensure all READMEs accurately reflect the n
 
 ## Acceptance Criteria
 
-- [ ] `cargo run --example delete_index` compiles and runs against a live server
-- [ ] SDK README Index operations section shows `delete_index`
-- [ ] CLI README shows `udex index delete` with correct exit code notes
-- [ ] No README still documents `udex index delete` as hidden or not yet available
+- [x] `cargo run --example delete_index` compiles and runs against a live server
+- [x] SDK README Index operations section shows `delete_index`
+- [x] CLI README shows `udex index delete` with correct exit code notes
+- [x] No README still documents `udex index delete` as hidden or not yet available
 
 ## Dependencies
 

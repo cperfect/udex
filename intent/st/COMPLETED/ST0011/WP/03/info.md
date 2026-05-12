@@ -28,10 +28,10 @@ Implement the `delete_index` gRPC handler in the server and wire up authorizatio
 
 ## Acceptance Criteria
 
-- [ ] `delete_index` handler implemented and compiles
-- [ ] Permission `udex:index:v1:<name>:delete` is required
-- [ ] Integration tests cover: happy path (empty index deleted), non-empty index (FAILED_PRECONDITION), not found (NOT_FOUND), missing name (INVALID_ARGUMENT), wrong permission (PERMISSION_DENIED)
-- [ ] All new integration tests pass (`cargo test -p udex-server`)
+- [x] `delete_index` handler implemented and compiles
+- [x] Permission `udex:index:v1:<name>:delete` is required
+- [x] Integration tests cover: happy path (empty index deleted), non-empty index (FAILED_PRECONDITION), not found (NOT_FOUND), missing name (INVALID_ARGUMENT), wrong permission (PERMISSION_DENIED)
+- [x] All new integration tests pass (`cargo test -p udex-server`)
 
 ## Dependencies
 

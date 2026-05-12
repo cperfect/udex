@@ -20,10 +20,10 @@ Add `UdexClient::delete_index` to the SDK, expose it in the README, and cover it
 
 ## Acceptance Criteria
 
-- [ ] `UdexClient::delete_index` is callable from the SDK
-- [ ] Integration tests cover: delete empty index (ok), delete non-empty index (FAILED_PRECONDITION mapped to `Error::Rpc`), confirm deleted index is gone (`NOT_FOUND` on subsequent describe)
-- [ ] All new integration tests pass (`cargo test -p udex-sdk`)
-- [ ] README and example updates tracked in WP-06
+- [x] `UdexClient::delete_index` is callable from the SDK
+- [x] Integration tests cover: delete empty index (ok), delete non-empty index (FAILED_PRECONDITION mapped to `Error::Rpc`), confirm deleted index is gone (`NOT_FOUND` on subsequent describe)
+- [x] All new integration tests pass (`cargo test -p udex-sdk`)
+- [x] README and example updates tracked in WP-06
 
 ## Dependencies
 
