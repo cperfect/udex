@@ -765,7 +765,7 @@ async fn test_delete_index_empty_name() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_delete_index_permission_denied() {
+async fn test_delete_index_required_permissions_and_missing_claims() {
     let data = data(false).await;
     let index_server = &data.0;
 
