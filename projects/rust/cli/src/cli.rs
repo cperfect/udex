@@ -253,17 +253,20 @@ pub struct TokenInspectArgs {
 }
 
 /// Arguments for `udex token fetch`.
+///
+/// `UDEX_CLIENT_ID` and `UDEX_CLIENT_SECRET` are read exclusively from the
+/// environment to avoid leaking credentials via process listings.
 #[derive(Parser)]
 pub struct TokenFetchArgs {
-    /// OAuth2 client ID [env: UDEX_CLIENT_ID]
-    #[arg(long, env = "UDEX_CLIENT_ID")]
-    pub client_id: String,
     /// Full token endpoint URL (e.g. http://localhost:4444/oauth2/token) [env: UDEX_TOKEN_URL]
     #[arg(long, env = "UDEX_TOKEN_URL")]
     pub url: String,
     /// Scopes to request (may be repeated)
     #[arg(long = "scope", value_name = "SCOPE")]
     pub scopes: Vec<String>,
+    /// Audience to request in the token (e.g. the server's configured jwt_audience) [env: UDEX_TOKEN_AUDIENCE]
+    #[arg(long, env = "UDEX_TOKEN_AUDIENCE")]
+    pub audience: Option<String>,
 }
 
 // --- context ---

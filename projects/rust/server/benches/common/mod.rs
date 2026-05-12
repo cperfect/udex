@@ -91,9 +91,8 @@ impl BenchFixture {
                     )),
                 }),
                 kek_id: None,
+                dek: None,
             }],
-            dek: None,
-            kek_id: None,
         }
     }
 
@@ -111,9 +110,8 @@ impl BenchFixture {
                     value: Some(udex_api::entry::value::Value::StringValue(n.to_string())),
                 }),
                 kek_id: None,
+                dek: None,
             }],
-            dek: None,
-            kek_id: None,
         }
     }
 
@@ -131,9 +129,8 @@ impl BenchFixture {
                     )),
                 }),
                 kek_id: None,
+                dek: None,
             }],
-            dek: None,
-            kek_id: None,
         }
     }
 
@@ -253,6 +250,7 @@ async fn start_server_and_connect() -> (
             jwt_audience: Some(format!("{}-audience", ID_PREFIX)),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         },
     };
 
@@ -342,9 +340,8 @@ async fn start_server_and_connect() -> (
                             value: Some(udex_api::entry::value::Value::StringValue(i.to_string())),
                         }),
                         kek_id: None,
+                        dek: None,
                     }],
-                    dek: None,
-                    kek_id: None,
                 }),
             })),
         })

@@ -110,8 +110,6 @@ where
         Ok(Context {
             hash,
             pairs: input.pairs,
-            dek: input.dek,
-            kek_id: input.kek_id,
         })
     }
 

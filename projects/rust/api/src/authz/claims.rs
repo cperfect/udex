@@ -60,6 +60,10 @@ impl Claims {
         }
     }
 
+    pub fn sub(&self) -> &str {
+        &self.sub
+    }
+
     pub fn with_scope(mut self, scope: impl Into<String>) -> Self {
         self.scope = scope.into();
         self

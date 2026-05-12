@@ -35,15 +35,12 @@ pub fn context_input_from_json(
                     value: Some(proto_value),
                 }),
                 kek_id: None,
+                dek: None,
             })
         })
         .collect::<Result<Vec<_>, Error>>()?;
 
-    Ok(ContextInput {
-        pairs,
-        dek: None,
-        kek_id: None,
-    })
+    Ok(ContextInput { pairs })
 }
 
 fn json_value_to_proto(key: &str, v: serde_json::Value) -> Result<value::Value, Error> {

@@ -43,6 +43,7 @@ pub struct AuthzInterceptor {
     expected_issuer: String,
     expected_audience: String,
     scope_claim_name: String,
+    mask_subject_in_logs: bool,
 }
 
 impl AuthzInterceptor {
@@ -146,6 +147,7 @@ impl AuthzInterceptor {
             expected_issuer,
             expected_audience,
             scope_claim_name,
+            mask_subject_in_logs: config.mask_subject_in_logs,
         })
     }
 
@@ -184,6 +186,9 @@ impl AuthzInterceptor {
         let mut validation = Validation::new(alg);
         validation.set_issuer(&[&self.expected_issuer]);
         validation.set_audience(&[&self.expected_audience]);
+        // Require sub in addition to the library's default (exp).
+        // An empty sub is caught later by custom_validate_public().
+        validation.required_spec_claims.insert("sub".to_string());
 
         // Decode as a raw JSON map so we can extract scope from the configured
         // claim name without being coupled to a fixed field name in Claims.
@@ -223,6 +228,26 @@ impl AuthzInterceptor {
     }
 }
 
+/// Returns a masked representation of a JWT subject for audit logging.
+///
+/// Subjects of 6 or more characters expose the first 2 and last 2 characters;
+/// everything in between is replaced with asterisks. Subjects of 5 or fewer
+/// characters are replaced entirely with asterisks of the same length.
+///
+/// Operates on Unicode scalar values (chars), so multi-byte characters are
+/// counted correctly.
+fn mask_subject(sub: &str) -> String {
+    let chars: Vec<char> = sub.chars().collect();
+    let len = chars.len();
+    if len >= 6 {
+        let first: String = chars[..2].iter().collect();
+        let last: String = chars[len - 2..].iter().collect();
+        format!("{}{}{}", first, "*".repeat(len - 4), last)
+    } else {
+        "*".repeat(len)
+    }
+}
+
 #[tonic::async_trait]
 impl RequestInterceptor for AuthzInterceptor {
     async fn intercept(&self, mut req: Request<Body>) -> Result<Request<Body>, Status> {
@@ -234,10 +259,17 @@ impl RequestInterceptor for AuthzInterceptor {
             Some(auth_header) => {
                 let token = self.extract_bearer_token(auth_header)?;
                 let claims = self.validate_jwt(token)?;
-                tracing::debug!("JWT validation successful");
-
+                let subject = if self.mask_subject_in_logs {
+                    mask_subject(claims.sub())
+                } else {
+                    claims.sub().to_string()
+                };
+                tracing::info!(
+                    subject = %subject,
+                    method = %req.uri().path(),
+                    "request authenticated"
+                );
                 req.extensions_mut().insert(claims);
-                tracing::debug!("Claims added to request extensions");
                 Ok(req)
             }
             None => {
@@ -272,8 +304,22 @@ mod tests {
             jwt_audience: Some("test-audience".to_string()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         })
         .expect("Failed to create test AuthzInterceptor")
+    }
+
+    fn test_interceptor_masked() -> AuthzInterceptor {
+        AuthzInterceptor::new(AuthzConfig {
+            jwks_url: None,
+            jwt_public_key: Some(bound_pem_secret("tests/jwt/signing_public_key.pem")),
+            jwt_issuer: Some("test-issuer".to_string()),
+            jwt_audience: Some("test-audience".to_string()),
+            danger_allow_non_tls: false,
+            scope_claim_name: None,
+            mask_subject_in_logs: true,
+        })
+        .expect("Failed to create masked test AuthzInterceptor")
     }
 
     #[test]
@@ -285,6 +331,7 @@ mod tests {
             jwt_audience: Some("test-audience".to_string()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         }) else {
             panic!("expected ConfigValidation error for both key sources");
         };
@@ -303,6 +350,7 @@ mod tests {
             jwt_audience: Some("test-audience".to_string()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         }) else {
             panic!("expected ConfigValidation error for no key source");
         };
@@ -368,6 +416,101 @@ mod tests {
         assert!(interceptor.extract_bearer_token("").is_err());
     }
 
+    fn make_request_with_token(token: &str) -> tonic::codegen::http::Request<tonic::body::Body> {
+        tonic::codegen::http::Request::builder()
+            .uri("/udex.index.v1.IndexService/ListIndices")
+            .header("authorization", format!("Bearer {token}"))
+            .body(tonic::body::Body::empty())
+            .expect("build request")
+    }
+
+    fn make_valid_token(sub: &str) -> String {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize;
+        let claims = Claims::new(
+            sub.to_string(),
+            "test-issuer".to_string(),
+            "test-audience".to_string(),
+            now + 3600,
+            now,
+        );
+        let key_pem =
+            std::fs::read_to_string("tests/jwt/signing_private_key.pem").expect("read private key");
+        let encoding_key =
+            EncodingKey::from_ec_pem(key_pem.as_bytes()).expect("create EncodingKey");
+        let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
+        header.typ = Some("JWT".to_string());
+        encode(&header, &claims, &encoding_key).expect("encode JWT")
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_mask_subject_in_logs_emits_masked() {
+        use tonic_middleware::RequestInterceptor;
+        let token = make_valid_token("alice@example.com");
+        let interceptor = test_interceptor_masked();
+        let req = make_request_with_token(&token);
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(async { interceptor.intercept(req).await })
+            .expect("intercept ok");
+        // "alice@example.com" (17 chars) → "al*************om"
+        assert!(
+            logs_contain("al*************om"),
+            "expected partial-masked subject in log"
+        );
+        assert!(
+            !logs_contain("alice@example.com"),
+            "expected subject to be redacted"
+        );
+    }
+
+    #[traced_test]
+    #[test]
+    fn test_mask_subject_in_logs_false_emits_subject() {
+        use tonic_middleware::RequestInterceptor;
+        let token = make_valid_token("alice@example.com");
+        let interceptor = test_interceptor();
+        let req = make_request_with_token(&token);
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(async { interceptor.intercept(req).await })
+            .expect("intercept ok");
+        assert!(logs_contain("alice@example.com"), "expected subject in log");
+        assert!(
+            !logs_contain("al*************om"),
+            "expected subject not masked"
+        );
+    }
+
+    #[test]
+    fn test_mask_subject_long() {
+        assert_eq!(mask_subject("alice@example.com"), "al*************om");
+        assert_eq!(mask_subject("abcdef"), "ab**ef");
+    }
+
+    #[test]
+    fn test_mask_subject_short() {
+        assert_eq!(mask_subject("alice"), "*****");
+        assert_eq!(mask_subject("ab"), "**");
+        assert_eq!(mask_subject("a"), "*");
+        assert_eq!(mask_subject(""), "");
+    }
+
+    #[test]
+    fn test_mask_subject_boundary() {
+        // exactly 6 chars: first 2 + 2 asterisks + last 2
+        assert_eq!(mask_subject("abcdef"), "ab**ef");
+        // exactly 5 chars: all asterisks
+        assert_eq!(mask_subject("abcde"), "*****");
+    }
+
     #[traced_test]
     #[test]
     fn test_invalid_jwt_emits_warn() {
@@ -410,5 +553,67 @@ mod tests {
         let result = interceptor.validate_jwt(&token);
         assert!(result.is_err());
         assert!(logs_contain("JWT validation error"));
+    }
+
+    #[test]
+    fn test_jwt_empty_sub_is_rejected() {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize;
+        let claims = Claims::new(
+            "".to_string(),
+            "test-issuer".to_string(),
+            "test-audience".to_string(),
+            now + 3600,
+            now,
+        );
+        let key_pem =
+            std::fs::read_to_string("tests/jwt/signing_private_key.pem").expect("read private key");
+        let encoding_key =
+            EncodingKey::from_ec_pem(key_pem.as_bytes()).expect("create EncodingKey");
+        let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
+        header.typ = Some("JWT".to_string());
+        let token = encode(&header, &claims, &encoding_key).expect("encode JWT");
+
+        let result = test_interceptor().validate_jwt(&token);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
+    }
+
+    #[test]
+    fn test_jwt_missing_sub_is_rejected() {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        #[derive(serde::Serialize)]
+        struct NoSubClaims {
+            iss: String,
+            aud: String,
+            exp: usize,
+            iat: usize,
+        }
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize;
+        let claims = NoSubClaims {
+            iss: "test-issuer".to_string(),
+            aud: "test-audience".to_string(),
+            exp: now + 3600,
+            iat: now,
+        };
+        let key_pem =
+            std::fs::read_to_string("tests/jwt/signing_private_key.pem").expect("read private key");
+        let encoding_key =
+            EncodingKey::from_ec_pem(key_pem.as_bytes()).expect("create EncodingKey");
+        let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
+        header.typ = Some("JWT".to_string());
+        let token = encode(&header, &claims, &encoding_key).expect("encode JWT");
+
+        let result = test_interceptor().validate_jwt(&token);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
     }
 }

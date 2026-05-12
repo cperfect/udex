@@ -1,4 +1,4 @@
-use crate::entry::ContextInput;
+use crate::entry::{ContextInput, Value};
 use crate::Error;
 
 pub type ContextHasher = fn(&ContextInput) -> Result<String, Error>;
@@ -8,14 +8,33 @@ pub type ContextHasher = fn(&ContextInput) -> Result<String, Error>;
 /// Pairs are sorted by key before serialisation so that submission order does
 /// not affect the hash — two `ContextInput` values with the same pairs in any
 /// order will always produce the same hash.
+///
+/// Only `key` and `value` contribute to the hash. Encryption metadata (`kek_id`,
+/// `dek`) is excluded: if the encrypted value changes (re-encryption, key
+/// rotation) the new ciphertext already produces a different hash through the
+/// value field, so there is no need to include the metadata separately.
 pub fn xxh3_context_hash(context: &ContextInput) -> Result<String, Error> {
     use xxhash_rust::xxh3::xxh3_64;
 
-    let mut sorted_pairs = context.pairs.clone();
+    #[derive(serde::Serialize)]
+    struct HashPair<'a> {
+        key: &'a str,
+        value: &'a Option<Value>,
+    }
+
+    let mut sorted_pairs: Vec<_> = context.pairs.iter().collect();
     sorted_pairs.sort_by(|a, b| a.key.cmp(&b.key));
 
+    let hash_pairs: Vec<HashPair> = sorted_pairs
+        .iter()
+        .map(|p| HashPair {
+            key: &p.key,
+            value: &p.value,
+        })
+        .collect();
+
     let context_json =
-        serde_json::to_string(&sorted_pairs).map_err(|e| Error::DataConversion(e.to_string()))?;
+        serde_json::to_string(&hash_pairs).map_err(|e| Error::DataConversion(e.to_string()))?;
 
     Ok(format!("{:016x}", xxh3_64(context_json.as_bytes())))
 }
@@ -49,405 +68,169 @@ mod tests {
         })
     }
 
+    fn kv(key: &str, value: Option<Value>) -> KeyValuePair {
+        KeyValuePair {
+            key: key.to_string(),
+            value,
+            kek_id: None,
+            dek: None,
+        }
+    }
+
+    fn ctx(pairs: Vec<KeyValuePair>) -> ContextInput {
+        ContextInput { pairs }
+    }
+
     #[test]
     fn test_same_context_same_hash() {
-        let context1 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "name".to_string(),
-                    value: create_string_value("Alice"),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "age".to_string(),
-                    value: create_int_value(30),
-                    kek_id: None,
-                },
-            ],
-            dek: None,
-            kek_id: None,
-        };
-
-        let context2 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "name".to_string(),
-                    value: create_string_value("Alice"),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "age".to_string(),
-                    value: create_int_value(30),
-                    kek_id: None,
-                },
-            ],
-            dek: None,
-            kek_id: None,
-        };
-
-        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
-
+        let context1 = ctx(vec![
+            kv("name", create_string_value("Alice")),
+            kv("age", create_int_value(30)),
+        ]);
+        let context2 = ctx(vec![
+            kv("name", create_string_value("Alice")),
+            kv("age", create_int_value(30)),
+        ]);
         assert_eq!(
-            hash1, hash2,
+            xxh3_context_hash(&context1).unwrap(),
+            xxh3_context_hash(&context2).unwrap(),
             "Identical contexts should produce the same hash"
         );
     }
 
     #[test]
     fn test_different_key_order_same_hash() {
-        let context1 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "name".to_string(),
-                    value: create_string_value("Alice"),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "age".to_string(),
-                    value: create_int_value(30),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "city".to_string(),
-                    value: create_string_value("New York"),
-                    kek_id: None,
-                },
-            ],
-            dek: None,
-            kek_id: None,
-        };
-
-        let context2 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "city".to_string(),
-                    value: create_string_value("New York"),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "name".to_string(),
-                    value: create_string_value("Alice"),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "age".to_string(),
-                    value: create_int_value(30),
-                    kek_id: None,
-                },
-            ],
-            dek: None,
-            kek_id: None,
-        };
-
-        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
-
+        let context1 = ctx(vec![
+            kv("name", create_string_value("Alice")),
+            kv("age", create_int_value(30)),
+            kv("city", create_string_value("New York")),
+        ]);
+        let context2 = ctx(vec![
+            kv("city", create_string_value("New York")),
+            kv("name", create_string_value("Alice")),
+            kv("age", create_int_value(30)),
+        ]);
         assert_eq!(
-            hash1, hash2,
+            xxh3_context_hash(&context1).unwrap(),
+            xxh3_context_hash(&context2).unwrap(),
             "Same key-value pairs in different order should produce the same hash"
         );
     }
 
     #[test]
     fn test_different_contexts_different_hashes() {
-        let context1 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "name".to_string(),
-                    value: create_string_value("Alice"),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "age".to_string(),
-                    value: create_int_value(30),
-                    kek_id: None,
-                },
-            ],
-            dek: None,
-            kek_id: None,
-        };
-
-        let context2 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "name".to_string(),
-                    value: create_string_value("Bob"),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "age".to_string(),
-                    value: create_int_value(30),
-                    kek_id: None,
-                },
-            ],
-            dek: None,
-            kek_id: None,
-        };
-
-        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
-
+        let context1 = ctx(vec![
+            kv("name", create_string_value("Alice")),
+            kv("age", create_int_value(30)),
+        ]);
+        let context2 = ctx(vec![
+            kv("name", create_string_value("Bob")),
+            kv("age", create_int_value(30)),
+        ]);
         assert_ne!(
-            hash1, hash2,
+            xxh3_context_hash(&context1).unwrap(),
+            xxh3_context_hash(&context2).unwrap(),
             "Different contexts should produce different hashes"
         );
     }
 
     #[test]
     fn test_different_values_different_hashes() {
-        let context1 = ContextInput {
-            pairs: vec![KeyValuePair {
-                key: "age".to_string(),
-                value: create_int_value(30),
-                kek_id: None,
-            }],
-            dek: None,
-            kek_id: None,
-        };
-
-        let context2 = ContextInput {
-            pairs: vec![KeyValuePair {
-                key: "age".to_string(),
-                value: create_int_value(31),
-                kek_id: None,
-            }],
-            dek: None,
-            kek_id: None,
-        };
-
-        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
-
+        let c1 = ctx(vec![kv("age", create_int_value(30))]);
+        let c2 = ctx(vec![kv("age", create_int_value(31))]);
         assert_ne!(
-            hash1, hash2,
-            "Different values should produce different hashes"
+            xxh3_context_hash(&c1).unwrap(),
+            xxh3_context_hash(&c2).unwrap()
         );
     }
 
     #[test]
     fn test_different_keys_different_hashes() {
-        let context1 = ContextInput {
-            pairs: vec![KeyValuePair {
-                key: "name".to_string(),
-                value: create_string_value("Alice"),
-                kek_id: None,
-            }],
-            dek: None,
-            kek_id: None,
-        };
-
-        let context2 = ContextInput {
-            pairs: vec![KeyValuePair {
-                key: "username".to_string(),
-                value: create_string_value("Alice"),
-                kek_id: None,
-            }],
-            dek: None,
-            kek_id: None,
-        };
-
-        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
-
+        let c1 = ctx(vec![kv("name", create_string_value("Alice"))]);
+        let c2 = ctx(vec![kv("username", create_string_value("Alice"))]);
         assert_ne!(
-            hash1, hash2,
-            "Different keys should produce different hashes"
+            xxh3_context_hash(&c1).unwrap(),
+            xxh3_context_hash(&c2).unwrap()
         );
     }
 
     #[test]
     fn test_different_value_types_different_hashes() {
-        let context1 = ContextInput {
-            pairs: vec![KeyValuePair {
-                key: "value".to_string(),
-                value: create_string_value("42"),
-                kek_id: None,
-            }],
-            dek: None,
-            kek_id: None,
-        };
-
-        let context2 = ContextInput {
-            pairs: vec![KeyValuePair {
-                key: "value".to_string(),
-                value: create_int_value(42),
-                kek_id: None,
-            }],
-            dek: None,
-            kek_id: None,
-        };
-
-        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
-
+        let c1 = ctx(vec![kv("value", create_string_value("42"))]);
+        let c2 = ctx(vec![kv("value", create_int_value(42))]);
         assert_ne!(
-            hash1, hash2,
+            xxh3_context_hash(&c1).unwrap(),
+            xxh3_context_hash(&c2).unwrap(),
             "Same value but different types should produce different hashes"
         );
     }
 
     #[test]
     fn test_empty_context_consistent_hash() {
-        let context1 = ContextInput {
-            pairs: vec![],
-            dek: None,
-            kek_id: None,
-        };
-
-        let context2 = ContextInput {
-            pairs: vec![],
-            dek: None,
-            kek_id: None,
-        };
-
-        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
-
-        assert_eq!(hash1, hash2, "Empty contexts should produce the same hash");
+        assert_eq!(
+            xxh3_context_hash(&ctx(vec![])).unwrap(),
+            xxh3_context_hash(&ctx(vec![])).unwrap(),
+            "Empty contexts should produce the same hash"
+        );
     }
 
     #[test]
     fn test_complex_reordering_same_hash() {
-        let context1 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "z_last".to_string(),
-                    value: create_string_value("last"),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "a_first".to_string(),
-                    value: create_string_value("first"),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "m_middle".to_string(),
-                    value: create_int_value(42),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "b_second".to_string(),
-                    value: create_bool_value(true),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "x_float".to_string(),
-                    value: create_float_value(std::f64::consts::PI),
-                    kek_id: None,
-                },
-            ],
-            dek: None,
-            kek_id: None,
-        };
-
-        let context2 = ContextInput {
-            pairs: vec![
-                KeyValuePair {
-                    key: "x_float".to_string(),
-                    value: create_float_value(std::f64::consts::PI),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "b_second".to_string(),
-                    value: create_bool_value(true),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "a_first".to_string(),
-                    value: create_string_value("first"),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "z_last".to_string(),
-                    value: create_string_value("last"),
-                    kek_id: None,
-                },
-                KeyValuePair {
-                    key: "m_middle".to_string(),
-                    value: create_int_value(42),
-                    kek_id: None,
-                },
-            ],
-            dek: None,
-            kek_id: None,
-        };
-
-        let hash1 = xxh3_context_hash(&context1).expect("Hash should succeed");
-        let hash2 = xxh3_context_hash(&context2).expect("Hash should succeed");
-
+        let context1 = ctx(vec![
+            kv("z_last", create_string_value("last")),
+            kv("a_first", create_string_value("first")),
+            kv("m_middle", create_int_value(42)),
+            kv("b_second", create_bool_value(true)),
+            kv("x_float", create_float_value(std::f64::consts::PI)),
+        ]);
+        let context2 = ctx(vec![
+            kv("x_float", create_float_value(std::f64::consts::PI)),
+            kv("b_second", create_bool_value(true)),
+            kv("a_first", create_string_value("first")),
+            kv("z_last", create_string_value("last")),
+            kv("m_middle", create_int_value(42)),
+        ]);
         assert_eq!(
-            hash1, hash2,
+            xxh3_context_hash(&context1).unwrap(),
+            xxh3_context_hash(&context2).unwrap(),
             "Complex reordering of same key-value pairs should produce the same hash"
         );
     }
 
     #[test]
     fn test_hash_deterministic() {
-        // This test verifies that the hash function is deterministic, meaning that
-        // given the same input, it will always produce the same output across multiple calls.
-        // This is a critical property for a hash function used in a lookup system because:
-        // 1. It ensures that the same context will always map to the same hash
-        // 2. It guarantees consistent behavior across different runs of the application
-        // 3. It enables reliable storage and retrieval of contexts by their hash
-        //
-        // Without determinism, contexts could not be reliably found after being stored,
-        // as their hash might change between storage and retrieval operations.
-
-        let context = ContextInput {
-            pairs: vec![KeyValuePair {
-                key: "test".to_string(),
-                value: create_string_value("value"),
-                kek_id: None,
-            }],
-            dek: None,
-            kek_id: None,
-        };
-
-        // Generate the hash three times from the same input
-        let hash1 = xxh3_context_hash(&context).expect("Hash should succeed");
-        let hash2 = xxh3_context_hash(&context).expect("Hash should succeed");
-        let hash3 = xxh3_context_hash(&context).expect("Hash should succeed");
-
-        // All three hashes must be identical - this proves determinism
-        assert_eq!(
-            hash1, hash2,
-            "Hash should be deterministic - same input must always produce same output"
-        );
-        assert_eq!(
-            hash2, hash3,
-            "Hash should be deterministic - same input must always produce same output"
-        );
-        assert_eq!(
-            hash1, hash3,
-            "Hash should be deterministic - same input must always produce same output"
-        );
+        let context = ctx(vec![kv("test", create_string_value("value"))]);
+        let h1 = xxh3_context_hash(&context).unwrap();
+        let h2 = xxh3_context_hash(&context).unwrap();
+        let h3 = xxh3_context_hash(&context).unwrap();
+        assert_eq!(h1, h2);
+        assert_eq!(h2, h3);
     }
 
     #[test]
     fn test_hash_format() {
-        let context = ContextInput {
-            pairs: vec![KeyValuePair {
-                key: "test".to_string(),
-                value: create_string_value("value"),
-                kek_id: None,
-            }],
-            dek: None,
-            kek_id: None,
-        };
-
-        let hash = xxh3_context_hash(&context).expect("Hash should succeed");
-
-        // xxh3-64 produces a 64-bit value — 16 hex characters
+        let context = ctx(vec![kv("test", create_string_value("value"))]);
+        let hash = xxh3_context_hash(&context).unwrap();
         assert_eq!(hash.len(), 16, "xxh3-64 hash should be 16 hex characters");
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_eq!(hash, hash.to_lowercase());
+    }
 
-        // Should only contain hex characters
-        assert!(
-            hash.chars().all(|c| c.is_ascii_hexdigit()),
-            "Hash should only contain hex characters"
+    #[test]
+    fn test_encryption_metadata_excluded_from_hash() {
+        // kek_id and dek on a pair must not affect the hash — only key and value do.
+        // This ensures DEK rotation or KEK relabelling doesn't create a new context entry.
+        let plaintext = ctx(vec![kv("email", create_string_value("alice@example.com"))]);
+        let with_metadata = ctx(vec![KeyValuePair {
+            key: "email".to_string(),
+            value: create_string_value("alice@example.com"),
+            kek_id: Some("my-kek-v1".to_string()),
+            dek: Some("wrapped-dek-bytes".to_string()),
+        }]);
+        assert_eq!(
+            xxh3_context_hash(&plaintext).unwrap(),
+            xxh3_context_hash(&with_metadata).unwrap(),
+            "kek_id and dek must not affect the context hash"
         );
-
-        // Should be lowercase
-        assert_eq!(hash, hash.to_lowercase(), "Hash should be lowercase");
     }
 }

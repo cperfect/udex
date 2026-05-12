@@ -56,9 +56,7 @@ Two tables make up the schema. `"index"` holds policy configuration for a named 
 | `key` | `UUID` | Primary key — server-generated |
 | `index_name` | `TEXT` | Foreign key → `"index".name` |
 | `context_hash` | `TEXT` | Hash of `pairs`; unique per `index_name` — one context, one key within an index |
-| `pairs` | `JSONB` | Serialised key-value pairs |
-| `dek` | `TEXT` | Optional Data Encryption Key reference |
-| `kek_id` | `TEXT` | Optional Key Encryption Key ID |
+| `pairs` | `JSONB` | Serialised `KeyValuePair` array; each pair may carry its own `kek_id` and `dek` for per-pair envelope encryption |
 | `hash_algorithm` | `TEXT` | Algorithm used to compute `context_hash` |
 
 ### Indexes
@@ -89,9 +87,7 @@ erDiagram
         uuid key PK
         text index_name FK
         text context_hash "UNIQUE per index_name"
-        jsonb pairs
-        text dek
-        text kek_id
+        jsonb pairs "KeyValuePair array; per-pair kek_id and dek live here"
         text hash_algorithm
     }
 

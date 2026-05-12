@@ -21,7 +21,16 @@ pub mod value {
         BoolValue(bool),
     }
 }
-/// KeyValuePair represents a single key-value pair in a context
+/// KeyValuePair represents a single key-value pair in a context.
+/// Envelope encryption is per-pair: set kek_id and dek on each pair whose value
+/// is encrypted. Pairs without kek_id/dek are stored as plaintext.
+///
+/// kek_id identifies which Key Encryption Key wrapped the DEK.
+/// dek holds the wrapped Data Encryption Key used to encrypt this pair's value.
+/// Both fields are opaque to the server — it stores and echoes them verbatim.
+///
+/// The context hash is computed over (key, value) only; kek_id and dek are
+/// excluded so that encryption metadata changes do not affect context identity.
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct KeyValuePair {
@@ -29,27 +38,24 @@ pub struct KeyValuePair {
     pub key: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "2")]
     pub value: ::core::option::Option<Value>,
-    /// Optional Key Encryption Key ID for envelope encryption
+    /// KEK identifier — signals that value is ciphertext
     #[prost(string, optional, tag = "3")]
     pub kek_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Wrapped DEK for this pair's encrypted value
+    #[prost(string, optional, tag = "4")]
+    pub dek: ::core::option::Option<::prost::alloc::string::String>,
 }
-/// ContextInput represents a set of key-value pairs for creating contexts
-/// Used in requests where the server will generate the hash
+/// ContextInput represents a set of key-value pairs for creating contexts.
+/// Used in requests where the server will generate the hash.
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ContextInput {
     #[prost(message, repeated, tag = "1")]
     pub pairs: ::prost::alloc::vec::Vec<KeyValuePair>,
-    /// Optional Data Encryption Key - if this is set then kek_id must also be set
-    #[prost(string, optional, tag = "2")]
-    pub dek: ::core::option::Option<::prost::alloc::string::String>,
-    /// Optional Key Encryption Key ID - if this is set then dek must also be set
-    #[prost(string, optional, tag = "3")]
-    pub kek_id: ::core::option::Option<::prost::alloc::string::String>,
 }
-/// Context represents a set of key-value pairs with metadata
-/// Contexts are immutable - updates require delete and recreate operations
-/// The hash is always calculated and provided by the server
+/// Context represents a set of key-value pairs with metadata.
+/// Contexts are immutable — updates require delete and recreate operations.
+/// The hash is always calculated and provided by the server.
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Context {
@@ -58,12 +64,6 @@ pub struct Context {
     pub hash: ::prost::alloc::string::String,
     #[prost(message, repeated, tag = "2")]
     pub pairs: ::prost::alloc::vec::Vec<KeyValuePair>,
-    /// Optional Data Encryption Key
-    #[prost(string, optional, tag = "3")]
-    pub dek: ::core::option::Option<::prost::alloc::string::String>,
-    /// Optional Key Encryption Key ID
-    #[prost(string, optional, tag = "4")]
-    pub kek_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// CreateEntryRequest creates a new entry
 /// The server generates both the globally unique key (UUIDv4) and context hash

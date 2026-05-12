@@ -42,29 +42,35 @@ message Value {
   }
 }
 
-// KeyValuePair represents a single key-value pair in a context
+// KeyValuePair represents a single key-value pair in a context.
+// Envelope encryption is per-pair: set kek_id and dek on each pair whose value
+// is encrypted. Pairs without kek_id/dek are stored as plaintext.
+//
+// kek_id identifies which Key Encryption Key wrapped the DEK.
+// dek holds the wrapped Data Encryption Key used to encrypt this pair's value.
+// Both fields are opaque to the server — it stores and echoes them verbatim.
+//
+// The context hash is computed over (key, value) only; kek_id and dek are
+// excluded so that encryption metadata changes do not affect context identity.
 message KeyValuePair {
   string key = 1;
   Value value = 2;
-  optional string kek_id = 3; // Optional Key Encryption Key ID for envelope encryption
+  optional string kek_id = 3; // KEK identifier — signals that value is ciphertext
+  optional string dek = 4;    // Wrapped DEK for this pair's encrypted value
 }
 
-// ContextInput represents a set of key-value pairs for creating contexts
-// Used in requests where the server will generate the hash
+// ContextInput represents a set of key-value pairs for creating contexts.
+// Used in requests where the server will generate the hash.
 message ContextInput {
   repeated KeyValuePair pairs = 1;
-  optional string dek = 2; // Optional Data Encryption Key - if this is set then kek_id must also be set
-  optional string kek_id = 3; // Optional Key Encryption Key ID - if this is set then dek must also be set
 }
 
-// Context represents a set of key-value pairs with metadata
-// Contexts are immutable - updates require delete and recreate operations
-// The hash is always calculated and provided by the server
+// Context represents a set of key-value pairs with metadata.
+// Contexts are immutable — updates require delete and recreate operations.
+// The hash is always calculated and provided by the server.
 message Context {
   string hash = 1; // Server-generated hash identifying this context
   repeated KeyValuePair pairs = 2;
-  optional string dek = 3; // Optional Data Encryption Key
-  optional string kek_id = 4; // Optional Key Encryption Key ID
 }
 
 // CreateEntryRequest creates a new entry

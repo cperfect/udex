@@ -56,8 +56,6 @@ impl PostgresDatastore {
                 index_name,
                 context_hash,
                 pairs,
-                dek,
-                kek_id,
                 hash_algorithm
             )
             VALUES (
@@ -65,9 +63,7 @@ impl PostgresDatastore {
                 $2,
                 $3,
                 $4,
-                $5,
-                $6,
-                $7
+                $5
             )
             ON CONFLICT (index_name, context_hash) DO NOTHING
             "#,
@@ -76,8 +72,6 @@ impl PostgresDatastore {
         .bind(&entry.index_name)
         .bind(&entry.context.hash)
         .bind(serde_json::to_value(&entry.context.pairs).map_err(Error::Serialization)?)
-        .bind(&entry.context.dek)
-        .bind(&entry.context.kek_id)
         .bind(hash_algorithm_str)
         .execute(&mut **tx)
         .await
@@ -148,8 +142,6 @@ impl PostgresDatastore {
                 index_name,
                 context_hash,
                 pairs,
-                dek,
-                kek_id,
                 hash_algorithm
             FROM
                 entry_context
@@ -183,8 +175,6 @@ impl PostgresDatastore {
                 index_name,
                 context_hash,
                 pairs,
-                dek,
-                kek_id,
                 hash_algorithm
             FROM
                 entry_context
@@ -212,8 +202,6 @@ fn row_to_entry(row: &sqlx::postgres::PgRow) -> Result<Entry, Error> {
     let context = Context {
         hash: row.try_get("context_hash").map_err(Error::Database)?,
         pairs,
-        dek: row.try_get("dek").map_err(Error::Database)?,
-        kek_id: row.try_get("kek_id").map_err(Error::Database)?,
     };
 
     Ok(Entry {

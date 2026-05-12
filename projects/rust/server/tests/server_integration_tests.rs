@@ -90,6 +90,7 @@ async fn init_server() -> MaybeOnceType {
             jwt_audience: Some(jwt_audience.clone()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         },
     };
 
@@ -212,6 +213,7 @@ async fn init_server_hydra() -> HydraFixtureType {
             danger_allow_non_tls: true,
             // Hydra uses "scp" (array) instead of the RFC 8693 default "scope".
             scope_claim_name: Some("scp".to_string()),
+            mask_subject_in_logs: false,
         },
     };
 
@@ -503,6 +505,104 @@ async fn test_init_indexes() {
     println!("✓ Index properties match the configuration");
 }
 
+/// Verifies that `create_index` records the JWT `sub` claim as `created_by`.
+#[tokio_shared_rt::test]
+async fn test_create_index_records_sub_as_created_by() {
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    let data = data(false).await;
+    let bind_address = data.1;
+    let jwt_signing_key = &data.2;
+    let jwt_issuer = &data.6;
+    let jwt_audience = &data.7;
+
+    let ca_cert = tokio::fs::read_to_string("tests/certs/ca.crt")
+        .await
+        .expect("Failed to read CA certificate");
+    let tls_config = ClientTlsConfig::new()
+        .ca_certificate(tonic::transport::Certificate::from_pem(ca_cert))
+        .domain_name("localhost");
+    let endpoint = Channel::from_shared(format!("https://{}", bind_address))
+        .expect("Invalid endpoint")
+        .tls_config(tls_config)
+        .expect("Failed to configure TLS");
+
+    let creator_sub = "alice";
+    let new_index_name = "sub-created-by-test-index";
+
+    let claims = generate_test_claims(
+        creator_sub,
+        jwt_issuer,
+        jwt_audience,
+        Some(OverrideClaims {
+            scope: Some("udex:index:v1:create".to_string()),
+            sub: None,
+            issuer: None,
+            audience: None,
+            exp: None,
+            iat: None,
+        }),
+    );
+    let bearer = format!("Bearer {}", generate_test_jwt(&claims, jwt_signing_key));
+
+    let mut client = udex_api::index::index_service_client::IndexServiceClient::connect(endpoint)
+        .await
+        .expect("Failed to connect");
+
+    let mut create_req = tonic::Request::new(udex_api::index::CreateIndexRequest {
+        name: new_index_name.to_string(),
+        description: "test index for created_by verification".to_string(),
+        max_bulk_operations: 10,
+        max_key_length: 128,
+        max_value_length: 512,
+        max_kv_pairs_per_context: 16,
+        hash_algorithm: udex_api::index::HashAlgorithm::Xxh3 as i32,
+    });
+    create_req
+        .metadata_mut()
+        .insert("authorization", bearer.parse().expect("valid bearer"));
+    client
+        .create_index(create_req)
+        .await
+        .expect("create_index failed");
+
+    let read_claims = generate_test_claims(
+        "reader",
+        jwt_issuer,
+        jwt_audience,
+        Some(OverrideClaims {
+            scope: Some(format!("udex:index:v1:{new_index_name}:read")),
+            sub: None,
+            issuer: None,
+            audience: None,
+            exp: None,
+            iat: None,
+        }),
+    );
+    let read_bearer = format!(
+        "Bearer {}",
+        generate_test_jwt(&read_claims, jwt_signing_key)
+    );
+    let mut describe_req = tonic::Request::new(udex_api::index::DescribeRequest {
+        name: new_index_name.to_string(),
+    });
+    describe_req
+        .metadata_mut()
+        .insert("authorization", read_bearer.parse().expect("valid bearer"));
+    let index = client
+        .describe(describe_req)
+        .await
+        .expect("describe failed")
+        .into_inner()
+        .index
+        .expect("index missing from response");
+
+    assert_eq!(
+        index.created_by, creator_sub,
+        "created_by should equal the JWT sub claim"
+    );
+}
+
 /// Tests authentication and authorization for different services
 #[tokio_shared_rt::test]
 async fn test_authz() {
@@ -591,9 +691,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -670,9 +769,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -758,9 +856,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -853,9 +950,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -962,9 +1058,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -1119,9 +1214,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -1268,9 +1362,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -1363,9 +1456,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -1423,9 +1515,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -1528,9 +1619,8 @@ async fn test_authz() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
 
@@ -1905,9 +1995,8 @@ async fn test_hydra_scope_subset() {
                         )),
                     }),
                     kek_id: None,
+                    dek: None,
                 }],
-                dek: None,
-                kek_id: None,
             }),
         });
         req.metadata_mut().insert(

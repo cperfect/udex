@@ -117,20 +117,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .collect();
 
-    // Append the encrypted pair.
+    // Append the encrypted pair — kek_id and dek travel with the pair itself.
     pairs.push(KeyValuePair {
         key: enc_key.clone(),
         value: Some(Value {
             value: Some(udex_sdk::value::Value::StringValue(encrypted_value)),
         }),
         kek_id: Some(kek_id.clone()),
+        dek: Some(wrapped_dek),
     });
 
-    let ctx = ContextInput {
-        pairs,
-        dek: Some(wrapped_dek),
-        kek_id: Some(kek_id.clone()),
-    };
+    let ctx = ContextInput { pairs };
 
     // ── Create ────────────────────────────────────────────────────────────────
 
@@ -142,18 +139,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let found = client.lookup_context_by_key(&index, &created.key).await?;
 
-    // Recover the DEK by unwrapping with the KEK.
-    let wrapped = B64.decode(found.dek.as_deref().ok_or("missing dek")?)?;
-    let (dek_nonce_bytes, dek_ct_bytes) = wrapped.split_at(12);
-    let recovered_dek = kek
-        .decrypt(Nonce::from_slice(dek_nonce_bytes), dek_ct_bytes)
-        .map_err(|_| "failed to unwrap DEK — wrong KEK or corrupt data")?;
-    let dek_dec = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&recovered_dek));
-
     println!("\nContext pairs:");
     for pair in &found.pairs {
-        if pair.kek_id.is_some() {
-            // Decrypt values whose kek_id is set.
+        if let (Some(wrapped_dek), Some(_kek_id)) = (pair.dek.as_deref(), pair.kek_id.as_deref()) {
+            // Recover the DEK stored on this pair, then decrypt the value.
+            let wrapped = B64.decode(wrapped_dek)?;
+            let (dek_nonce_bytes, dek_ct_bytes) = wrapped.split_at(12);
+            let recovered_dek = kek
+                .decrypt(Nonce::from_slice(dek_nonce_bytes), dek_ct_bytes)
+                .map_err(|_| "failed to unwrap DEK — wrong KEK or corrupt data")?;
+            let dek_dec = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&recovered_dek));
+
             if let Some(udex_sdk::value::Value::StringValue(enc)) =
                 pair.value.as_ref().and_then(|v| v.value.as_ref())
             {
@@ -189,6 +185,7 @@ fn plaintext_pair(key: &str, value: &str) -> KeyValuePair {
             value: Some(udex_sdk::value::Value::StringValue(value.to_owned())),
         }),
         kek_id: None,
+        dek: None,
     }
 }
 

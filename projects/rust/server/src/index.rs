@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
+use udex_api::authz::claims::Claims;
 use udex_api::index::{
     index_service_server::IndexService as IndexServiceTrait, CreateIndexRequest,
     CreateIndexResponse, DescribeRequest, DescribeResponse, Index, IndexUpdate, ListIndicesRequest,
@@ -129,7 +130,7 @@ where
                     .hash_algorithm
                     .expect("Index update must contain hash_algorithm"),
                 created_at: Some(udex_api::now_timestamp()),
-                created_by: "init".to_string(), // TODO: set from JWT sub claim once Claims exposes sub()
+                created_by: "init".to_string(),
                 updated_at: None,
                 updated_by: None,
             };
@@ -148,7 +149,7 @@ where
                 {
                     // update the existing index
                     self.update_index_internal(&index_request.name, update.clone(), "init")
-                        .await?; // TODO: set from JWT sub claim once Claims exposes sub()
+                        .await?;
                 }
                 // else: index already exists and is the same, skip
             } else {
@@ -212,6 +213,14 @@ where
         &self,
         request: Request<CreateIndexRequest>,
     ) -> Result<Response<CreateIndexResponse>, Status> {
+        let sub = request
+            .extensions()
+            .get::<Claims>()
+            .map(|c| c.sub().to_string())
+            .ok_or_else(|| {
+                tracing::error!("Claims missing from request extensions — auth middleware not applied to create_index");
+                Status::internal("Internal server error")
+            })?;
         let req = request.into_inner();
 
         // Validate input
@@ -248,7 +257,7 @@ where
             max_kv_pairs_per_context: req.max_kv_pairs_per_context,
             hash_algorithm: req.hash_algorithm,
             created_at: Some(udex_api::now_timestamp()),
-            created_by: "api".to_string(), // TODO: set from JWT sub claim once Claims exposes sub()
+            created_by: sub,
             updated_at: None,
             updated_by: None,
         };

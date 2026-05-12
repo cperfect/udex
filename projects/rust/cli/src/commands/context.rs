@@ -27,15 +27,12 @@ pub fn hash(args: ContextHashArgs) -> Result<()> {
                     value: Some(value::Value::StringValue(v.to_string())),
                 }),
                 kek_id: None,
+                dek: None,
             })
         })
         .collect::<Result<_>>()?;
 
-    let context = ContextInput {
-        pairs,
-        dek: None,
-        kek_id: None,
-    };
+    let context = ContextInput { pairs };
 
     let h = xxh3_context_hash(&context).context("failed to compute context hash")?;
     println!("{h}");
