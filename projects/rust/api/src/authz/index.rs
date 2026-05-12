@@ -446,4 +446,62 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().code(), tonic::Code::PermissionDenied);
     }
+
+    #[tokio::test]
+    async fn test_delete_index_with_valid_permissions() {
+        let mut mock_service = MockIndexServiceImpl::new();
+        mock_service
+            .expect_delete_index()
+            .times(1)
+            .returning(|_| Ok(Response::new(DeleteIndexResponse {})));
+
+        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let claims = create_test_claims_with_permissions(vec![format!(
+            "udex:index:v1:{}:delete",
+            "test-index"
+        )
+        .as_str()]);
+
+        let mut request = Request::new(DeleteIndexRequest {
+            name: "test-index".to_string(),
+        });
+        request.extensions_mut().insert(claims);
+
+        let result = authorizor.delete_index(request).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_delete_index_without_permissions() {
+        let mock_service = MockIndexServiceImpl::new();
+        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let claims = create_test_claims_with_permissions(vec![format!(
+            "udex:index:v1:{}:read", // wrong action — read cannot delete
+            "test-index"
+        )
+        .as_str()]);
+
+        let mut request = Request::new(DeleteIndexRequest {
+            name: "test-index".to_string(),
+        });
+        request.extensions_mut().insert(claims);
+
+        let result = authorizor.delete_index(request).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::PermissionDenied);
+    }
+
+    #[tokio::test]
+    async fn test_delete_index_without_claims() {
+        let mock_service = MockIndexServiceImpl::new();
+        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+
+        let request = Request::new(DeleteIndexRequest {
+            name: "test-index".to_string(),
+        });
+
+        let result = authorizor.delete_index(request).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
+    }
 }
