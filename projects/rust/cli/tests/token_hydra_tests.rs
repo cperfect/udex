@@ -7,7 +7,7 @@
 //!
 //! Requires: a running Hydra instance (available in the devcontainer compose
 //! stack). The Hydra URLs are read from `HYDRA_PUBLIC_URL` / `HYDRA_ADMIN_URL`
-//! / `HYDRA_ISSUER`, defaulting to the compose values.
+//! / `HYDRA_ISSUER`, defaulting to `http://localhost:4444` / `:4445`.
 
 use std::net::SocketAddr;
 use std::sync::OnceLock;
@@ -47,12 +47,12 @@ const SERVER_KEY: &str = concat!(
 
 fn hydra_public_url() -> String {
     dotenvy::dotenv_override().ok();
-    std::env::var("HYDRA_PUBLIC_URL").unwrap_or_else(|_| "http://hydra:4444".to_string())
+    std::env::var("HYDRA_PUBLIC_URL").unwrap_or_else(|_| "http://localhost:4444".to_string())
 }
 
 fn hydra_admin_url() -> String {
     dotenvy::dotenv_override().ok();
-    std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://hydra:4445".to_string())
+    std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string())
 }
 
 fn token_url() -> String {
