@@ -3,7 +3,7 @@ verblock: "12 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-04
 title: "CLI delete command"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-04: CLI delete command

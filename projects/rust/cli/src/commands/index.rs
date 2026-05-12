@@ -154,9 +154,14 @@ pub async fn update(
 
 /// Delete an index.
 pub async fn delete(
-    _client: &UdexClient,
-    _args: IndexDeleteArgs,
+    client: &UdexClient,
+    args: IndexDeleteArgs,
     _output: &OutputFormat,
 ) -> Result<()> {
-    anyhow::bail!("index delete is not yet implemented by the server")
+    client
+        .delete_index(&args.name)
+        .await
+        .context("delete_index RPC failed")?;
+    println!("Deleted index '{}'.", args.name);
+    Ok(())
 }

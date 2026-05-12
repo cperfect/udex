@@ -127,8 +127,7 @@ pub enum IndexCommands {
     Get(IndexGetArgs),
     /// Update an existing index
     Update(IndexUpdateArgs),
-    /// Delete an index (not yet implemented server-side; hidden until the RPC exists)
-    #[command(hide = true)]
+    /// Delete an index (requires the index to have no entries)
     Delete(IndexDeleteArgs),
 }
 

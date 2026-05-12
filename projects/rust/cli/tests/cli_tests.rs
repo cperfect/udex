@@ -89,6 +89,25 @@ fn test_index_list_fails_without_server() {
 }
 
 #[test]
+fn test_index_delete_appears_in_help() {
+    udex()
+        .args(["index", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("delete"));
+}
+
+#[test]
+fn test_index_delete_fails_without_server() {
+    // Transport-level failure (connection refused) → exit code 8.
+    udex()
+        .args(["index", "delete", "some-index"])
+        .assert()
+        .code(8)
+        .stderr(predicate::str::contains("transport error"));
+}
+
+#[test]
 fn test_token_inspect_rejects_invalid_token() {
     udex()
         .args(["token", "inspect", "not.a.jwt"])
