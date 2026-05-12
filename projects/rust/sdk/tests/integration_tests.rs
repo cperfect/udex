@@ -135,6 +135,7 @@ async fn init_jwt_fixture() -> JwtFixture {
             jwt_audience: Some(jwt_audience.clone()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         },
     };
 
@@ -241,6 +242,7 @@ async fn init_hydra_fixture() -> HydraFixture {
             jwt_audience: Some(audience.clone()),
             danger_allow_non_tls: true,
             scope_claim_name: Some("scp".to_string()),
+            mask_subject_in_logs: false,
         },
     };
 

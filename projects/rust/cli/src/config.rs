@@ -78,6 +78,7 @@ impl Default for UdexConfig {
                     jwt_audience: Some("udex".to_string()),
                     danger_allow_non_tls: false,
                     scope_claim_name: None,
+                    mask_subject_in_logs: false,
                 },
             },
             datastore: DatastoreConfig {

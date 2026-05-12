@@ -68,6 +68,15 @@ pub struct AuthzConfig {
     /// Defaults to `"scope"` when not set.
     #[serde(default)]
     pub scope_claim_name: Option<String>,
+    /// When `true`, the JWT `sub` claim is replaced with `[masked]` in audit log lines.
+    ///
+    /// Enable this when your identity provider places PII (e.g. an email address) in
+    /// the subject claim. The preferred alternative is to configure the IdP to issue
+    /// an opaque, non-PII identifier as the subject instead — masking is a last resort.
+    ///
+    /// Defaults to `false`.
+    #[serde(default)]
+    pub mask_subject_in_logs: bool,
 }
 
 impl ServerConfig {
@@ -237,6 +246,7 @@ mod tests {
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         }
     }
 
@@ -248,6 +258,7 @@ mod tests {
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         }
     }
 
@@ -327,6 +338,7 @@ mod tests {
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -344,6 +356,7 @@ mod tests {
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -361,6 +374,7 @@ mod tests {
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -378,6 +392,7 @@ mod tests {
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         };
         assert!(cfg.validate().is_err());
     }
@@ -391,6 +406,7 @@ mod tests {
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -408,6 +424,7 @@ mod tests {
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: false,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -425,6 +442,7 @@ mod tests {
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: true,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         };
         assert!(cfg.validate().is_ok());
     }
@@ -438,6 +456,7 @@ mod tests {
             jwt_audience: Some("udex".to_string()),
             danger_allow_non_tls: true,
             scope_claim_name: None,
+            mask_subject_in_logs: false,
         };
         assert!(cfg.validate().is_ok());
     }

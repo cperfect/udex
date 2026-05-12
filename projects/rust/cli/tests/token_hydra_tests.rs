@@ -106,6 +106,7 @@ async fn init_fixture() -> Fixture {
             jwt_audience: Some(AUDIENCE.to_string()),
             danger_allow_non_tls: true,
             scope_claim_name: Some("scp".to_string()),
+            mask_subject_in_logs: false,
         },
     };
 
