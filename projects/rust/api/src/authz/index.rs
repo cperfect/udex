@@ -5,9 +5,9 @@ use crate::authz::{
     permissions::{is_permitted, Permissable},
 };
 use crate::index::{
-    index_service_server::IndexService, CreateIndexRequest, CreateIndexResponse, DescribeRequest,
-    DescribeResponse, ListIndicesRequest, ListIndicesResponse, UpdateIndexRequest,
-    UpdateIndexResponse,
+    index_service_server::IndexService, CreateIndexRequest, CreateIndexResponse,
+    DeleteIndexRequest, DeleteIndexResponse, DescribeRequest, DescribeResponse, ListIndicesRequest,
+    ListIndicesResponse, UpdateIndexRequest, UpdateIndexResponse,
 };
 
 /// Authorizor for IndexService that checks permissions based on Claims for each method call.
@@ -96,18 +96,33 @@ where
         &self,
         request: tonic::Request<ListIndicesRequest>,
     ) -> std::result::Result<tonic::Response<ListIndicesResponse>, tonic::Status> {
-        // Extract claims from request extensions
         let claims = request
             .extensions()
             .get::<Claims>()
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
 
-        // Check permissions
         if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
         }
 
         self.inner.list_indices(request).await
+    }
+
+    /// DeleteIndex deletes an index. Fails if the index still has entries.
+    async fn delete_index(
+        &self,
+        request: tonic::Request<DeleteIndexRequest>,
+    ) -> std::result::Result<tonic::Response<DeleteIndexResponse>, tonic::Status> {
+        let claims = request
+            .extensions()
+            .get::<Claims>()
+            .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
+
+        if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
+            return Err(tonic::Status::permission_denied("Insufficient permissions"));
+        }
+
+        self.inner.delete_index(request).await
     }
 }
 
@@ -135,6 +150,12 @@ impl Permissable<UpdateIndexRequest> for UpdateIndexRequest {
 impl Permissable<ListIndicesRequest> for ListIndicesRequest {
     fn required_permissions(&self) -> Vec<String> {
         vec!["udex:index:v1:list".to_string()]
+    }
+}
+
+impl Permissable<DeleteIndexRequest> for DeleteIndexRequest {
+    fn required_permissions(&self) -> Vec<String> {
+        vec![format!("udex:index:v1:{}:delete", self.name)]
     }
 }
 
@@ -171,6 +192,11 @@ mod tests {
                 &self,
                 request: Request<ListIndicesRequest>,
             ) -> Result<Response<ListIndicesResponse>, Status>;
+
+            async fn delete_index(
+                &self,
+                request: Request<DeleteIndexRequest>,
+            ) -> Result<Response<DeleteIndexResponse>, Status>;
         }
     }
 

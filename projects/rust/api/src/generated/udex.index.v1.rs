@@ -361,6 +361,31 @@ pub mod index_service_client {
                 .insert(GrpcMethod::new("udex.index.v1.IndexService", "ListIndices"));
             self.inner.unary(req, path, codec).await
         }
+        /// DeleteIndex deletes an index. Fails if the index still has entries.
+        pub async fn delete_index(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DeleteIndexRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::DeleteIndexResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/udex.index.v1.IndexService/DeleteIndex",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("udex.index.v1.IndexService", "DeleteIndex"));
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -406,6 +431,14 @@ pub mod index_service_server {
             request: tonic::Request<super::ListIndicesRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ListIndicesResponse>,
+            tonic::Status,
+        >;
+        /// DeleteIndex deletes an index. Fails if the index still has entries.
+        async fn delete_index(
+            &self,
+            request: tonic::Request<super::DeleteIndexRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::DeleteIndexResponse>,
             tonic::Status,
         >;
     }
@@ -651,6 +684,51 @@ pub mod index_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ListIndicesSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/udex.index.v1.IndexService/DeleteIndex" => {
+                    #[allow(non_camel_case_types)]
+                    struct DeleteIndexSvc<T: IndexService>(pub Arc<T>);
+                    impl<
+                        T: IndexService,
+                    > tonic::server::UnaryService<super::DeleteIndexRequest>
+                    for DeleteIndexSvc<T> {
+                        type Response = super::DeleteIndexResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::DeleteIndexRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as IndexService>::delete_index(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = DeleteIndexSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

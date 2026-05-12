@@ -6,8 +6,9 @@ use tonic::{Request, Response, Status};
 use udex_api::authz::claims::Claims;
 use udex_api::index::{
     index_service_server::IndexService as IndexServiceTrait, CreateIndexRequest,
-    CreateIndexResponse, DescribeRequest, DescribeResponse, Index, IndexUpdate, ListIndicesRequest,
-    ListIndicesResponse, UpdateIndexRequest, UpdateIndexResponse,
+    CreateIndexResponse, DeleteIndexRequest, DeleteIndexResponse, DescribeRequest,
+    DescribeResponse, Index, IndexUpdate, ListIndicesRequest, ListIndicesResponse,
+    UpdateIndexRequest, UpdateIndexResponse,
 };
 use udex_datastore::Datastore;
 
@@ -321,5 +322,12 @@ where
                 Err(Status::internal("Internal server error"))
             }
         }
+    }
+
+    async fn delete_index(
+        &self,
+        _request: Request<DeleteIndexRequest>,
+    ) -> Result<Response<DeleteIndexResponse>, Status> {
+        Err(Status::unimplemented("DeleteIndex not yet implemented"))
     }
 }
