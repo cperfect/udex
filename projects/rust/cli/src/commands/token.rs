@@ -54,6 +54,13 @@ pub fn inspect(args: TokenInspectArgs) -> Result<()> {
 /// Fetch a token from an OAuth2 server using the client_credentials grant,
 /// then print the raw (encoded) token and the decoded header + claims.
 pub async fn fetch(args: TokenFetchArgs, output: &OutputFormat) -> Result<()> {
+    let client_id = std::env::var("UDEX_CLIENT_ID").map_err(|_| {
+        anyhow::anyhow!(
+            "UDEX_CLIENT_ID is not set — export it before running this command:\n\
+             \n\
+             \texport UDEX_CLIENT_ID=<your-client-id>"
+        )
+    })?;
     let client_secret = std::env::var("UDEX_CLIENT_SECRET").map_err(|_| {
         anyhow::anyhow!(
             "UDEX_CLIENT_SECRET is not set — export it before running this command:\n\
@@ -65,7 +72,7 @@ pub async fn fetch(args: TokenFetchArgs, output: &OutputFormat) -> Result<()> {
     let token_url = TokenUrl::new(args.url.clone()).context("invalid token URL")?;
 
     // auth_uri is not required for client_credentials — only token_uri is needed.
-    let client = BasicClient::new(ClientId::new(args.client_id))
+    let client = BasicClient::new(ClientId::new(client_id))
         .set_client_secret(ClientSecret::new(client_secret))
         .set_token_uri(token_url);
 

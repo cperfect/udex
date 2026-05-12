@@ -66,24 +66,24 @@ server and prints the raw encoded JWT followed by the decoded header and claims.
 Use it to obtain a token for development/debugging or to verify token contents.
 
 ```bash
-# Fetch a token.
-# All three required flags can also be supplied via env vars:
-#   UDEX_CLIENT_ID, UDEX_CLIENT_SECRET, UDEX_TOKEN_URL
-udex token fetch \
-  --client-id     my-client \
-  --client-secret my-secret \
-  --url http://localhost:4444/oauth2/token
+# UDEX_CLIENT_ID and UDEX_CLIENT_SECRET must be set in the environment.
+# Passing credentials as flags is intentionally unsupported to prevent
+# them appearing in process listings (ps, /proc).
+export UDEX_CLIENT_ID=my-client
+export UDEX_CLIENT_SECRET=my-secret
 
-# Request a specific subset of the client's registered scopes
+# Fetch a token.
+udex token fetch --url http://localhost:4444/oauth2/token
+
+# Request a specific subset of the client's registered scopes.
 udex token fetch \
-  --client-id my-client --client-secret my-secret \
   --url http://localhost:4444/oauth2/token \
   --scope udex:index:v1:my-index:read \
   --scope udex:entry:v1:my-index:create
 
-# Structured output — useful for scripting
-udex token fetch ... --output json   # {"token":"eyJ...","header":{...},"claims":{...}}
-udex token fetch ... --output yaml
+# Structured output — useful for scripting.
+udex token fetch --url http://localhost:4444/oauth2/token --output json
+udex token fetch --url http://localhost:4444/oauth2/token --output yaml
 ```
 
 When used with Ory Hydra (the OAuth2 server in the dev compose stack), pair
@@ -143,10 +143,12 @@ These flags apply only to `udex token fetch` and have no effect on other subcomm
 
 | Flag | Env var | Description |
 |------|---------|-------------|
-| `--client-id ID` | `UDEX_CLIENT_ID` | OAuth2 client ID |
-| `--client-secret SECRET` | `UDEX_CLIENT_SECRET` | OAuth2 client secret |
 | `--url URL` | `UDEX_TOKEN_URL` | Full token endpoint URL (e.g. `http://localhost:4444/oauth2/token`) |
 | `--scope SCOPE` | — | Scope to request; may be repeated for multiple scopes |
+
+`UDEX_CLIENT_ID` and `UDEX_CLIENT_SECRET` are read exclusively from the
+environment. Passing credentials as flags is intentionally unsupported — flags
+appear in process listings and shell history, which would expose secrets.
 
 ## Output formats
 
