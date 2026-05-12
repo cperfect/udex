@@ -63,12 +63,14 @@ pub async fn data(serial: bool) -> Data<'static, MaybeOnceType> {
 /// auth interceptor would do. Required because create_index now rejects requests
 /// without Claims rather than defaulting to an "unknown" subject.
 fn with_test_claims<T>(mut request: Request<T>) -> Request<T> {
+    let iat = time::OffsetDateTime::now_utc().unix_timestamp() as usize;
+    let exp = iat + 3600; // 1 hour from now
     let claims = Claims::new(
         "test-subject".to_string(),
         "test-issuer".to_string(),
         "test-audience".to_string(),
-        9999999999, // exp far in the future
-        0,          // iat
+        exp,
+        iat,
     );
     request.extensions_mut().insert(claims);
     request
