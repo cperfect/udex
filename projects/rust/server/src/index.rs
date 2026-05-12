@@ -343,7 +343,10 @@ where
 
         match self.datastore.delete_index(&req.name).await {
             Ok(()) => Ok(Response::new(DeleteIndexResponse {})),
-            Err(udex_datastore::Error::IndexNotEmpty(msg)) => Err(Status::failed_precondition(msg)),
+            Err(udex_datastore::Error::IndexNotEmpty(msg)) => {
+                tracing::error!(error = %msg, index = %req.name, "Attempt to delete non-empty index");
+                Err(Status::failed_precondition("index is not empty"))
+            }
             Err(udex_datastore::Error::InvalidIndex(_)) => {
                 Err(Status::not_found(format!("index '{}' not found", req.name)))
             }
