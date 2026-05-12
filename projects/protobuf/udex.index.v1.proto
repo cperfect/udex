@@ -26,6 +26,9 @@ service IndexService {
   
   // ListIndices returns a list of all indices
   rpc ListIndices(ListIndicesRequest) returns (ListIndicesResponse);
+
+  // DeleteIndex deletes an index. Fails if the index still has entries.
+  rpc DeleteIndex(DeleteIndexRequest) returns (DeleteIndexResponse);
 }
 
 // DescribeRequest requests information about a specific index

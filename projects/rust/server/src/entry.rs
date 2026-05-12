@@ -139,6 +139,10 @@ where
             DatastoreError::InvalidIndexUpdate(_) => {
                 Status::invalid_argument("Invalid index update")
             }
+            DatastoreError::IndexNotEmpty(msg) => {
+                tracing::error!(error = %msg, "Attempt to operate on non-empty index");
+                Status::failed_precondition("Index is not empty")
+            }
             DatastoreError::DatabaseNotInitialized(msg) => {
                 tracing::error!(error = %msg, "Database not initialized");
                 Status::failed_precondition("Service unavailable")

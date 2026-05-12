@@ -5,11 +5,13 @@ use std::sync::{Arc, OnceLock};
 use tonic::Request;
 use udex_api::authz::claims::Claims;
 use udex_api::index::{
-    index_service_server::IndexService as IndexServiceTrait, CreateIndexRequest, DescribeRequest,
-    HashAlgorithm, IndexUpdate, ListIndicesRequest, UpdateIndexRequest,
+    index_service_server::IndexService as IndexServiceTrait, CreateIndexRequest,
+    DeleteIndexRequest, DescribeRequest, HashAlgorithm, IndexUpdate, ListIndicesRequest,
+    UpdateIndexRequest,
 };
 use udex_datastore::integration_test::init_postgres;
 use udex_datastore::postgres::PostgresDatastore;
+use udex_datastore::{Datastore, Entry};
 use udex_server::{logging, HealthCheck, IndexService};
 
 // See https://github.com/ufoscout/maybe-once for the MaybeOnceAsync pattern used here.
@@ -631,4 +633,166 @@ async fn test_validation_error_consistency() {
             // All validation errors should be InvalidArgument
         }
     }
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_delete_index_empty_index() {
+    let fixtures = init_postgres().await;
+    let datastore = Arc::new(fixtures.0);
+    let _db_name = fixtures.2;
+    let index_server = IndexService::new(datastore.clone());
+
+    index_server
+        .create_index(with_test_claims(Request::new(CreateIndexRequest {
+            name: "del_test_empty".to_string(),
+            description: "delete test".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 10,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        })))
+        .await
+        .expect("Failed to create index");
+
+    let result = index_server
+        .delete_index(with_test_claims(Request::new(DeleteIndexRequest {
+            name: "del_test_empty".to_string(),
+        })))
+        .await;
+
+    assert!(result.is_ok(), "Deleting an empty index should succeed");
+
+    let not_found = index_server
+        .describe(Request::new(DescribeRequest {
+            name: "del_test_empty".to_string(),
+        }))
+        .await;
+    assert_eq!(
+        not_found.unwrap_err().code(),
+        tonic::Code::NotFound,
+        "Deleted index should not be found"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_delete_index_not_empty() {
+    let fixtures = init_postgres().await;
+    let datastore = Arc::new(fixtures.0);
+    let _db_name = fixtures.2;
+    let index_server = IndexService::new(datastore.clone());
+
+    index_server
+        .create_index(with_test_claims(Request::new(CreateIndexRequest {
+            name: "del_test_nonempty".to_string(),
+            description: "delete test".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 10,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        })))
+        .await
+        .expect("Failed to create index");
+
+    datastore
+        .create_entry(Entry {
+            key: uuid::Uuid::new_v4(),
+            context: udex_api::entry::Context {
+                hash: "del_nonempty_hash".to_string(),
+                pairs: vec![],
+            },
+            index_name: "del_test_nonempty".to_string(),
+        })
+        .await
+        .expect("Failed to create entry");
+
+    let result = index_server
+        .delete_index(with_test_claims(Request::new(DeleteIndexRequest {
+            name: "del_test_nonempty".to_string(),
+        })))
+        .await;
+
+    let status = result.unwrap_err();
+    assert_eq!(
+        status.code(),
+        tonic::Code::FailedPrecondition,
+        "Deleting a non-empty index should return FailedPrecondition"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_delete_index_not_found() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    let result = index_server
+        .delete_index(with_test_claims(Request::new(DeleteIndexRequest {
+            name: "nonexistent_index_xyz".to_string(),
+        })))
+        .await;
+
+    let status = result.unwrap_err();
+    assert_eq!(
+        status.code(),
+        tonic::Code::NotFound,
+        "Deleting a non-existent index should return NotFound"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_delete_index_empty_name() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    let result = index_server
+        .delete_index(with_test_claims(Request::new(DeleteIndexRequest {
+            name: "".to_string(),
+        })))
+        .await;
+
+    let status = result.unwrap_err();
+    assert_eq!(
+        status.code(),
+        tonic::Code::InvalidArgument,
+        "Empty index name should return InvalidArgument"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_delete_index_required_permissions_and_missing_claims() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    // Use AuthorizorWrapper path: call via the authorizor with wrong permission
+    // The direct IndexService skips authz; test the Permissable impl separately.
+    // Verify the permission string is correct by checking Permissable directly.
+    use udex_api::authz::permissions::Permissable;
+    let req = DeleteIndexRequest {
+        name: "my-index".to_string(),
+    };
+    let perms = req.required_permissions();
+    assert_eq!(
+        perms,
+        vec!["udex:index:v1:my-index:delete"],
+        "DeleteIndexRequest must require the delete permission scoped to the index name"
+    );
+
+    // Confirm a request without Claims is rejected.
+    let result = index_server
+        .delete_index(Request::new(DeleteIndexRequest {
+            name: "test_index".to_string(),
+        }))
+        .await;
+    let status = result.unwrap_err();
+    assert_eq!(
+        status.code(),
+        tonic::Code::Internal,
+        "Missing Claims should return Internal (auth middleware not applied)"
+    );
 }

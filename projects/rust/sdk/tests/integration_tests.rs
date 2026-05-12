@@ -22,7 +22,7 @@ use time::OffsetDateTime;
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzRequest};
-use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
+use udex_api::index::{CreateIndexRequest, HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
 use udex_sdk::{ClientOptions, ContextInput, KeyValuePair, UdexClient, Value};
 
@@ -319,7 +319,9 @@ fn make_token(
     } else {
         default_scope = format!(
             "udex:index:v1:list \
+             udex:index:v1:create \
              udex:index:v1:{index_name}:read \
+             udex:index:v1:**:delete \
              udex:entry:v1:{index_name}:create \
              udex:entry:v1:{index_name}:read \
              udex:entry:v1:{index_name}:write \
@@ -986,5 +988,70 @@ async fn test_hydra_sdk_invalid_credentials_return_auth_error() {
     assert!(
         matches!(err, udex_sdk::Error::Auth(_)),
         "expected Error::Auth for bad credentials, got: {err}"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_delete_index_empty() {
+    let d = data(false).await;
+    let client = &d.0;
+
+    let name = format!("{ID_PREFIX}-delete-empty");
+
+    client
+        .create_index(CreateIndexRequest {
+            name: name.clone(),
+            description: "delete test".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 10,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        })
+        .await
+        .expect("create_index failed");
+
+    client
+        .delete_index(&name)
+        .await
+        .expect("delete_index on empty index should succeed");
+
+    // A second delete must return NOT_FOUND, confirming the index is gone.
+    let err = client.delete_index(&name).await.unwrap_err();
+    assert!(
+        matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::NOT_FOUND),
+        "deleted index should not be found on re-delete, got: {err}"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_delete_index_not_empty() {
+    let d = data(false).await;
+    let client = &d.0;
+    let index_name = &d.1;
+
+    // The shared index has entries from other tests; attempting to delete it must fail.
+    let err = client.delete_index(index_name).await.unwrap_err();
+    assert!(
+        matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::FAILED_PRECONDITION),
+        "expected FailedPrecondition for non-empty index, got: {err}"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_delete_index_not_found() {
+    let d = data(false).await;
+    let client = &d.0;
+
+    let err = client
+        .delete_index("nonexistent-index-xyz")
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::NOT_FOUND),
+        "expected NotFound for nonexistent index, got: {err}"
     );
 }

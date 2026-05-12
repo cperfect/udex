@@ -154,9 +154,25 @@ pub async fn update(
 
 /// Delete an index.
 pub async fn delete(
-    _client: &UdexClient,
-    _args: IndexDeleteArgs,
+    client: &UdexClient,
+    args: IndexDeleteArgs,
     _output: &OutputFormat,
 ) -> Result<()> {
-    anyhow::bail!("index delete is not yet implemented by the server")
+    client.delete_index(&args.name).await.map_err(|e| {
+        let msg = match &e {
+            udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::FAILED_PRECONDITION => {
+                format!(
+                    "index '{}' still has entries — delete all entries first",
+                    args.name
+                )
+            }
+            udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::NOT_FOUND => {
+                format!("index '{}' not found", args.name)
+            }
+            _ => "delete_index RPC failed".to_string(),
+        };
+        anyhow::Error::from(e).context(msg)
+    })?;
+    println!("Deleted index '{}'.", args.name);
+    Ok(())
 }

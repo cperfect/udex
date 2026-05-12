@@ -6,8 +6,9 @@ use tonic::{Request, Response, Status};
 use udex_api::authz::claims::Claims;
 use udex_api::index::{
     index_service_server::IndexService as IndexServiceTrait, CreateIndexRequest,
-    CreateIndexResponse, DescribeRequest, DescribeResponse, Index, IndexUpdate, ListIndicesRequest,
-    ListIndicesResponse, UpdateIndexRequest, UpdateIndexResponse,
+    CreateIndexResponse, DeleteIndexRequest, DeleteIndexResponse, DescribeRequest,
+    DescribeResponse, Index, IndexUpdate, ListIndicesRequest, ListIndicesResponse,
+    UpdateIndexRequest, UpdateIndexResponse,
 };
 use udex_datastore::Datastore;
 
@@ -318,6 +319,39 @@ where
             }
             Err(e) => {
                 tracing::error!(error = %e, "Failed to list indices");
+                Err(Status::internal("Internal server error"))
+            }
+        }
+    }
+
+    async fn delete_index(
+        &self,
+        request: Request<DeleteIndexRequest>,
+    ) -> Result<Response<DeleteIndexResponse>, Status> {
+        let _ = request
+            .extensions()
+            .get::<Claims>()
+            .ok_or_else(|| {
+                tracing::error!("Claims missing from request extensions — auth middleware not applied to delete_index");
+                Status::internal("Internal server error")
+            })?;
+        let req = request.into_inner();
+
+        if req.name.is_empty() {
+            return Err(Status::invalid_argument("index name is required"));
+        }
+
+        match self.datastore.delete_index(&req.name).await {
+            Ok(()) => Ok(Response::new(DeleteIndexResponse {})),
+            Err(udex_datastore::Error::IndexNotEmpty(msg)) => {
+                tracing::error!(error = %msg, index = %req.name, "Attempt to delete non-empty index");
+                Err(Status::failed_precondition("index is not empty"))
+            }
+            Err(udex_datastore::Error::InvalidIndex(_)) => {
+                Err(Status::not_found(format!("index '{}' not found", req.name)))
+            }
+            Err(e) => {
+                tracing::error!(error = %e, index = %req.name, "Failed to delete index");
                 Err(Status::internal("Internal server error"))
             }
         }
