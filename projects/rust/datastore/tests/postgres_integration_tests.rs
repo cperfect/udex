@@ -1194,3 +1194,79 @@ async fn test_bulk_read_get_by_context_is_index_scoped(#[context] ctx: Context) 
         other => panic!("expected None for missing hash, got {:?}", other),
     }
 }
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_delete_index_empty(#[context] ctx: Context) {
+    let data = data(false).await;
+    let datastore = &data.0;
+    let idx_name = index_name(&ctx);
+
+    datastore
+        .create_index(create_sample_index(&idx_name))
+        .await
+        .expect("Failed to create index");
+
+    datastore
+        .delete_index(&idx_name)
+        .await
+        .expect("Deleting an empty index should succeed");
+
+    let not_found = datastore.get_index(&idx_name).await;
+    assert!(
+        not_found.is_err(),
+        "Deleted index should not be retrievable"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_delete_index_not_empty(#[context] ctx: Context) {
+    let data = data(false).await;
+    let datastore = &data.0;
+    let idx_name = index_name(&ctx);
+
+    datastore
+        .create_index(create_sample_index(&idx_name))
+        .await
+        .expect("Failed to create index");
+
+    datastore
+        .create_entry(Entry {
+            key: Uuid::new_v4(),
+            context: create_sample_context("del_idx_nonempty"),
+            index_name: idx_name.clone(),
+        })
+        .await
+        .expect("Failed to create entry");
+
+    let err = datastore
+        .delete_index(&idx_name)
+        .await
+        .expect_err("Deleting a non-empty index should fail");
+
+    assert!(
+        matches!(err, udex_datastore::Error::IndexNotEmpty(_)),
+        "Expected IndexNotEmpty, got: {:?}",
+        err
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_delete_index_not_found(#[context] ctx: Context) {
+    let data = data(false).await;
+    let datastore = &data.0;
+    let idx_name = index_name(&ctx);
+
+    let err = datastore
+        .delete_index(&idx_name)
+        .await
+        .expect_err("Deleting a non-existent index should fail");
+
+    assert!(
+        matches!(err, udex_datastore::Error::InvalidIndex(_)),
+        "Expected InvalidIndex, got: {:?}",
+        err
+    );
+}

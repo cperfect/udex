@@ -43,9 +43,10 @@ pub enum Error {
     /// Type of error that occurs when a requested operation is not implemented
     #[error("Not implemented: {0}")]
     NotImplemented(String),
-    /// Type of error that occurs when
     #[error("Invalid index update: {0}")]
     InvalidIndexUpdate(String),
+    #[error("Index not empty: {0}")]
+    IndexNotEmpty(String),
     // Type of error related to migrations
     #[error("Migration error: {0}")]
     Migration(String),
@@ -183,6 +184,10 @@ pub trait Datastore: Send + Sync {
 
     /// Delete an entry by key.
     async fn delete_entry(&self, index_name: &str, key: Uuid) -> Result<(), Error>;
+
+    /// Delete an index by name. Returns `Error::IndexNotEmpty` if the index
+    /// still has entries, and `Error::InvalidIndex` if it does not exist.
+    async fn delete_index(&self, name: &str) -> Result<(), Error>;
 
     /// Perform multiple entry write operations in a single transaction.
     /// Any failure will rollback all operations.

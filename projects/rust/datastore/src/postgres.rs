@@ -558,6 +558,41 @@ impl Datastore for PostgresDatastore {
         Ok(())
     }
 
+    async fn delete_index(&self, name: &str) -> Result<(), Error> {
+        let entry_count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM entry_context
+            WHERE index_name = $1
+            "#,
+        )
+        .bind(name)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(Error::Database)?;
+
+        if entry_count > 0 {
+            return Err(Error::IndexNotEmpty(format!(
+                "index '{}' has {} entr{}; delete all entries before deleting the index",
+                name,
+                entry_count,
+                if entry_count == 1 { "y" } else { "ies" },
+            )));
+        }
+
+        let result = sqlx::query(r#"DELETE FROM "index" WHERE name = $1"#)
+            .bind(name)
+            .execute(&*self.pool)
+            .await
+            .map_err(Error::Database)?;
+
+        if result.rows_affected() == 0 {
+            return Err(Error::InvalidIndex(format!("index '{}' not found", name)));
+        }
+
+        Ok(())
+    }
+
     async fn bulk_entry_read(
         &self,
         operations: Vec<EntryReadOperation>,
