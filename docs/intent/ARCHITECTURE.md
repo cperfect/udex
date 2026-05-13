@@ -1,4 +1,5 @@
 # Udex Architecture Intent
+> See the [FAQs](../../FAQ.md) for some key decisions
 
 ## Overview
 
@@ -58,9 +59,7 @@ Udex is intended to be used by other systems. In general a "source" system will 
 
 ## What Udex Is Not
 
-Udex is not intended to store entities themselves nor the relations between them. The context is only intended to capture the minimum required to perform further operations on the entity in other systems. Nor does Udex support search and query: clients are expected to know either the unique key(s) or the context of the entities they are interested in resolving.
-
-Udex is not intended to be used directly by humans apart from specific admin operations.
+Udex is not an entity store, a graph database, or a general-purpose query engine. It holds the minimum context required to resolve entities across boundaries, not the entities themselves. Clients must know the key or context they are looking for; search is not supported. It is not intended to be used directly by humans apart from specific admin operations. For the design rationale, see the [FAQ](../../FAQ.md).
 
 ## Security Model
 

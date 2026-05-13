@@ -23,40 +23,21 @@ It is not intended to be a generic entity database and aggregate queries are del
 
 For full detail on the data model, operations, components, security model, and design principles, see [docs/intent/ARCHITECTURE.md](docs/intent/ARCHITECTURE.md).
 
+For common questions see the [FAQs](FAQ.md)
+
+> This project also gives me chance to learn rust, develop AI coding processes and tools and play with a few other technologies.
+
 ## The 1:1 Entry–Context Model
 
 A **context** is a set of key-value pairs that uniquely describes an entity at a point in time. Udex hashes the pairs to produce a **context fingerprint**. The core invariant is:
 
 > **One context fingerprint maps to exactly one entry key — always.**
 
-`create_entry` is idempotent: submitting the same context twice returns the same key both times. No duplicates accumulate. This makes Udex safe to call from retry-prone systems without coordination.
+See [the FAQ](FAQ.md#why-are-keyscontexts-11) for the reasoning behind this.
 
-### Why 1:1?
+`create_entry` is idempotent: submitting the same context twice returns the same key both times. No duplicates accumulate. For the rationale behind this design and how to handle key migrations, 
 
-The driving use case is cross-party key resolution. If Party A sends the same entity twice (perhaps because of a network retry or a restart), Udex must return the same stable key. Returning a different key each time would break any downstream system that caches or stores the first key. The 1:1 invariant provides that guarantee at the database level — no application-layer deduplication is needed.
-
-### Migrating to a new key
-
-Sometimes a key genuinely needs to change — for example when a user is re-enrolled under new credentials, or when a context value is corrected. Because Udex enforces 1:1, you cannot create a second entry for the same context. Instead, **encode the migration intent in the context** using a version pair.
-
-**Example — re-enrolling a user after a credential rotation:**
-
-```text
-# Original entry: context fingerprint for alice, version 1
-create_entry index=users context={user_id: alice, version: 1}
-→ key: 550e8400-e29b-41d4-a716-446655440000
-
-# Migrate: bump the version to produce a distinct context fingerprint
-create_entry index=users context={user_id: alice, version: 2}
-→ key: 6ba7b810-9dad-11d1-80b4-00c04fd430c8   ← fresh key
-
-# Optionally retire the old entry
-delete_entry key=550e8400-e29b-41d4-a716-446655440000
-```
-
-The `version` pair is just a convention — any pair that changes the fingerprint works (`epoch`, `tenant`, `rotation_id`, etc.). Callers that need to look up the current entry include the expected version in their context and let the hash do the rest. No out-of-band state is needed to track "which version is current" beyond what is already in the context pairs themselves.
-
-> This project also gives me chance to learn rust, develop AI coding processes and tools and play with a few other technologies.
+See [the FAQ](FAQ.md#why-are-contexts-immutable)  for the reasoning behind this.
 
 ## Getting Started
 
@@ -140,7 +121,7 @@ This project is developed using [Claude Code](https://claude.ai/code) (Anthropic
 | CLI | [clap](https://docs.rs/clap) — `udex` binary for server lifecycle, index/entry management, JWT inspection, and context hashing |
 | Error handling | [thiserror](https://docs.rs/thiserror) (library errors) + [anyhow](https://docs.rs/anyhow) (application errors) |
 
-_(Deferred)_ Optional REST interface and OpenTelemetry tracing/metrics.
+For the roadmap of deferred features, see the [FAQ](FAQ.md#what-future-features-might-udex-support).
 
 ## License
 
