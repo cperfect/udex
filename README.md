@@ -27,6 +27,24 @@ For common questions see the [FAQs](docs/FAQ.md)
 
 > This project also gives me chance to learn rust, develop AI coding processes and tools and play with a few other technologies.
 
+## Documentation
+
+| Document | Description |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Data model, operations, security model, and design principles |
+| [docs/FAQ.md](docs/FAQ.md) | Design rationale and common questions |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Getting started, development guidelines, and testing standards |
+| [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) | Rust-specific coding standards and conventions |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting policy |
+| [.devcontainer/](.devcontainer/README.md) | VS Code dev container — tools and first-time setup |
+| [projects/compose/](projects/compose/README.md) | Docker Compose — local PostgreSQL + Hydra services |
+| [projects/protobuf/](projects/protobuf/README.md) | Protobuf API definitions — source of truth for all API types |
+| [projects/rust/api/](projects/rust/api/README.md) | `udex-api` — generated types, authz, hashing |
+| [projects/rust/server/](projects/rust/server/README.md) | `udex-server` — gRPC server |
+| [projects/rust/datastore/](projects/rust/datastore/README.md) | `udex-datastore` — PostgreSQL implementation |
+| [projects/rust/sdk/](projects/rust/sdk/README.md) | `udex-sdk` — Rust client SDK |
+| [projects/rust/cli/](projects/rust/cli/README.md) | `udex-cli` — command-line interface |
+
 ## Core Concepts
 
 There are four core domain concepts:
@@ -110,13 +128,15 @@ For the roadmap of deferred features, see the [FAQ](docs/FAQ.md#what-future-feat
 
 MIT — see [LICENSE](LICENSE).
 
+## Installation
+> Placeholder will be filled in prior to release
+
+### Deployment
+> Placeholder will be filled in prior to release
+
 ## Development / Contributing
 
-See
-
-- [CONTRIBUTING.md](CONTRIBUTING.md) — getting started, general development principles, guidelines, and testing standards for all contributors
-- [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) — Rust-specific coding standards, error conventions, and local check commands
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — full architecture intent: components, operations, security model, and design principles
+See [CONTRIBUTING.md](CONTRIBUTING.md) to get started. All key documents are indexed in the [Documentation](#documentation) section above.
 
 ## Info
 
