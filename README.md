@@ -56,6 +56,7 @@ There are four core domain concepts:
 
 ```mermaid
 classDiagram
+    direction LR
     class Index {
         +String name
         +String description
