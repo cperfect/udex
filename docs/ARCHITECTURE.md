@@ -11,19 +11,25 @@ Indices will have a name that is a string of lower case latin letters with the o
 
 A Globally Unique Key is intended to be just that: unique not only within an index but across all indices (and ideally across everything — i.e. truly global).
 
-A context is uniquely determined by its hash, with the hash determined by Udex by applying its hash function against the key value pairs. There could however be more than one unique key for any context in an Index. The same context can appear only once in an Index but could appear in multiple indices. A context is not necessarily one to one with an entity: the same entity could be mapped to different contexts with different key value pairs. This is opaque to Udex and is entirely up to how clients use it.
+A context is uniquely determined by its hash, with the hash determined by Udex by applying its hash function against the key value pairs. One context fingerprint maps to exactly one key within any given index — the 1:1 invariant. The same context can appear only once in an index but could appear in multiple indices with independent keys. A context is not necessarily one to one with an entity: the same entity could be mapped to different contexts with different key value pairs. This is opaque to Udex and is entirely up to how clients use it.
 
 A context, including its hash, will be *immutable* and cannot be updated, though it can be deleted and replaced.
 
 ## Components
 
-The system has two server side components, which combined support one or more indices.
+* **API definitions** ([`projects/protobuf/`](../projects/protobuf/README.md)): Protobuf v3 service and message definitions — the source of truth for all API types. Server, SDK, and CLI code is generated from these files.
+* **Server** ([`udex-server`](../projects/rust/server/README.md)): a stateless gRPC application component that provides the API and business logic for Udex. Designed to be horizontally scaled. Consumes a TOML configuration file at startup.
+* **Datastore** ([`udex-datastore`](../projects/rust/datastore/README.md)): holds the Udex index state. Transactions, distribution, and scaling are handled by the datastore implementation and are opaque to the application. Currently implemented on PostgreSQL 16+.
+* **SDK** ([`udex-sdk`](../projects/rust/sdk/README.md)): a Rust client SDK for building systems that interact with Udex. Handles token acquisition and all RPC calls.
+* **CLI** ([`udex-cli`](../projects/rust/cli/README.md)): the `udex` binary for server lifecycle management, index and entry operations, JWT inspection, and context hashing. Also serves as the reference client for integration testing.
+* **Configuration**: a TOML file consumed at startup that specifies the datastore connection, TLS material, auth server endpoints, and the initial index set. Configuration is static — it is not mutated at runtime.
 
-* **Server**: a stateless application component that provides the APIs and business logic for Udex. It is intended that the application component can be horizontally scaled in and out. The server is largely generated from API specifications.
-* **Configuration**: determines which datastore to use (and any configuration required for that datastore) and which indices exist and their configurations. Application components share the same configuration. Configuration can be static (e.g. file) or dynamic (e.g. via something like etcd).
-* **Datastore**: holds the Udex index state. Transactions, distribution and scaling are handled by the datastore implementation and are opaque to the application and, as far as possible, the configuration.
-* **CLI** _(Deferred)_: the CLI can be used to generate or update the configuration, start and stop the server and as a client for test and operational purposes.
-* **SDKs** _(Deferred)_: to enable clients to be built for various technologies and frameworks. SDKs will largely be generated from API specifications and will support generating JWTs in the right format for the server.
+## Deployment
+> Details will be updated before release
+
+The only deployable artefact is the CLI - this is used to start the server and perform administrative tasks. The Server will take care of initialising the DB given the correct access and configuration.
+
+The sdk will be published as a crate before release.
 
 ## Operations
 
@@ -31,25 +37,24 @@ Udex has two types of operations: Index and Admin.
 
 ### Index Operations
 
-Index operations, including bulk operations, are transactional.
+Index operations, including bulk operations, are transactional. The full API is defined in [`udex.entry.v1.proto`](../projects/protobuf/udex.entry.v1.proto).
 
-* **Create** an entry for a context, returning a unique key. If the context already exists this is an error.
-* **Replace** a context for an existing key or keys: the key will now map to the new context. If this change would result in no keys being mapped to the old context, the old context will be deleted. If the key does not exist or already maps to the context then this is an error.
-* **Add** an additional unique key for a context: creates and returns a new unique key entry for the context. If the context does not exist then this is an error.
-* **Delete** an entry for a context and one or more unique keys. If additional keys in Udex are mapped to the same context and were not asked to be deleted, the context will remain. If the context does not exist, or any of the requested keys do not exist or do not map to the context then this is an error.
-* **Lookup** a context by its unique key. If the unique key does not exist or does not map to a context this is an error.
-* **Reverse Lookup** unique key(s) by context. If more than one key exists for the context in the index then all are returned. If the context does not exist or does not map to any keys then this is an error.
+* **Create** an entry for a context, returning a unique key. Idempotent — if the context already exists in the index, the existing key is returned unchanged; no duplicate is created.
+* **Delete** an entry by key. Removes the key-to-context binding.
+* **Lookup** a context by its unique key. Returns an error if the key does not exist.
+* **Reverse Lookup** a key by context hash. Returns the key if one exists, or an empty result if the context is not present in the index. Because the 1:1 invariant holds, at most one key is returned.
 
-All of these operations can be performed in bulk up to a configurable limit per index. Bulk operations are transactional — if any fail, the rest will be rolled back. Create and Lookup are the most commonly used operations and will be the most optimised.
+All operations can be performed in bulk up to a configurable limit per index. Bulk writes are transactional — if any operation fails, all are rolled back. Create and Lookup are the most commonly used operations and are the most optimised.
 
 ### Admin Operations
 
-_(Initially these may only be supported by static configuration.)_
+Admin operations are exposed as the `IndexService` gRPC API (defined in [`udex.index.v1.proto`](../projects/protobuf/udex.index.v1.proto)). Initial indices can also be declared in the server configuration file, which applies them on startup.
 
-* Create a new index with a bulk operation limit
-* Update an index's bulk operation limit
-* Delete an index
-* List indices
+* Create a new index
+* Describe an index (name, configuration, metadata)
+* Update an index's mutable fields (description, limits, hash algorithm)
+* Delete an index — only permitted when the index has no entries
+* List all indices
 
 ## Usage
 
@@ -79,7 +84,7 @@ There is a permission per index per operation and each must be specifically enab
 
 #### Admin Level
 
-No admin APIs are initially provided. Permissions for admin operations are assumed to be applied via other mechanisms (e.g. access to source control and infrastructure).
+Admin operations (index management) are exposed via `IndexService` and follow the same JWT permission model as entry operations — each operation requires a specific scope. See [`docs/SECRETS.md`](SECRETS.md) for the credential and scope inventory.
 
 ### Encryption
 
@@ -95,7 +100,7 @@ Udex does not support encryption at rest directly, though supported datastores a
 
 #### Secrets
 
-Udex configuration only supports secrets by injection (e.g. environment variables) and will not support secrets directly in configuration files. The application component will only hold secrets in memory. Udex supports rolling out new secrets.
+Udex configuration only supports secrets by injection (e.g. environment variables) and will not support secrets directly in configuration files. The application component will only hold secrets in memory. Udex supports rolling out new secrets. See [`docs/SECRETS.md`](SECRETS.md) for the full inventory of credentials and key material used in the project.
 
 ## Principles
 
