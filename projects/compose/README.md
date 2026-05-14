@@ -17,6 +17,7 @@ Docker Compose configuration for local development and integration testing. Runs
 Generate the required secrets and environment file before starting:
 
 ```bash
+# From the workspace root
 bash scripts/gen-env.sh
 ```
 
