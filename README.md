@@ -23,7 +23,7 @@ It is not intended to be a generic entity database and aggregate queries are del
 
 For full detail on the data model, operations, components, security model, and design principles, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-For common questions see the [FAQs](docs/FAQ.md)
+For common questions, see the [FAQs](docs/FAQ.md).
 
 > This project also gives me chance to learn rust, develop AI coding processes and tools and play with a few other technologies.
 
