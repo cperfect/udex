@@ -107,6 +107,51 @@ The API is three gRPC services (defined in [`projects/protobuf/`](projects/proto
 
 All requests require a JWT (ES256) issued via **OAuth2 Client Credentials** flow. Permissions are scoped per index per operation — a token for one index cannot access another. The [Rust SDK](projects/rust/sdk/) and [`udex` CLI](projects/rust/cli/) are the primary clients.
 
+### Client Usage
+There are a number client roles:
+* Key Holder - uses keys to access data
+* Context Holder - has the context, but doesn't want to hand out its own keys
+* Indexer - performs indexing operations between Key Holders and Context Holders
+* Admin - maintains indices.
+
+Combinations of the first three roles are possible: A single logical client could play both Key Holder and Context Holder roles, though generally not for the same index, and also act as an Indexer, or a client could be both the Context Holder and Indexer etc.
+
+Admin is expected to be CI or Operational role and generally would not be a Key Holder or Context Holder.
+
+#### Example
+In this scenario a Context Holder wishes to distribute data to one or more parties who act as Key Holders. The Context Holder does not want to distribute its own keys to the data so the Indexer uses Udex to assign and lookup keys, effectively acting as transformation proxy.
+
+> This is meant to be indicative only
+
+```mermaid
+sequenceDiagram
+  title Data Distribution with Keys
+
+  Context Holder->>+Indexer:Send Data
+  Indexer->>Indexer: Generate Contexts
+  Indexer->>+Udex: Resolve existing Contexts
+  Udex->>-Indexer: Existing Keys for Contexts
+  Indexer->>+Udex: Index new Contexts
+  Udex-->-Indexer: New Keys for Contexts
+  Indexer->>Indexer: Enhance data with keys
+  Indexer->>Key Holder: Send data with keys
+  Key Holder->>Key Holder: Store data with keys
+  Indexer->>-Context Holder: done
+```
+```mermaid
+sequenceDiagram
+  title Use Keys to access Data
+
+  Key Holder->>+Indexer: Access Data with Keys
+  Indexer->>+Udex: Lookup Contexts for Keys
+  Udex->>-Indexer: Keys for Contexts
+  Indexer->>Indexer: Enhance Request with Contexts
+  Indexer->>+Context Holder: Access data with Contexts
+  Context Holder->>-Indexer: Respond with data
+  Indexer->>Indexer: Enhance data with Keys
+  Indexer->>-Key Holder: Respond with data
+```
+
 ## Tech Stack
 
 | Concern | Technology |
