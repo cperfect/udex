@@ -91,9 +91,7 @@ A **context** is a set of key-value pairs that uniquely describes an entity at a
 
 See [the FAQ](docs/FAQ.md#why-are-keyscontexts-11) for the reasoning behind this.
 
-`create_entry` is idempotent: submitting the same context twice returns the same key both times. No duplicates accumulate. For the rationale behind this design and how to handle key migrations, 
-
-See [the FAQ](docs/FAQ.md#why-are-contexts-immutable)  for the reasoning behind this.
+`create_entry` is idempotent: submitting the same context twice returns the same key both times. No duplicates accumulate. For the rationale behind this design and how to handle key migrations, see [the FAQ](docs/FAQ.md#why-are-contexts-immutable).
 
 ### Access
 
