@@ -24,6 +24,9 @@ Public artefacts (certificates, public keys, client IDs, endpoint URLs) are mark
 | Hydra test client secret (`hydra-test-secret`) | OAuth2 client secret | Server integration tests — `client_credentials` grant | Dev | No | `projects/rust/server/tests/server_integration_tests.rs` (dev-only hardcoded fixture) |
 | Hydra non-Udex client secret (`non-udex-secret`) | OAuth2 client secret | Server integration tests — scope rejection test | Dev | No | `projects/rust/server/tests/server_integration_tests.rs` (dev-only hardcoded fixture) |
 | Hydra wrong-audience client secret (`wrong-aud-secret`) | OAuth2 client secret | Server integration tests — audience rejection test | Dev | No | `projects/rust/server/tests/server_integration_tests.rs` (dev-only hardcoded fixture) |
+| SDK Hydra test client secret (`sdk-hydra-test-secret`) | OAuth2 client secret | SDK integration tests — Hydra fixture | Dev | No | `projects/rust/sdk/tests/integration_tests.rs` (dev-only hardcoded fixture) |
+| CLI token test client secret (`cli-hydra-test-secret`) | OAuth2 client secret | CLI token Hydra tests | Dev | No | `projects/rust/cli/tests/token_hydra_tests.rs` (dev-only hardcoded fixture) |
+| CLI index test client secret (`cli-hydra-idx-del-secret`) | OAuth2 client secret | CLI index delete Hydra tests | Dev | No | `projects/rust/cli/tests/index_hydra_tests.rs` (dev-only hardcoded fixture) |
 | `jwks_url` | JWKS endpoint URL | Rust server config — runtime key source | Both | Yes | Config property (`projects/rust/server/src/config.rs`; `projects/rust/cli/src/config.rs`) |
 
 ## JWT Signing Keys
@@ -56,3 +59,4 @@ Public artefacts (certificates, public keys, client IDs, endpoint URLs) are mark
 | `gen-keys-and-certs.sh` | Key/cert generation script (delegates to sub-scripts) | Dev/CI — generate TLS certs and JWT signing keys | Dev | Yes | `scripts/gen-keys-and-certs.sh` |
 | `regenerate_jwt_signing_key_pair.sh` | Key generation script (ECDSA P-256, PKCS8) | Dev — rotate test JWT keys (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/rust/server/tests/jwt/regenerate_jwt_signing_key_pair.sh` |
 | `regenerate_certs.sh` | Certificate generation script (RSA-4096, CA + server) | Dev — rotate test TLS certs (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/rust/server/tests/certs/regenerate_certs.sh` |
+| `hydra-create-client.sh` | Hydra OAuth2 client registration script | Dev — register a client in Hydra with specified scopes; prints env vars for CLI use | Dev | Yes | `scripts/hydra-create-client.sh` |
