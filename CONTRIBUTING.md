@@ -125,7 +125,7 @@ Tests **MUST** be automated and reliable. Flakey tests are broken tests — fix 
 The API definitions in `projects/protobuf/` drive code generation for the server, SDK, and CLI — if you are changing an API, start there. The Rust workspace dependency order is `api` → `datastore` / `server` / `sdk` → `cli`.
 
 ## General Development Principals & Guidelines
-> See also the code the specific development : e.g. for rust [./projects/rust/CONTRIBTING.md](./projects/rust/CONTRIBTING.md)
+> See also the code the specific development : e.g. for rust [./projects/rust/CONTRIBUTING.md](./projects/rust/CONTRIBUTING.md)
 
 ### Princples
 1. **Think of the Next Guy** Assume that someone else will need to read, understand and modify your work (possibly under stress in the early hours of the morning during an outage). Do not assume they know what you know and think like you do. Do not assume you will be available to speak to them. Don't leave landmines behind you or if you absolutely have to leave GREAT BIG WARNINGS.
