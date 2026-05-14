@@ -27,7 +27,44 @@ For common questions see the [FAQs](docs/FAQ.md)
 
 > This project also gives me chance to learn rust, develop AI coding processes and tools and play with a few other technologies.
 
-## The 1:1 Entry–Context Model
+## Core Concepts
+
+There are four core domain concepts:
+
+- **Index** — a named, configured namespace for entries. Indices are independent: the same context can appear in multiple indices with different keys. Index names are lowercase strings and are immutable once set.
+- **Context** — a set of key-value pairs that uniquely identifies an entity. Udex hashes the pairs to produce a stable **context fingerprint**. Contexts are immutable — they cannot be updated, only deleted and recreated.
+- **Key** — a server-generated UUIDv4 assigned to a context within an index. Keys are globally unique across all indices and permanent for the lifetime of the entry.
+- **Entry** — the binding of a key to a context within an index. The 1:1 invariant ensures that one context fingerprint maps to exactly one key within any given index (see [The 1:1 Entry–Context Model](#the-11-entrycontext-model) below).
+
+```mermaid
+classDiagram
+    class Index {
+        +String name
+        +String description
+        +i32 max_bulk_operations
+        +HashAlgorithm hash_algorithm
+    }
+    class Entry {
+        +UUID key
+    }
+    class Context {
+        +String hash
+    }
+    class KeyValuePair {
+        +String key
+        +Value value
+        +String? kek_id
+        +String? dek
+    }
+
+    Index "1" *-- "0..*" Entry : contains
+    Entry --> Context : key maps to
+    Context "1" *-- "1..*" KeyValuePair : described by
+```
+
+`Value` is a union of `String`, `i64`, `f64`, and `bool`. `kek_id` and `dek` are optional envelope-encryption fields — when present they signal that the value is ciphertext and carry the wrapped key metadata. Both are opaque to the server and excluded from the context hash.
+
+### The 1:1 Entry–Context Model
 
 A **context** is a set of key-value pairs that uniquely describes an entity at a point in time. Udex hashes the pairs to produce a **context fingerprint**. The core invariant is:
 
@@ -39,73 +76,17 @@ See [the FAQ](docs/FAQ.md#why-are-keyscontexts-11) for the reasoning behind this
 
 See [the FAQ](docs/FAQ.md#why-are-contexts-immutable)  for the reasoning behind this.
 
-## Getting Started
+### Access
 
-### Prerequisites
+The API is three gRPC services (defined in [`projects/protobuf/`](projects/protobuf/)):
 
-- **Rust** (1.95.0) — install via [rustup](https://rustup.rs/)
-- **PostgreSQL 16+** — the datastore; run locally via Docker or use the dev container (which starts it automatically)
-- **Docker** — used to run a local PostgreSQL instance for integration tests
-- **protoc** (Protocol Buffers compiler) — required to build the API crate from `.proto` definitions
+| Service | Operations |
+|---|---|
+| `IndexService` | Create, describe, update, list, delete indices |
+| `EntryService` | Create, delete, lookup by key, lookup by context, bulk read/write |
+| `HealthzService` | Server liveness check |
 
-  ```bash
-  # macOS
-  brew install protobuf
-
-  # Debian/Ubuntu
-  apt-get install protobuf-compiler
-  ```
-
-A [VS Code dev container](.devcontainer) is provided that installs all prerequisites automatically — this is the recommended way to get a consistent environment.
-
-### Build & Test
-
-```bash
-# Clone the repository
-git clone https://github.com/cperfect/udex.git && cd udex
-
-# Start PostgreSQL (or use the dev container, which starts it automatically)
-docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
-
-# Build the workspace
-cargo build
-
-# Run the full test suite
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres cargo test
-```
-
-See [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) for the full pre-commit checklist and local check commands.
-
-### Security scanning
-> Dependabot has been disabled and replaced by regular scanning with trivy. The results are uploaded to the GitHub security panel for this repository.
-
-[Trivy](https://trivy.dev) is pre-installed in the dev container. To run the same scan that CI runs:
-
-```bash
-trivy fs --config .trivy.yaml .
-```
-
-Findings at MEDIUM severity or higher cause a non-zero exit and will block merging on GitHub. To suppress an accepted finding, add its ID to `.trivyignore` with a comment explaining the rationale.
-
-Outside the devcontainer, install Trivy first:
-
-```bash
-# macOS
-brew install trivy
-
-# Debian/Ubuntu (from official Trivy apt repo)
-wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
-echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-sudo apt-get update && sudo apt-get install trivy
-```
-
-## Contributing Guides
-
-- [CONTRIBUTING.md](CONTRIBUTING.md) — general development principles, guidelines, and testing standards for all contributors
-- [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) — Rust-specific coding standards, error conventions, and local check commands
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — full architecture intent: components, operations, security model, and design principles
-
-This project is developed using [Claude Code](https://claude.ai/code) (Anthropic) with [Intent v2.8.0](https://github.com/matthewsinclair/intent) for steel thread and work package management. Plugins: [`rust-analyzer-lsp`](https://github.com/anthropics/claude-code-plugins). Skills: [`in-essentials`](https://github.com/matthewsinclair/intent).
+All requests require a JWT (ES256) issued via **OAuth2 Client Credentials** flow. Permissions are scoped per index per operation — a token for one index cannot access another. The [Rust SDK](projects/rust/sdk/) and [`udex` CLI](projects/rust/cli/) are the primary clients.
 
 ## Tech Stack
 
@@ -114,9 +95,11 @@ This project is developed using [Claude Code](https://claude.ai/code) (Anthropic
 | API spec | [Protobuf v3](https://protobuf.dev) — server, client, data models, and SDKs generated from `.proto` definitions via [prost](https://docs.rs/prost) / [tonic-build](https://docs.rs/tonic-build) |
 | Transport | [tonic](https://docs.rs/tonic) — gRPC over HTTP/2 with TLS |
 | Async runtime | [tokio](https://docs.rs/tokio) |
-| TLS | [rustls](https://docs.rs/rustls) with [aws-lc-rs](https://docs.rs/aws-lc-rs) crypto backend |
+| TLS | [rustls](https://docs.rs/rustls) with [aws-lc-rs](https://docs.rs/aws-lc-rs) crypto backend — used for gRPC transport, datastore connections, and HTTP clients |
 | Datastore | [PostgreSQL 16+](https://www.postgresql.org) accessed via [sqlx](https://docs.rs/sqlx) (compile-time verified queries, async, connection pooling) |
-| Authentication | JWT (ES256) via [jsonwebtoken](https://docs.rs/jsonwebtoken) |
+| Hashing | [xxhash-rust](https://docs.rs/xxhash-rust) (XXH3) — fast non-cryptographic hash used to fingerprint contexts |
+| Serialization | [serde](https://docs.rs/serde) / [serde_json](https://docs.rs/serde_json) / [serde_yaml](https://docs.rs/serde_yaml) — derived on all API types; drives JSON and YAML output in the CLI |
+| Authorization | OAuth2 Client Credentials flow — JWT (ES256) validated on every request via [jsonwebtoken](https://docs.rs/jsonwebtoken); permissions are scoped per index per operation |
 | Logging | [tracing](https://docs.rs/tracing) + [tracing-subscriber](https://docs.rs/tracing-subscriber) (structured JSON in production, human-readable in development) |
 | CLI | [clap](https://docs.rs/clap) — `udex` binary for server lifecycle, index/entry management, JWT inspection, and context hashing |
 | Error handling | [thiserror](https://docs.rs/thiserror) (library errors) + [anyhow](https://docs.rs/anyhow) (application errors) |
@@ -126,3 +109,15 @@ For the roadmap of deferred features, see the [FAQ](docs/FAQ.md#what-future-feat
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Development / Contributing
+
+See
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — getting started, general development principles, guidelines, and testing standards for all contributors
+- [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) — Rust-specific coding standards, error conventions, and local check commands
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — full architecture intent: components, operations, security model, and design principles
+
+## Info
+
+This project is developed using [Claude Code](https://claude.ai/code) (Anthropic) with [Intent v2.8.0](https://github.com/matthewsinclair/intent) for steel thread and work package management. Plugins: [`rust-analyzer-lsp`](https://github.com/anthropics/claude-code-plugins). Skills: [`in-essentials`](https://github.com/matthewsinclair/intent).
