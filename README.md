@@ -114,6 +114,8 @@ There are a number of client roles:
 
 Combinations of the first three roles are possible: A single logical client could play both Key Holder and Context Holder roles, though generally not for the same index, and also act as an Indexer, or a client could be both the Context Holder and Indexer etc.
 
+The Key Holder must obviously retain the key, however the Indexer has a choice - it can resolve the hash from the context (as long as it know which hash function to apply - and it should always use the SDK for this to ensure hash stability) or it can retain the hash for re-use.
+
 Admin is expected to be CI or Operational role and generally would not be a Key Holder or Context Holder.
 
 #### Example
