@@ -108,10 +108,10 @@ The API is three gRPC services (defined in [`projects/protobuf/`](projects/proto
 All requests require a JWT (ES256) issued via **OAuth2 Client Credentials** flow. Permissions are scoped per index per operation — a token for one index cannot access another. The [Rust SDK](projects/rust/sdk/) and [`udex` CLI](projects/rust/cli/) are the primary clients.
 
 ### Client Usage
-There are a number client roles:
-* Key Holder - uses keys to access data
-* Context Holder - has the context, but doesn't want to hand out its own keys
-* Indexer - performs indexing operations between Key Holders and Context Holders
+There are a number of client roles:
+* Key Holder - uses keys to access data.
+* Context Holder - has the context, but doesn't want to hand out its own keys.
+* Indexer - performs indexing operations between Key Holders and Context Holders.
 * Admin - maintains indices.
 
 Combinations of the first three roles are possible: A single logical client could play both Key Holder and Context Holder roles, though generally not for the same index, and also act as an Indexer, or a client could be both the Context Holder and Indexer etc.
