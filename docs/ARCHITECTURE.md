@@ -1,19 +1,13 @@
 # Udex Architecture Intent
+> **Prerequisites**: Read [Core Concepts](../README.md#core-concepts) in the README before this document. The architecture assumes familiarity with Index, Context, Key, Entry, and the 1:1 invariant.
+
 > See the [FAQs](FAQ.md) for some key decisions
 
 ## Overview
 
-Udex is a universal lookup directory for entities that is intended to be lightweight, fast and efficient for high transaction volumes, possibly across organisational and regulatory boundaries. Udex is intended to be used in complex distributed integration scenarios where it is desirable for internal representations of entities, potentially including the primary keys, not to be exposed across the integration boundaries so as to prevent tight coupling across those boundaries and limit the exposure to [Hyrum's Law](https://www.hyrumslaw.com/).
+Udex is a universal lookup directory for entities designed to be lightweight, fast, and efficient for high transaction volumes, including across organisational and regulatory boundaries. The design is motivated by complex distributed integration scenarios where internal entity representations — including primary keys — must not be exposed across integration boundaries, preventing tight coupling and limiting exposure to [Hyrum's Law](https://www.hyrumslaw.com/).
 
-Udex holds one or more Indices which consist of entries from globally unique keys to contexts: globally unique keys are just that and may be realised as UUIDs or another suitable standard and are allocated by Udex and are intended to be truly globally unique, whereas contexts are just one or more key value pairs, plus a fast hash of the key value pairs that are intended to be the minimum to uniquely and reliably map the entity in some other context (e.g. a source database or registry, or a different Udex index): essentially a Udex entry is Globally Unique Key <-> Context Hash -> Context Key/Value Pairs and an Index is a namespace of Contexts.
-
-Indices will have a name that is a string of lower case latin letters with the option of underscore infixes. Index names must be unique within a given Udex system and are immutable. Indices will also have a human friendly but short description (default empty) and a configurable max number of bulk operations (default 100) per client.
-
-A Globally Unique Key is intended to be just that: unique not only within an index but across all indices (and ideally across everything — i.e. truly global).
-
-A context is uniquely determined by its hash, with the hash determined by Udex by applying its hash function against the key value pairs. One context fingerprint maps to exactly one key within any given index — the 1:1 invariant. The same context can appear only once in an index but could appear in multiple indices with independent keys. A context is not necessarily one to one with an entity: the same entity could be mapped to different contexts with different key value pairs. This is opaque to Udex and is entirely up to how clients use it.
-
-A context, including its hash, will be *immutable* and cannot be updated, though it can be deleted and replaced.
+This document describes the system components, deployment model, operations, security model, and design principles.
 
 ## Components
 
@@ -41,11 +35,13 @@ The sdk will be published as a crate before release.
 
 ## Operations
 
-Udex has two types of operations: Index and Admin.
+> For a service-level overview of the API, see [Access](../README.md#access) in the README. This section specifies operation semantics.
 
-### Index Operations
+Udex has two types of operations: Index Usage and Index Management.
 
-Index operations, including bulk operations, are transactional. The full API is defined in [`udex.entry.v1.proto`](../projects/protobuf/udex.entry.v1.proto).
+### Index Usage Operations
+
+Index usage operations, including bulk operations, are transactional. The full API is defined in [`udex.entry.v1.proto`](../projects/protobuf/udex.entry.v1.proto).
 
 * **Create** an entry for a context, returning a unique key. Idempotent — if the context already exists in the index, the existing key is returned unchanged; no duplicate is created.
 * **Delete** an entry by key. Removes the key-to-context binding.
@@ -54,7 +50,7 @@ Index operations, including bulk operations, are transactional. The full API is 
 
 All operations can be performed in bulk up to a configurable limit per index. Bulk writes are transactional — if any operation fails, all are rolled back. Create and Lookup are the most commonly used operations and are the most optimised.
 
-### Admin Operations
+### Index Management Operations
 
 Admin operations are exposed as the `IndexService` gRPC API (defined in [`udex.index.v1.proto`](../projects/protobuf/udex.index.v1.proto)). Initial indices can also be declared in the server configuration file, which applies them on startup.
 
@@ -66,9 +62,7 @@ Admin operations are exposed as the `IndexService` gRPC API (defined in [`udex.i
 
 ## Usage
 
-Udex is intended to be used by other systems. In general a "source" system will generate an entry by sending the desired context for the entity to Udex, and Udex will generate the entry with a key. The source then uses the key in integration for the entity with other parties. It may choose to use different keys and contexts for the same entity.
-
-> **Example**: in an Open Banking environment, customer and account identifiers are required to be stable vs changes in the underlying systems but also not shared between different data holders/partners, so that the compromise of one data holder does not compromise the others. Udex provides the stable, opaque key that can be used across integration boundaries.
+See [Client Usage](../README.md#client-usage) in the README for client roles, role combinations, and sequence diagrams illustrating typical usage patterns.
 
 ## What Udex Is Not
 
