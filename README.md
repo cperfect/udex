@@ -21,9 +21,9 @@ It has been built with the following integration and data management scenarios i
 
 It is not intended to be a generic entity database and aggregate queries are deliberately not supported.
 
-For full detail on the data model, operations, components, security model, and design principles, see [docs/intent/ARCHITECTURE.md](docs/intent/ARCHITECTURE.md).
+For full detail on the data model, operations, components, security model, and design principles, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-For common questions see the [FAQs](FAQ.md)
+For common questions see the [FAQs](docs/FAQ.md)
 
 > This project also gives me chance to learn rust, develop AI coding processes and tools and play with a few other technologies.
 
@@ -33,11 +33,11 @@ A **context** is a set of key-value pairs that uniquely describes an entity at a
 
 > **One context fingerprint maps to exactly one entry key — always.**
 
-See [the FAQ](FAQ.md#why-are-keyscontexts-11) for the reasoning behind this.
+See [the FAQ](docs/FAQ.md#why-are-keyscontexts-11) for the reasoning behind this.
 
 `create_entry` is idempotent: submitting the same context twice returns the same key both times. No duplicates accumulate. For the rationale behind this design and how to handle key migrations, 
 
-See [the FAQ](FAQ.md#why-are-contexts-immutable)  for the reasoning behind this.
+See [the FAQ](docs/FAQ.md#why-are-contexts-immutable)  for the reasoning behind this.
 
 ## Getting Started
 
@@ -103,7 +103,7 @@ sudo apt-get update && sudo apt-get install trivy
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) — general development principles, guidelines, and testing standards for all contributors
 - [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) — Rust-specific coding standards, error conventions, and local check commands
-- [docs/intent/ARCHITECTURE.md](docs/intent/ARCHITECTURE.md) — full architecture intent: components, operations, security model, and design principles
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — full architecture intent: components, operations, security model, and design principles
 
 This project is developed using [Claude Code](https://claude.ai/code) (Anthropic) with [Intent v2.8.0](https://github.com/matthewsinclair/intent) for steel thread and work package management. Plugins: [`rust-analyzer-lsp`](https://github.com/anthropics/claude-code-plugins). Skills: [`in-essentials`](https://github.com/matthewsinclair/intent).
 
@@ -121,7 +121,7 @@ This project is developed using [Claude Code](https://claude.ai/code) (Anthropic
 | CLI | [clap](https://docs.rs/clap) — `udex` binary for server lifecycle, index/entry management, JWT inspection, and context hashing |
 | Error handling | [thiserror](https://docs.rs/thiserror) (library errors) + [anyhow](https://docs.rs/anyhow) (application errors) |
 
-For the roadmap of deferred features, see the [FAQ](FAQ.md#what-future-features-might-udex-support).
+For the roadmap of deferred features, see the [FAQ](docs/FAQ.md#what-future-features-might-udex-support).
 
 ## License
 

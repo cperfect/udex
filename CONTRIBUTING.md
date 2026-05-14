@@ -43,7 +43,35 @@ Prefer integration test coverage over unit tests (Test Diamond) — integration 
 
 Tests **MUST** be automated and reliable. Flakey tests are broken tests — fix the root cause, don't skip or retry.
 
-## General Development Guidelines
+## Repo Structure
+> Part of the thinking here is to allow AI agents to focus on specific areas to avoid context bloat.
+
+```text
+/
+├── projects/              # Code projects, divided by technology
+│   ├── protobuf/          # .proto definitions — source of truth for all API types
+│   ├── compose/           # Docker Compose for local dev (PostgreSQL + Hydra)
+│   └── rust/              # Rust workspace (see projects/rust/CONTRIBUTING.md)
+│       ├── api/           # udex-api — generated types, authz, hashing; no I/O
+│       ├── server/        # udex-server — gRPC handlers, authn, config, logging
+│       ├── datastore/     # udex-datastore — Datastore/Migrator traits + PostgreSQL impl
+│       ├── sdk/           # udex-sdk — client SDK
+│       └── cli/           # udex-cli — CLI binary
+├── docs/                  # Project-level documentation
+│   ├── ARCHITECTURE.md    # Data model, operations, security model, design principles
+│   ├── FAQ.md             # Design rationale and common questions
+│   ├── SECRETS.md         # Inventory of all credentials and key material
+│   └── archive/           # Historical working documents
+├── scripts/               # Setup scripts: gen-env.sh, gen-keys-and-certs.sh, hydra-create-client.sh
+├── intent/                # Intent CLI Project tracking (steel threads, LLM guidelines)
+├── README.md              # Project overview and getting started
+├── SECURITY.md            # Vulnerability reporting policy
+└── CONTRIBUTING.md        # This file
+```
+
+The API definitions in `projects/protobuf/` drive code generation for the server, SDK, and CLI — if you are changing an API, start there. The Rust workspace dependency order is `api` → `datastore` / `server` / `sdk` → `cli`.
+
+## General Development Principals & Guidelines
 > See also the code the specific development : e.g. for rust [./projects/rust/CONTRIBTING.md](./projects/rust/CONTRIBTING.md)
 
 ### Princples
@@ -66,7 +94,7 @@ Tests **MUST** be automated and reliable. Flakey tests are broken tests — fix 
 1. **Configuration MUST be consumed as static or injected values** — the application layer MUST NOT mutate configuration at runtime. Dynamic configuration (e.g. via etcd) is handled at the infrastructure layer before values reach the application.
 
 #### Security
-1. **`SECRETS.md` MUST be kept current** — any change that adds, removes, or modifies a credential, key, certificate, or closely associated principal (e.g. OAuth client ID, JWKS URL) MUST include a corresponding update to [`SECRETS.md`](./SECRETS.md) in the same commit.
+1. **`SECRETS.md` MUST be kept current** — any change that adds, removes, or modifies a credential, key, certificate, or closely associated principal (e.g. OAuth client ID, JWKS URL) MUST include a corresponding update to [`SECRETS.md`](docs/SECRETS.md) in the same commit.
 1. **Never commit real credentials** — test fixtures MUST use purpose-generated dev-only values. Production credentials MUST be supplied at runtime via environment variables or a secrets manager.
 
 #### Development
@@ -83,4 +111,12 @@ Tests **MUST** be automated and reliable. Flakey tests are broken tests — fix 
 1. **Tests MUST be automated**
 1. **Tests SHOULD be reliable** flakey tests are broken tests. Either fix what is being tested of fix the tests.
 1. **Overall Test Coverage SHOULD aim towards the Test Diamond** As opposed to the Test Pyramid. That is Integration Teating should have the most coverage (ideally tending to 100%), and UI and unit testing are less important.
+
+
+#### Docs
+* Keep general docs at the top level and keep other docs closest to where they are used.
+* Each code project should have its own README.md. If there are supporting docs specific to a project rather than general these can go in the project as well in docs subdirectory if necessary.
+* Tech specific CONTRIBUTION
+* Unless there is a specific need/standard for a markdown or similar doc to be elsewhere (e.g. READMEs, SECURITY.md) put in the <workspace>/docs
+* Use links to avoid duplication
 

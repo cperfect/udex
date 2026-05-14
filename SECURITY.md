@@ -94,7 +94,7 @@ values cannot appear in process listings or shell history.
 
 ### Secret inventory
 
-See [`SECRETS.md`](./SECRETS.md) for the full inventory of credentials, keys,
+See [`SECRETS.md`](docs/SECRETS.md) for the full inventory of credentials, keys,
 certificates, and their sources.
 
 ## Scope
