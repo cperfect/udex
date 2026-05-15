@@ -31,7 +31,7 @@ These components are used during development and testing but are not part of a p
 
 The only deployable artefact is the CLI - this is used to start the server and perform administrative tasks. The Server will take care of initialising the DB given the correct access and configuration.
 
-The sdk will be published as a crate before release.
+The SDK will be published as a crate before release.
 
 ## Operations
 
