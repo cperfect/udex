@@ -57,6 +57,10 @@ connection_timeout_secs = 10
 query_timeout_secs = 30
 # Allow non-TLS connections — never set to true in production.
 dangerous_allow_non_tls = false
+# Allow the server to apply outstanding migrations on startup.
+# Defaults to false. In production, prefer running `udex migrate apply`
+# as a dedicated pre-deploy step rather than enabling this.
+# apply_migrations = false
 "#;
 
 /// Generate a default configuration file.

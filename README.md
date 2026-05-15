@@ -133,7 +133,7 @@ As an example of this see [Open Banking Consumer Data Right (CDR)](./docs/use_ca
 | Serialization | [serde](https://docs.rs/serde) / [serde_json](https://docs.rs/serde_json) / [serde_yaml](https://docs.rs/serde_yaml) — derived on all API types; drives JSON and YAML output in the CLI |
 | Authorization | OAuth2 Client Credentials flow — JWT (ES256) validated on every request via [jsonwebtoken](https://docs.rs/jsonwebtoken); permissions are scoped per index per operation |
 | Logging | [tracing](https://docs.rs/tracing) + [tracing-subscriber](https://docs.rs/tracing-subscriber) (structured JSON in production, human-readable in development) |
-| CLI | [clap](https://docs.rs/clap) — `udex` binary for server lifecycle, index/entry management, JWT inspection, and context hashing |
+| CLI | [clap](https://docs.rs/clap) — `udex` binary for server lifecycle, database migration management, index/entry management, JWT inspection, and context hashing |
 | Error handling | [thiserror](https://docs.rs/thiserror) (library errors) + [anyhow](https://docs.rs/anyhow) (application errors) |
 
 For the roadmap of deferred features, see the [FAQ](docs/FAQ.md#what-future-features-might-udex-support).
@@ -147,6 +147,42 @@ MIT — see [LICENSE](LICENSE).
 
 ### Deployment
 > Placeholder will be filled in prior to release
+
+### Database migrations
+
+Udex uses [sqlx](https://docs.rs/sqlx) migrations applied automatically in the correct order. The server **never** mutates the schema without explicit permission.
+
+#### How it works
+
+On every startup the server checks that the database schema version matches the version expected by the running binary. If they do not match, the server **refuses to start** and logs an error with the current and expected version numbers. This prevents a code/schema mismatch from silently corrupting data.
+
+The `apply_migrations` config option (default `false`) controls whether the server is also permitted to apply outstanding migrations before that check runs:
+
+```toml
+[datastore]
+# false (default) — server checks version but will not migrate; use `udex migrate apply` instead.
+# true  — server applies any outstanding migrations on startup, then checks.
+apply_migrations = false
+```
+
+#### Recommended workflow
+
+Run migrations as a dedicated pre-deploy step, before starting the new server binary:
+
+```bash
+# 1. Confirm what will be applied (exits non-zero if behind)
+udex migrate check --config udex.toml
+
+# 2. Apply outstanding migrations
+udex migrate apply --config udex.toml
+
+# 3. Start the server (will refuse to start if schema is still wrong)
+udex serve --config udex.toml
+```
+
+Both commands read only the `[datastore]` section of the config file, so TLS certificate files do not need to be present when running migrations.
+
+Setting `apply_migrations = true` is convenient for local development and CI environments where the server process is authorised to modify the schema. It is **not recommended for production** because it couples schema changes to server restarts and removes the explicit pre-deploy step.
 
 ## Development / Contributing
 
