@@ -124,10 +124,10 @@ Tests **MUST** be automated and reliable. Flakey tests are broken tests — fix 
 
 The API definitions in `projects/protobuf/` drive code generation for the server, SDK, and CLI — if you are changing an API, start there. The Rust workspace dependency order is `api` → `datastore` / `server` / `sdk` → `cli`.
 
-## General Development Principals & Guidelines
-> See also the code the specific development : e.g. for rust [./projects/rust/CONTRIBUTING.md](./projects/rust/CONTRIBUTING.md)
+## General Development Principles & Guidelines
+> See also language-specific development guidance, e.g. for Rust [./projects/rust/CONTRIBUTING.md](./projects/rust/CONTRIBUTING.md)
 
-### Princples
+### Principles
 1. **Think of the Next Guy** Assume that someone else will need to read, understand and modify your work (possibly under stress in the early hours of the morning during an outage). Do not assume they know what you know and think like you do. Do not assume you will be available to speak to them. Don't leave landmines behind you or if you absolutely have to leave GREAT BIG WARNINGS.
 1. **State is hard** It's easy to break, hard to fix and hard to test. Be very careful in what state is stored where and prefer as few stores of state as possible.
 1. **Code is cheap** Code is cheap in the AI world. Don't be afraid to try different approaches and then throw away what doesn't work. Don't let DRY drive complexity when a simple piece of code can be copied. Prefer putting more effort and complexity into code rather than making state management problems.
@@ -136,7 +136,7 @@ The API definitions in `projects/protobuf/` drive code generation for the server
 ### Guidelines
 > The key words “MUST”, “MUST NOT”, “REQUIRED”, “SHALL”, “SHALL NOT”, “SHOULD”, “SHOULD NOT”, “RECOMMENDED”, “MAY”, and “OPTIONAL” in this document are to be interpreted as described in [RFC 2119](https://www.ietf.org/rfc/rfc2119.txt).
 
-> Sub-projects may also define there own guidelines in addition - e.g. for a specific coding language or technology.
+> Sub-projects may also define their own guidelines in addition, e.g. for a specific coding language or technology.
 
 #### Architecture
 1. **Udex SHOULD use internet standards or de-facto standards** e.g. use OAuth2 vs custom Auth frameworks.
@@ -162,7 +162,7 @@ The API definitions in `projects/protobuf/` drive code generation for the server
 1. **No error should just be ignored** - either it is worth noticing or it isn't an error
 ### Testing
 1. **Tests MUST be automated**
-1. **Tests SHOULD be reliable** flakey tests are broken tests. Either fix what is being tested of fix the tests.
+1. **Tests SHOULD be reliable** flakey tests are broken tests. Either fix what is being tested or fix the tests.
 1. **Overall Test Coverage SHOULD aim towards the Test Diamond** As opposed to the Test Pyramid. That is Integration Teating should have the most coverage (ideally tending to 100%), and UI and unit testing are less important.
 
 
@@ -172,4 +172,3 @@ The API definitions in `projects/protobuf/` drive code generation for the server
 * Tech-specific contribution guidance should live with the relevant project or technology.
 * Unless there is a specific need or standard for a Markdown or similar document to be elsewhere (for example `README.md` files or `SECURITY.md`), put it in `docs/`.
 * Use links to avoid duplication.
-
