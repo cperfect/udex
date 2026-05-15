@@ -3,7 +3,7 @@ verblock: "15 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Enforce check_migration_version on every startup"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-02: Enforce check_migration_version on every startup

@@ -14,9 +14,10 @@ use udex_api::{
     index::index_service_server::IndexServiceServer,
 };
 use udex_datastore::Datastore;
-use udex_datastore::{config::DatastoreConfig, postgres::PostgresDatastore, Migrator}; // trait must be in scope for .migrate() to be callable
+use udex_datastore::{config::DatastoreConfig, postgres::PostgresDatastore, Migrator};
 
-/// Initialises the PostgreSQL datastore, runs migrations, and starts the server.
+/// Initialises the PostgreSQL datastore, conditionally applies migrations, enforces
+/// schema version, and starts the server.
 ///
 /// This is the primary entry point for production use. For tests, use [`serve`]
 /// directly with a pre-built datastore.
@@ -24,11 +25,114 @@ pub async fn start(
     server_config: ServerConfig,
     datastore_config: DatastoreConfig,
 ) -> Result<(), Error> {
+    let apply_migrations = datastore_config.apply_migrations;
     let datastore = PostgresDatastore::init(datastore_config)
         .await
         .map_err(Error::Datastore)?;
-    datastore.migrate().await.map_err(Error::Datastore)?;
+    apply_and_check_migrations(&*datastore, apply_migrations).await?;
     serve(server_config, *datastore).await
+}
+
+/// Conditionally runs migrations then enforces the schema version.
+///
+/// If `apply_migrations` is true, outstanding migrations are applied first.
+/// The version check always runs afterwards; a mismatch is logged at ERROR
+/// level and returned as an error so the caller can abort startup.
+async fn apply_and_check_migrations(
+    migrator: &dyn Migrator,
+    apply_migrations: bool,
+) -> Result<(), Error> {
+    if apply_migrations {
+        tracing::info!("Applying database migrations");
+        migrator.migrate().await.map_err(Error::Datastore)?;
+    }
+    migrator.check_migration_version().await.map_err(|e| {
+        tracing::error!(
+            error = %e,
+            apply_migrations,
+            "Database schema version mismatch — server cannot start; \
+             run `udex migrate apply` or set apply_migrations=true to resolve"
+        );
+        Error::Datastore(e)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+    use udex_datastore::{Error as DatastoreError, Migrator};
+
+    struct MockMigrator {
+        current: AtomicI64,
+        latest: i64,
+        migrate_called: AtomicBool,
+    }
+
+    impl MockMigrator {
+        fn new(current: i64, latest: i64) -> Self {
+            Self {
+                current: AtomicI64::new(current),
+                latest,
+                migrate_called: AtomicBool::new(false),
+            }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl Migrator for MockMigrator {
+        async fn migrate(&self) -> Result<(), DatastoreError> {
+            self.migrate_called.store(true, Ordering::SeqCst);
+            self.current.store(self.latest, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn current_version(&self) -> Result<i64, DatastoreError> {
+            Ok(self.current.load(Ordering::SeqCst))
+        }
+        async fn latest_version(&self) -> Result<i64, DatastoreError> {
+            Ok(self.latest)
+        }
+    }
+
+    #[tokio::test]
+    async fn migration_apply_false_db_current_ok() {
+        let m = MockMigrator::new(1, 1);
+        assert!(apply_and_check_migrations(&m, false).await.is_ok());
+        assert!(
+            !m.migrate_called.load(Ordering::SeqCst),
+            "migrate must not be called when apply_migrations=false"
+        );
+    }
+
+    #[tokio::test]
+    async fn migration_apply_false_db_behind_fails() {
+        let m = MockMigrator::new(0, 1);
+        assert!(apply_and_check_migrations(&m, false).await.is_err());
+        assert!(
+            !m.migrate_called.load(Ordering::SeqCst),
+            "migrate must not be called when apply_migrations=false"
+        );
+    }
+
+    #[tokio::test]
+    async fn migration_apply_true_db_behind_migrates_and_succeeds() {
+        let m = MockMigrator::new(0, 1);
+        assert!(apply_and_check_migrations(&m, true).await.is_ok());
+        assert!(
+            m.migrate_called.load(Ordering::SeqCst),
+            "migrate must be called when apply_migrations=true"
+        );
+    }
+
+    #[tokio::test]
+    async fn migration_apply_true_db_current_still_calls_migrate() {
+        let m = MockMigrator::new(1, 1);
+        assert!(apply_and_check_migrations(&m, true).await.is_ok());
+        assert!(
+            m.migrate_called.load(Ordering::SeqCst),
+            "migrate must be called even when db is already current"
+        );
+    }
 }
 
 /// Starts the Udex server with the provided configuration and datastore.
