@@ -585,6 +585,9 @@ async fn test_sdk_bulk_write_and_read() {
             bulk_write_entry_operation_result::Result::DeleteEntry(_) => {
                 panic!("unexpected delete")
             }
+            bulk_write_entry_operation_result::Result::LookupOrCreate(_) => {
+                panic!("unexpected lookup_or_create")
+            }
         })
         .collect();
 
@@ -617,6 +620,82 @@ async fn test_sdk_bulk_write_and_read() {
             }
         }
     }
+}
+
+/// `lookup_or_create_entry` — first call for an unseen context creates the entry.
+///
+/// Exercises the client-side hash computation path: `lookup_or_create_entry`
+/// hashes the ContextInput internally before sending the RPC, so the test
+/// never needs to supply or compute a hash directly.  The response's
+/// `context_hash` must equal what `create_entry` would return for the same
+/// pairs, confirming the hash algorithm is stable across SDK methods.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_lookup_or_create_creates_new_entry() {
+    let d = data(false).await;
+    let client = &d.0;
+    let index_name = &d.1;
+
+    let ctx = context_input(&[("loc_sdk_key", "loc_sdk_create_value")]);
+
+    let resp = client
+        .lookup_or_create_entry(index_name, ctx.clone())
+        .await
+        .expect("lookup_or_create_entry failed");
+
+    assert!(resp.created, "created must be true for an unseen context");
+    assert!(!resp.key.is_empty(), "key must not be empty");
+    assert!(
+        !resp.context_hash.is_empty(),
+        "context_hash must not be empty"
+    );
+
+    // The hash must be consistent with what create_entry returns for the same pairs.
+    let via_create = client
+        .create_entry(index_name, ctx)
+        .await
+        .expect("create_entry failed");
+    assert_eq!(
+        resp.context_hash, via_create.context_hash,
+        "lookup_or_create and create_entry must compute the same context hash"
+    );
+    assert_eq!(
+        resp.key, via_create.key,
+        "lookup_or_create and create_entry must return the same key for the same context"
+    );
+}
+
+/// `lookup_or_create_entry` — second call with the same context returns the
+/// existing key with created=false.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_lookup_or_create_returns_existing_entry() {
+    let d = data(false).await;
+    let client = &d.0;
+    let index_name = &d.1;
+
+    let ctx = context_input(&[("loc_sdk_key", "loc_sdk_found_value")]);
+
+    let first = client
+        .lookup_or_create_entry(index_name, ctx.clone())
+        .await
+        .expect("first lookup_or_create_entry failed");
+    assert!(first.created, "first call must create the entry");
+
+    let second = client
+        .lookup_or_create_entry(index_name, ctx)
+        .await
+        .expect("second lookup_or_create_entry failed");
+
+    assert!(!second.created, "second call must not create a new entry");
+    assert_eq!(
+        second.key, first.key,
+        "second call must return the same key as the first"
+    );
+    assert_eq!(
+        second.context_hash, first.context_hash,
+        "context_hash must be stable across calls"
+    );
 }
 
 #[rstest]
@@ -925,6 +1004,9 @@ async fn test_hydra_sdk_bulk_write_and_read() {
             bulk_write_entry_operation_result::Result::CreateEntry(c) => c.key.clone(),
             bulk_write_entry_operation_result::Result::DeleteEntry(_) => {
                 panic!("unexpected delete")
+            }
+            bulk_write_entry_operation_result::Result::LookupOrCreate(_) => {
+                panic!("unexpected lookup_or_create")
             }
         })
         .collect();

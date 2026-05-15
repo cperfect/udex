@@ -26,6 +26,9 @@ const BULK_SEED_COUNT: usize = 1000;
 /// Context hash used exclusively by `bench_get_entry_by_context` so the
 /// lookup always measures a point lookup against a known-present entry.
 const GET_BY_CONTEXT_BENCH_HASH: &str = "bench-context-hash-get-by-context-only";
+/// Context hash used exclusively by `bench_lookup_or_create_found` so the
+/// found-path lookup always measures against a known-present entry.
+const LOOKUP_OR_CREATE_FOUND_BENCH_HASH: &str = "bench-context-hash-lookup-or-create-found-only";
 
 /// All resources needed to run datastore benchmarks.
 struct BenchFixture {
@@ -72,6 +75,24 @@ impl BenchFixture {
                 value: Some(Value {
                     value: Some(udex_api::entry::value::Value::StringValue(
                         "bench_get_by_context_only".to_string(),
+                    )),
+                }),
+                kek_id: None,
+                dek: None,
+            }],
+        }
+    }
+
+    /// Context used exclusively by `bench_lookup_or_create_found` so every
+    /// iteration measures the found path against a known-present entry.
+    fn lookup_or_create_found_bench_context() -> Context {
+        Context {
+            hash: LOOKUP_OR_CREATE_FOUND_BENCH_HASH.to_string(),
+            pairs: vec![KeyValuePair {
+                key: "bench_user_id".to_string(),
+                value: Some(Value {
+                    value: Some(udex_api::entry::value::Value::StringValue(
+                        "bench_lookup_or_create_found_only".to_string(),
                     )),
                 }),
                 kek_id: None,
@@ -287,6 +308,53 @@ fn bench_delete_entry(c: &mut Criterion) {
     });
 }
 
+fn bench_lookup_or_create_create(c: &mut Criterion) {
+    let fix = fixture();
+
+    c.bench_function("datastore/pg/entry/lookup_or_create_create", |b| {
+        b.to_async(fix.rt).iter(|| async {
+            fix.datastore
+                .lookup_or_create_entry(Entry {
+                    key: Uuid::new_v4(),
+                    context: fix.unique_context(),
+                    index_name: fix.index_name.clone(),
+                })
+                .await
+                .expect("lookup_or_create_entry failed");
+        });
+    });
+}
+
+fn bench_lookup_or_create_found(c: &mut Criterion) {
+    let fix = fixture();
+
+    // Seed exactly one entry with a context used by no other benchmark so
+    // every iteration measures the found path against a known-present entry.
+    fix.rt.block_on(async {
+        fix.datastore
+            .lookup_or_create_entry(Entry {
+                key: Uuid::new_v4(),
+                context: BenchFixture::lookup_or_create_found_bench_context(),
+                index_name: fix.index_name.clone(),
+            })
+            .await
+            .expect("create seed entry for lookup_or_create_found bench");
+    });
+
+    c.bench_function("datastore/pg/entry/lookup_or_create_found", |b| {
+        b.to_async(fix.rt).iter(|| async {
+            fix.datastore
+                .lookup_or_create_entry(Entry {
+                    key: Uuid::new_v4(),
+                    context: BenchFixture::lookup_or_create_found_bench_context(),
+                    index_name: fix.index_name.clone(),
+                })
+                .await
+                .expect("lookup_or_create_entry failed");
+        });
+    });
+}
+
 // --- Bulk benchmarks ---
 
 fn bench_bulk_write(c: &mut Criterion) {
@@ -312,6 +380,36 @@ fn bench_bulk_write(c: &mut Criterion) {
                     .bulk_entry_write(ops)
                     .await
                     .expect("bulk_entry_write failed");
+            });
+        });
+    }
+
+    group.finish();
+}
+
+fn bench_bulk_write_lookup_or_create(c: &mut Criterion) {
+    let fix = fixture();
+
+    let mut group = c.benchmark_group("datastore/pg/bulk_write_lookup_or_create");
+    group.measurement_time(Duration::from_secs(30));
+
+    for n in [10usize, 100, 1000] {
+        group.throughput(Throughput::Elements(n as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
+            b.to_async(fix.rt).iter(|| async move {
+                let ops: Vec<EntryWriteOperation> = (0..n)
+                    .map(|_| {
+                        EntryWriteOperation::LookupOrCreate(Entry {
+                            key: Uuid::new_v4(),
+                            context: fix.unique_context(),
+                            index_name: fix.index_name.clone(),
+                        })
+                    })
+                    .collect();
+                fix.datastore
+                    .bulk_entry_write(ops)
+                    .await
+                    .expect("bulk_entry_write lookup_or_create failed");
             });
         });
     }
@@ -350,7 +448,10 @@ criterion_group!(
     bench_get_entry_by_key,
     bench_get_entry_by_context,
     bench_delete_entry,
+    bench_lookup_or_create_create,
+    bench_lookup_or_create_found,
     bench_bulk_write,
     bench_bulk_read,
+    bench_bulk_write_lookup_or_create,
 );
 criterion_main!(benches);

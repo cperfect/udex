@@ -15,8 +15,9 @@ use std::time::Duration;
 use udex_api::entry::{
     bulk_read_entry_operation::Operation as ReadOp, BulkReadEntryOperation,
     BulkReadEntryOperationRequest, CreateEntryRequest, DeleteEntryRequest,
-    LookupContextByKeyRequest, LookupKeyByContextRequest,
+    LookupContextByKeyRequest, LookupKeyByContextOrCreateRequest, LookupKeyByContextRequest,
 };
+use udex_api::hash::xxh3_context_hash;
 
 /// `grpc/entry/create` — insert one entry through the full gRPC stack.
 ///
@@ -207,13 +208,104 @@ fn bench_bulk_read(c: &mut Criterion) {
     group.finish();
 }
 
+/// `grpc/entry/lookup_or_create_create` — lookup-or-create where the entry does not exist.
+///
+/// Each iteration uses a unique context so every call is a genuine insert,
+/// exercising the full write path: hash recomputation, conflict check, and insert.
+fn bench_lookup_or_create(c: &mut Criterion) {
+    let fix = common::fixture();
+
+    c.bench_function("grpc/entry/lookup_or_create_create", |b| {
+        b.to_async(fix.rt()).iter(|| async {
+            let ctx = fix.unique_context();
+            let hash = xxh3_context_hash(&ctx).expect("hash context for bench");
+            let mut client = fix.entry_client();
+            client
+                .lookup_key_by_context_or_create(fix.authed(LookupKeyByContextOrCreateRequest {
+                    index_name: fix.index_name.clone(),
+                    context: Some(ctx),
+                    context_hash: hash,
+                }))
+                .await
+                .expect("lookup_key_by_context_or_create failed");
+        });
+    });
+}
+
+/// `grpc/entry/lookup_or_create_found` — lookup-or-create where the entry already exists.
+///
+/// Seeds exactly one entry before measuring so every iteration measures the
+/// found path: hash recomputation and a single point lookup with no insert.
+fn bench_lookup_or_create_found(c: &mut Criterion) {
+    let fix = common::fixture();
+
+    let found_hash = fix.rt().block_on(async {
+        let ctx = common::BenchFixture::get_lookup_or_create_seed_context();
+        let hash = xxh3_context_hash(&ctx).expect("hash context for bench");
+        let mut client = fix.entry_client();
+        client
+            .lookup_key_by_context_or_create(fix.authed(LookupKeyByContextOrCreateRequest {
+                index_name: fix.index_name.clone(),
+                context: Some(ctx),
+                context_hash: hash.clone(),
+            }))
+            .await
+            .expect("seed entry for lookup_or_create_found bench");
+        hash
+    });
+
+    c.bench_function("grpc/entry/lookup_or_create_found", |b| {
+        b.to_async(fix.rt()).iter(|| async {
+            let ctx = common::BenchFixture::get_lookup_or_create_seed_context();
+            let mut client = fix.entry_client();
+            client
+                .lookup_key_by_context_or_create(fix.authed(LookupKeyByContextOrCreateRequest {
+                    index_name: fix.index_name.clone(),
+                    context: Some(ctx),
+                    context_hash: found_hash.clone(),
+                }))
+                .await
+                .expect("lookup_key_by_context_or_create failed");
+        });
+    });
+}
+
+/// `grpc/bulk_write_lookup_or_create/<N>` — N lookup_or_create operations in one bulk call.
+///
+/// All `N` operations use unique contexts so every call exercises the create path.
+/// Throughput is reported as operations/sec.
+fn bench_bulk_write_lookup_or_create(c: &mut Criterion) {
+    let fix = common::fixture();
+
+    let mut group = c.benchmark_group("grpc/bulk_write_lookup_or_create");
+    group.measurement_time(Duration::from_secs(30));
+
+    for n in [10usize, 100, 1000] {
+        group.throughput(Throughput::Elements(n as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
+            b.to_async(fix.rt()).iter(|| async move {
+                let mut client = fix.entry_client();
+                client
+                    .bulk_write_entry_operation(fix.authed(fix.bulk_lookup_or_create_request(n)))
+                    .await
+                    .expect("bulk_write_entry_operation lookup_or_create failed");
+            });
+        });
+    }
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_create_entry,
     bench_get_by_key,
     bench_get_by_context,
     bench_delete_entry,
+    bench_lookup_or_create,
+    bench_lookup_or_create_found,
     bench_bulk_write,
     bench_bulk_read,
+    bench_bulk_write_lookup_or_create,
 );
 criterion_main!(benches);

@@ -195,6 +195,8 @@ pub enum EntryCommands {
     Get(EntryGetArgs),
     /// Reverse-lookup entries by context
     Lookup(EntryLookupArgs),
+    /// Look up the key for a context, creating the entry if it does not exist
+    LookupOrCreate(EntryLookupOrCreateArgs),
     /// Delete an entry by key
     Delete(EntryDeleteArgs),
 }
@@ -222,6 +224,16 @@ pub struct EntryGetArgs {
 /// Arguments for `udex entry lookup`.
 #[derive(Parser)]
 pub struct EntryLookupArgs {
+    /// Index name
+    pub index: String,
+    /// Context key=value pairs (may be repeated)
+    #[arg(long = "context", value_name = "KEY=VALUE")]
+    pub context: Vec<String>,
+}
+
+/// Arguments for `udex entry lookup-or-create`.
+#[derive(Parser)]
+pub struct EntryLookupOrCreateArgs {
     /// Index name
     pub index: String,
     /// Context key=value pairs (may be repeated)

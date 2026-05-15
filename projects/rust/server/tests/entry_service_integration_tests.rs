@@ -650,3 +650,251 @@ async fn test_error_handling() {
     let lookup_result = entry_server.lookup_context_by_key(lookup_request).await;
     assert!(lookup_result.is_err(), "Should fail for non-existent key");
 }
+
+// ---------------------------------------------------------------------------
+// lookup_key_by_context_or_create tests
+// ---------------------------------------------------------------------------
+
+/// Helper: build a single-pair ContextInput and its server-computed hash.
+fn loc_context(pair_value: &str) -> (udex_api::entry::ContextInput, String) {
+    use udex_api::entry::{ContextInput, KeyValuePair, Value};
+    use udex_api::hash::xxh3_context_hash;
+
+    let ctx = ContextInput {
+        pairs: vec![KeyValuePair {
+            key: "loc_user".to_string(),
+            value: Some(Value {
+                value: Some(udex_api::entry::value::Value::StringValue(
+                    pair_value.to_string(),
+                )),
+            }),
+            kek_id: None,
+            dek: None,
+        }],
+    };
+    let hash = xxh3_context_hash(&ctx).expect("hash must succeed for valid context");
+    (ctx, hash)
+}
+
+/// lookup_key_by_context_or_create: first call for an unseen context creates
+/// the entry and returns created=true with a valid UUID key.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_lookup_or_create_creates_new_entry() {
+    use tonic::Request;
+    use udex_api::entry::LookupKeyByContextOrCreateRequest;
+
+    let data = data(false).await;
+    let entry_server = &data.0;
+    let index_name = &data.1;
+
+    let (ctx, hash) = loc_context("loc_create_user");
+
+    let resp = entry_server
+        .lookup_key_by_context_or_create(Request::new(LookupKeyByContextOrCreateRequest {
+            index_name: index_name.clone(),
+            context: Some(ctx),
+            context_hash: hash.clone(),
+        }))
+        .await
+        .expect("lookup_or_create on new context should succeed")
+        .into_inner();
+
+    assert!(resp.created, "created must be true for a new entry");
+    assert!(!resp.key.is_empty(), "key must not be empty");
+    assert_eq!(
+        resp.context_hash, hash,
+        "response hash must echo the request hash"
+    );
+    Uuid::parse_str(&resp.key).expect("key must be a valid UUID");
+}
+
+/// lookup_key_by_context_or_create: second call with the same context returns
+/// the existing key unchanged and created=false.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_lookup_or_create_returns_existing_entry() {
+    use tonic::Request;
+    use udex_api::entry::LookupKeyByContextOrCreateRequest;
+
+    let data = data(false).await;
+    let entry_server = &data.0;
+    let index_name = &data.1;
+
+    let (ctx, hash) = loc_context("loc_found_user");
+
+    let first = entry_server
+        .lookup_key_by_context_or_create(Request::new(LookupKeyByContextOrCreateRequest {
+            index_name: index_name.clone(),
+            context: Some(ctx.clone()),
+            context_hash: hash.clone(),
+        }))
+        .await
+        .expect("first lookup_or_create should succeed")
+        .into_inner();
+    assert!(first.created, "first call must create the entry");
+
+    let second = entry_server
+        .lookup_key_by_context_or_create(Request::new(LookupKeyByContextOrCreateRequest {
+            index_name: index_name.clone(),
+            context: Some(ctx),
+            context_hash: hash,
+        }))
+        .await
+        .expect("second lookup_or_create should succeed")
+        .into_inner();
+
+    assert!(!second.created, "second call must not create a new entry");
+    assert_eq!(
+        second.key, first.key,
+        "second call must return the same key as the first"
+    );
+}
+
+/// lookup_key_by_context_or_create: missing context field returns INVALID_ARGUMENT.
+/// Missing context_hash field returns INVALID_ARGUMENT.
+/// Empty index_name returns INVALID_ARGUMENT.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_lookup_or_create_validation_errors() {
+    use tonic::{Code, Request};
+    use udex_api::entry::LookupKeyByContextOrCreateRequest;
+
+    let data = data(false).await;
+    let entry_server = &data.0;
+    let index_name = &data.1;
+
+    let (ctx, hash) = loc_context("loc_validation_user");
+
+    // Missing context
+    let err = entry_server
+        .lookup_key_by_context_or_create(Request::new(LookupKeyByContextOrCreateRequest {
+            index_name: index_name.clone(),
+            context: None,
+            context_hash: hash.clone(),
+        }))
+        .await
+        .expect_err("missing context must be rejected");
+    assert_eq!(
+        err.code(),
+        Code::InvalidArgument,
+        "missing context → INVALID_ARGUMENT"
+    );
+
+    // Missing context_hash
+    let err = entry_server
+        .lookup_key_by_context_or_create(Request::new(LookupKeyByContextOrCreateRequest {
+            index_name: index_name.clone(),
+            context: Some(ctx.clone()),
+            context_hash: String::new(),
+        }))
+        .await
+        .expect_err("empty context_hash must be rejected");
+    assert_eq!(
+        err.code(),
+        Code::InvalidArgument,
+        "empty context_hash → INVALID_ARGUMENT"
+    );
+
+    // Empty index_name
+    let err = entry_server
+        .lookup_key_by_context_or_create(Request::new(LookupKeyByContextOrCreateRequest {
+            index_name: String::new(),
+            context: Some(ctx),
+            context_hash: hash,
+        }))
+        .await
+        .expect_err("empty index_name must be rejected");
+    assert_eq!(
+        err.code(),
+        Code::InvalidArgument,
+        "empty index_name → INVALID_ARGUMENT"
+    );
+}
+
+/// lookup_key_by_context_or_create: a context_hash that does not match the
+/// server-computed hash returns INVALID_ARGUMENT immediately, before any
+/// database access — even when the entry does not exist.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_lookup_or_create_hash_mismatch_invalid_argument() {
+    use tonic::{Code, Request};
+    use udex_api::entry::LookupKeyByContextOrCreateRequest;
+
+    let data = data(false).await;
+    let entry_server = &data.0;
+    let index_name = &data.1;
+
+    let (ctx, _correct_hash) = loc_context("loc_mismatch_user");
+
+    let err = entry_server
+        .lookup_key_by_context_or_create(Request::new(LookupKeyByContextOrCreateRequest {
+            index_name: index_name.clone(),
+            context: Some(ctx),
+            context_hash: "deliberately-wrong-hash".to_string(),
+        }))
+        .await
+        .expect_err("hash mismatch must be rejected");
+
+    assert_eq!(
+        err.code(),
+        Code::InvalidArgument,
+        "hash mismatch must return INVALID_ARGUMENT"
+    );
+    assert!(
+        err.message().contains("context_hash mismatch"),
+        "error message must identify the mismatch: {}",
+        err.message()
+    );
+}
+
+/// lookup_or_create inside a bulk write: verifies created=true on first call
+/// and that the LookupOrCreate result variant is populated in the bulk response.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_bulk_write_lookup_or_create() {
+    use tonic::Request;
+    use udex_api::entry::{
+        bulk_write_entry_operation::Operation,
+        bulk_write_entry_operation_result::Result as WriteResult, BulkWriteEntryOperation,
+        BulkWriteEntryOperationRequest, LookupKeyByContextOrCreateRequest,
+    };
+
+    let data = data(false).await;
+    let entry_server = &data.0;
+    let index_name = &data.1;
+
+    let (ctx, hash) = loc_context("loc_bulk_user");
+
+    let resp = entry_server
+        .bulk_write_entry_operation(Request::new(BulkWriteEntryOperationRequest {
+            index_name: index_name.clone(),
+            operations: vec![BulkWriteEntryOperation {
+                operation: Some(Operation::LookupOrCreate(
+                    LookupKeyByContextOrCreateRequest {
+                        index_name: index_name.clone(),
+                        context: Some(ctx),
+                        context_hash: hash.clone(),
+                    },
+                )),
+            }],
+        }))
+        .await
+        .expect("bulk write with lookup_or_create should succeed")
+        .into_inner();
+
+    assert_eq!(resp.results.len(), 1, "should have one result");
+
+    match resp.results[0].result.as_ref().expect("result must be set") {
+        WriteResult::LookupOrCreate(r) => {
+            assert!(r.created, "created must be true for a new entry");
+            assert!(!r.key.is_empty(), "key must not be empty");
+            assert_eq!(
+                r.context_hash, hash,
+                "response hash must echo the request hash"
+            );
+            Uuid::parse_str(&r.key).expect("key must be a valid UUID");
+        }
+        other => panic!("expected LookupOrCreate result, got {:?}", other),
+    }
+}

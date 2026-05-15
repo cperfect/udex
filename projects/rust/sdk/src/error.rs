@@ -60,6 +60,11 @@ pub enum Error {
     #[error("RPC error: {0}")]
     Rpc(RpcStatus),
 
+    /// The caller supplied an argument that the client cannot process before
+    /// contacting the server (e.g. a context that cannot be hashed).
+    #[error("invalid argument: {0}")]
+    InvalidArgument(String),
+
     /// The server returned a well-formed gRPC response with a missing or
     /// unexpected payload (client-side protocol violation detection).
     #[error("invalid server response: {0}")]

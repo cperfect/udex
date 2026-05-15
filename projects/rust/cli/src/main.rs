@@ -184,6 +184,9 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
                 EntryCommands::Lookup(args) => {
                     commands::entry::lookup(&client, args, &output).await
                 }
+                EntryCommands::LookupOrCreate(args) => {
+                    commands::entry::lookup_or_create(&client, args, &output).await
+                }
                 EntryCommands::Delete(args) => {
                     commands::entry::delete(&client, args, &output).await
                 }

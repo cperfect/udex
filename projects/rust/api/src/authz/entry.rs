@@ -9,6 +9,7 @@ use crate::entry::{
     BulkReadEntryOperationResponse, BulkWriteEntryOperationRequest,
     BulkWriteEntryOperationResponse, CreateEntryRequest, CreateEntryResponse, DeleteEntryRequest,
     DeleteEntryResponse, LookupContextByKeyRequest, LookupContextByKeyResponse,
+    LookupKeyByContextOrCreateRequest, LookupKeyByContextOrCreateResponse,
     LookupKeyByContextRequest, LookupKeyByContextResponse,
 };
 
@@ -150,6 +151,24 @@ where
 
         self.inner.bulk_read_entry_operation(request).await
     }
+
+    /// LookupKeyByContextOrCreate looks up or creates an entry. Requires write permission.
+    async fn lookup_key_by_context_or_create(
+        &self,
+        request: tonic::Request<LookupKeyByContextOrCreateRequest>,
+    ) -> std::result::Result<tonic::Response<LookupKeyByContextOrCreateResponse>, tonic::Status>
+    {
+        let claims = request
+            .extensions()
+            .get::<Claims>()
+            .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
+
+        if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
+            return Err(tonic::Status::permission_denied("Insufficient permissions"));
+        }
+
+        self.inner.lookup_key_by_context_or_create(request).await
+    }
 }
 
 impl Permissable<CreateEntryRequest> for CreateEntryRequest {
@@ -185,6 +204,12 @@ impl Permissable<BulkWriteEntryOperationRequest> for BulkWriteEntryOperationRequ
 impl Permissable<BulkReadEntryOperationRequest> for BulkReadEntryOperationRequest {
     fn required_permissions(&self) -> Vec<String> {
         vec![format!("udex:entry:v1:{}:read", self.index_name)]
+    }
+}
+
+impl Permissable<LookupKeyByContextOrCreateRequest> for LookupKeyByContextOrCreateRequest {
+    fn required_permissions(&self) -> Vec<String> {
+        vec![format!("udex:entry:v1:{}:write", self.index_name)]
     }
 }
 
@@ -230,6 +255,11 @@ mod tests {
                 &self,
                 request: Request<BulkReadEntryOperationRequest>,
             ) -> Result<Response<BulkReadEntryOperationResponse>, Status>;
+
+            async fn lookup_key_by_context_or_create(
+                &self,
+                request: Request<LookupKeyByContextOrCreateRequest>,
+            ) -> Result<Response<LookupKeyByContextOrCreateResponse>, Status>;
         }
     }
 
@@ -536,5 +566,79 @@ mod tests {
         let result = authorizor.create_entry(request).await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().code(), tonic::Code::PermissionDenied);
+    }
+
+    #[tokio::test]
+    async fn test_lookup_or_create_with_write_permission() {
+        let mut mock_service = MockEntryServiceImpl::new();
+        mock_service
+            .expect_lookup_key_by_context_or_create()
+            .times(1)
+            .returning(|_| {
+                Ok(Response::new(LookupKeyByContextOrCreateResponse {
+                    key: "test-key".to_string(),
+                    context_hash: "test-hash".to_string(),
+                    created: true,
+                }))
+            });
+
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let claims = create_test_claims_with_permissions(vec![format!(
+            "udex:entry:v1:{}:write",
+            "test-index"
+        )
+        .as_str()]);
+
+        let mut request = Request::new(LookupKeyByContextOrCreateRequest {
+            index_name: "test-index".to_string(),
+            context: None,
+            context_hash: "test-hash".to_string(),
+        });
+        request.extensions_mut().insert(claims);
+
+        let result = authorizor.lookup_key_by_context_or_create(request).await;
+        assert!(result.is_ok());
+        let resp = result.unwrap().into_inner();
+        assert_eq!(resp.key, "test-key");
+        assert!(resp.created);
+    }
+
+    #[tokio::test]
+    async fn test_lookup_or_create_read_permission_denied() {
+        let mock_service = MockEntryServiceImpl::new();
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        // read permission is insufficient — write is required
+        let claims = create_test_claims_with_permissions(vec![format!(
+            "udex:entry:v1:{}:read",
+            "test-index"
+        )
+        .as_str()]);
+
+        let mut request = Request::new(LookupKeyByContextOrCreateRequest {
+            index_name: "test-index".to_string(),
+            context: None,
+            context_hash: "test-hash".to_string(),
+        });
+        request.extensions_mut().insert(claims);
+
+        let result = authorizor.lookup_key_by_context_or_create(request).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::PermissionDenied);
+    }
+
+    #[tokio::test]
+    async fn test_lookup_or_create_no_claims() {
+        let mock_service = MockEntryServiceImpl::new();
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+
+        let request = Request::new(LookupKeyByContextOrCreateRequest {
+            index_name: "test-index".to_string(),
+            context: None,
+            context_hash: "test-hash".to_string(),
+        });
+
+        let result = authorizor.lookup_key_by_context_or_create(request).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
     }
 }

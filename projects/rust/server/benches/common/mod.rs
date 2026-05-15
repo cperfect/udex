@@ -18,8 +18,9 @@ use udex_api::entry::bulk_write_entry_operation::Operation as WriteOp;
 use udex_api::entry::entry_service_client::EntryServiceClient;
 use udex_api::entry::{
     BulkWriteEntryOperation, BulkWriteEntryOperationRequest, ContextInput, CreateEntryRequest,
-    KeyValuePair, Value,
+    KeyValuePair, LookupKeyByContextOrCreateRequest, Value,
 };
+use udex_api::hash::xxh3_context_hash;
 use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
 use udex_server::{config::ServerConfig, server};
@@ -145,6 +146,49 @@ impl BenchFixture {
                     index_name: self.index_name.clone(),
                     context: Some(self.unique_context()),
                 })),
+            })
+            .collect();
+        BulkWriteEntryOperationRequest {
+            index_name: self.index_name.clone(),
+            operations,
+        }
+    }
+
+    /// Returns a context input used exclusively by `bench_lookup_or_create_found`.
+    ///
+    /// Distinct from all other bench contexts so every iteration measures the
+    /// found path against a known-present entry.
+    pub fn get_lookup_or_create_seed_context() -> ContextInput {
+        ContextInput {
+            pairs: vec![KeyValuePair {
+                key: "bench_user_id".to_string(),
+                value: Some(Value {
+                    value: Some(udex_api::entry::value::Value::StringValue(
+                        "bench_lookup_or_create_found_only".to_string(),
+                    )),
+                }),
+                kek_id: None,
+                dek: None,
+            }],
+        }
+    }
+
+    /// Builds a bulk write request with `n` `lookup_or_create` operations.
+    ///
+    /// Each operation uses a unique context so all `n` calls are genuine creates,
+    /// exercising the write path end-to-end.
+    pub fn bulk_lookup_or_create_request(&self, n: usize) -> BulkWriteEntryOperationRequest {
+        let operations = (0..n)
+            .map(|_| {
+                let ctx = self.unique_context();
+                let hash = xxh3_context_hash(&ctx).expect("hash context for bench");
+                BulkWriteEntryOperation {
+                    operation: Some(WriteOp::LookupOrCreate(LookupKeyByContextOrCreateRequest {
+                        index_name: self.index_name.clone(),
+                        context: Some(ctx),
+                        context_hash: hash,
+                    })),
+                }
             })
             .collect();
         BulkWriteEntryOperationRequest {
@@ -365,7 +409,7 @@ async fn start_server_and_connect() -> (
             use udex_api::entry::bulk_write_entry_operation_result::Result as WriteResult;
             match r.result? {
                 WriteResult::CreateEntry(resp) => Some(resp.key),
-                WriteResult::DeleteEntry(_) => None,
+                WriteResult::DeleteEntry(_) | WriteResult::LookupOrCreate(_) => None,
             }
         })
         .collect();

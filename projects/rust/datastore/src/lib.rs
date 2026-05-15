@@ -108,7 +108,12 @@ pub struct Entry {
 
 pub enum EntryWriteOperation {
     Create(Entry),
-    Delete { index_name: String, key: Uuid },
+    Delete {
+        index_name: String,
+        key: Uuid,
+    },
+    /// Look up by context hash, creating the entry if it does not exist.
+    LookupOrCreate(Entry),
 }
 
 /// Result of a single write operation in a bulk write.
@@ -118,6 +123,12 @@ pub enum EntryWriteResult {
     /// for this context (idempotent create).
     Created(Uuid),
     Deleted,
+    /// Result of a `LookupOrCreate` operation.
+    /// `created` is `true` when the entry was inserted, `false` when found.
+    LookedUpOrCreated {
+        key: Uuid,
+        created: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -171,6 +182,12 @@ pub trait Datastore: Send + Sync {
     /// returned and no new row is written. The `entry.key` is used as the
     /// candidate key for new inserts; it is ignored when the context already exists.
     async fn create_entry(&self, entry: Entry) -> Result<Uuid, Error>;
+
+    /// Look up the key for a context, creating the entry if it does not exist.
+    ///
+    /// Returns `(key, created)` where `created` is `true` when the entry was
+    /// inserted by this call and `false` when a pre-existing entry was found.
+    async fn lookup_or_create_entry(&self, entry: Entry) -> Result<(Uuid, bool), Error>;
 
     /// Get an entry by key
     async fn get_entry_by_key(&self, key: Uuid) -> Result<Entry, Error>;
