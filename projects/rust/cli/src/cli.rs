@@ -77,6 +77,11 @@ pub enum Commands {
         #[command(subcommand)]
         command: ContextCommands,
     },
+    /// Manage database migrations
+    Migrate {
+        #[command(subcommand)]
+        command: MigrateCommands,
+    },
 }
 
 // --- serve ---
@@ -282,4 +287,22 @@ pub struct ContextHashArgs {
     /// Context key=value pairs (may be repeated)
     #[arg(long = "context", value_name = "KEY=VALUE")]
     pub context: Vec<String>,
+}
+
+// --- migrate ---
+
+#[derive(Subcommand)]
+pub enum MigrateCommands {
+    /// Check whether the database schema is at the expected version
+    Check(MigrateArgs),
+    /// Apply all outstanding database migrations
+    Apply(MigrateArgs),
+}
+
+/// Shared arguments for `udex migrate` subcommands.
+#[derive(Parser)]
+pub struct MigrateArgs {
+    /// Path to configuration file [env: UDEX_CONFIG]
+    #[arg(long, env = "UDEX_CONFIG", default_value = "udex.toml")]
+    pub config: PathBuf,
 }

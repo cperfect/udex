@@ -10,7 +10,8 @@ use crate::config::UdexConfig;
 /// Start the Udex gRPC server in the foreground.
 ///
 /// Loads configuration from the resolved path, validates it, initialises the
-/// PostgreSQL datastore (running migrations), and starts the gRPC server.
+/// PostgreSQL datastore, enforces schema version (migrating first if
+/// `apply_migrations = true`), and starts the gRPC server.
 /// Runs until interrupted (Ctrl+C / SIGTERM).
 pub async fn run(args: ServeArgs) -> Result<()> {
     let cfg = UdexConfig::load(&args.config)?;

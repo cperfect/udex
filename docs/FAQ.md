@@ -53,6 +53,43 @@ I think the RPC model suits Udex better than REST, especially for the bulk scena
 * Alternate key generation algorithms/formats - as long as they are opaque and globally unique
 * Separate db connection Pools per index - this would allow for separation of connection resources and/or allow for different schemas/dbs/servers per index.
 
+## How do I apply database migrations?
+
+Use the `udex migrate` subcommands to inspect and advance the database schema independently of the server process.
+
+```bash
+# Check whether the database is at the expected schema version.
+# Exits 0 if up to date; exits non-zero with a descriptive message if behind.
+udex migrate check --config udex.toml
+
+# Apply all outstanding migrations, then confirm the version.
+udex migrate apply --config udex.toml
+```
+
+Both commands read only the `[datastore]` section of the config file — TLS certificate files are not required. The recommended approach for production is to run `udex migrate apply` as a pre-deploy step before starting the new server binary.
+
+If you want the server to apply migrations automatically on startup (e.g. in development or CI), set `apply_migrations = true` in `[datastore]`:
+
+```toml
+[datastore]
+apply_migrations = true
+```
+
+See [Database migrations](../README.md#database-migrations) in the README for the full deployment workflow.
+
+## Why is the server refusing to start with a schema mismatch error?
+
+The server always checks that the database schema version matches the version expected by the running binary. If they differ, the server logs an error and exits rather than starting against an incompatible schema.
+
+The log will include the current and expected version numbers, for example:
+
+```text
+ERROR Database schema version mismatch — server cannot start; run `udex migrate apply` or set apply_migrations=true to resolve
+  error: Database not initialized: Current version 0 does not match latest version 1
+```
+
+To resolve, run `udex migrate apply --config udex.toml` to bring the schema up to date, then restart the server. Alternatively, set `apply_migrations = true` in `[datastore]` to allow the server to migrate automatically on startup (not recommended for production).
+
 ## What won't Udex support?
 * Non-transactional datastores
 * Complex/aggregate cross-context queries

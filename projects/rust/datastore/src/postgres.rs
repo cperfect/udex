@@ -6,8 +6,6 @@ use crate::{
 use serde_json;
 use sqlx::postgres::PgPool;
 use sqlx::Row;
-use std::fs;
-use std::path::Path;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use udex_api::entry::{Context, KeyValuePair};
@@ -710,41 +708,13 @@ impl Migrator for PostgresDatastore {
     }
 
     async fn latest_version(&self) -> Result<i64, Error> {
-        let migration_dir = Path::new("migrations/postgres");
-
-        let migration_files = fs::read_dir(migration_dir).map_err(|err| {
-            Error::DatabaseNotInitialized(format!("Failed to read migrations directory: {}", err))
-        })?;
-
-        let mut max_migration_version: Option<i64> = None;
-
-        for entry in migration_files {
-            let entry = entry.map_err(|err| {
-                Error::DatabaseNotInitialized(format!("Failed to read migration file: {}", err))
-            })?;
-            let file_name = entry.file_name();
-            let file_name_str = file_name.to_string_lossy();
-
-            if let Some(name_without_ext) = file_name_str.strip_suffix(".sql") {
-                if let Some(underscore_pos) = name_without_ext.find('_') {
-                    let version_str = &name_without_ext[..underscore_pos];
-                    let name_part = &name_without_ext[underscore_pos + 1..];
-
-                    if version_str.chars().all(|c| c.is_ascii_digit())
-                        && name_part
-                            .chars()
-                            .all(|c| c.is_ascii_lowercase() || c == '_')
-                    {
-                        if let Ok(version) = version_str.parse::<i64>() {
-                            max_migration_version =
-                                Some(max_migration_version.unwrap_or(0).max(version));
-                        }
-                    }
-                }
-            }
-        }
-
-        max_migration_version
+        // Use the compile-time embedded migration list so this works regardless
+        // of the process working directory.
+        sqlx::migrate!("migrations/postgres")
+            .migrations
+            .iter()
+            .map(|m| m.version)
+            .max()
             .ok_or_else(|| Error::DatabaseNotInitialized("No migrations found".to_string()))
     }
 }
