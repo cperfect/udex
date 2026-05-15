@@ -90,6 +90,26 @@ ERROR Database schema version mismatch — server cannot start; run `udex migrat
 
 To resolve, run `udex migrate apply --config udex.toml` to bring the schema up to date, then restart the server. Alternatively, set `apply_migrations = true` in `[datastore]` to allow the server to migrate automatically on startup (not recommended for production).
 
+## When should I use `lookup-or-create` instead of `lookup` + `create`?
+
+Use `lookup_key_by_context_or_create` (CLI: `udex entry lookup-or-create`) when you cannot know in advance whether an entry exists for a context and you do not want to perform a read-before-write.
+
+The canonical case is **Id Permanence**: an Indexer receives an entity — say, a customer or transaction — and must return a stable key for it, regardless of whether this is the first time it has seen that entity. A two-step approach (`lookup` → if missing, `create`) works but burns an extra round trip and introduces a TOCTOU window in concurrent systems. `lookup-or-create` removes both problems in a single call.
+
+```bash
+# First call — entry does not exist yet
+udex entry lookup-or-create --index customers --context id=alice version=1
+# → key: 550e8400-..., context_hash: abc123, created: true
+
+# Second call — same context, different process or retry
+udex entry lookup-or-create --index customers --context id=alice version=1
+# → key: 550e8400-..., context_hash: abc123, created: false
+```
+
+**Permission requirement**: `lookup-or-create` requires the `udex:entry:v1:{index_name}:write` permission because it may write. A token with only `read` permission will be rejected. In bulk operations it must appear in `BulkWriteEntryOperation`, not `BulkReadEntryOperation`.
+
+**Hash verification**: the client must supply a pre-computed `context_hash` alongside the full context pairs. The server recomputes the hash and returns `INVALID_ARGUMENT` if they disagree — even before touching the database. Always use the SDK to compute the hash; it guarantees algorithm stability.
+
 ## What won't Udex support?
 * Non-transactional datastores
 * Complex/aggregate cross-context queries

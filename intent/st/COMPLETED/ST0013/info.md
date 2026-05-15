@@ -1,10 +1,10 @@
 ---
 verblock: "15 May 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: WIP
+status: Completed
 slug: lookup-or-create-entry
 created: 20260515
-completed:
+completed: 20260515
 ---
 
 # ST0013: Lookup Or Create Entry
