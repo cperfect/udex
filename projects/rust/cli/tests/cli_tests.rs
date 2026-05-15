@@ -55,6 +55,48 @@ fn test_entry_help_exits_zero() {
 }
 
 #[test]
+fn test_entry_help_mentions_lookup_or_create() {
+    udex()
+        .args(["entry", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("lookup-or-create"));
+}
+
+#[test]
+fn test_entry_lookup_or_create_help_exits_zero() {
+    udex()
+        .args(["entry", "lookup-or-create", "--help"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_entry_lookup_or_create_help_mentions_context_flag() {
+    udex()
+        .args(["entry", "lookup-or-create", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--context"));
+}
+
+#[test]
+fn test_entry_lookup_or_create_fails_without_server() {
+    // Transport-level failure (connection refused) → exit code 8.
+    udex()
+        .args([
+            "entry",
+            "lookup-or-create",
+            "some-index",
+            "--context",
+            "user=alice",
+        ])
+        .assert()
+        .code(8)
+        .stderr(predicate::str::contains("transport error"));
+}
+
+#[test]
 fn test_token_help_exits_zero() {
     udex().args(["token", "--help"]).assert().success();
 }
