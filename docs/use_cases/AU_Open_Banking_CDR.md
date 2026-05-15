@@ -124,7 +124,7 @@ sequenceDiagram
     autonumber
     participant ADR as Accredited Data Recipient (ADR)<br><<Udex:Key Holder>>
     participant DH_API as Data Holder API Gateway<br><<Udex:Indexer>>
-    participant UDX as Udex<br><<Udex:Server>>
+    participant UDX as Data Holder Udex<br><<Udex:Server>>
     participant DH_DB as Data Holder Core Systems<br><<Udex:Context Holder>>
 
     ADR->>DH_API: 1. GET /banking/accounts (with Access Token)
@@ -139,18 +139,18 @@ sequenceDiagram
     end
 
     note over DH_API, ADR: ADR doesn't get to see Customer Id + Account 123456,<br>it holds the Permanent Id(s) 
-    DH_API-->>ADR: 6. Return Account List payload using &lt;permanent_id&gt;(s)
+    DH_API-->>ADR: 6. Return Account List payload using <permanent_id>(s)
 
     
-    ADR->>DH_API: 7. GET /banking/accounts/&lt;permanent_id&gt;/transactions
+    ADR->>DH_API: 7. GET /banking/accounts/<permanent_id>/transactions
     rect rgb(255, 240, 245)
-        note over DH_API, UDX: Reverse map &lt;permanent_id&gt; back to Internal Account 123456
-        DH_API->>UDX: 8. Look up Context based on &lt;permanent_id&gt; (e.g.) Internal Account 123456
+        note over DH_API, UDX: Reverse map <permanent_id> back to Internal Account 123456
+        DH_API->>UDX: 8. Look up Context based on <permanent_id> (e.g.) Internal Account 123456
         UDX-->>DH_API: 8a. Return Context for Key (e.g. Customer Id + Account 123456 + ADR Id)
         DH_API->>DH_DB: 9. Query Transactions for Account 123456
         DH_DB-->>DH_API: 10. Return Internal Transaction Data
     end
-    DH_API-->>ADR: 11. Return Transactions payload masked &lt;permanent_id&gt;
+    DH_API-->>ADR: 11. Return Transactions payload masked with <permanent_id>(s)
 ```
 
 ---
