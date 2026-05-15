@@ -2,15 +2,15 @@
 
 ## Tasks
 
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
-- ...
+- [x] Define the lookup criteria used to find an existing entry.
+- [x] Implement the create path when no matching entry is found.
+- [x] Ensure the operation returns the existing entry when one already exists.
+- [x] Verify the lookup-or-create flow for both existing and new entries.
 
 ## Task Notes
 
-[Additional notes about specific tasks if needed]
+Completed the core lookup-or-create workflow for this steel thread, covering both retrieval and creation paths.
 
 ## Dependencies
 
-[Task dependencies and sequencing requirements]
+No additional task dependencies were recorded for this completed work item.
