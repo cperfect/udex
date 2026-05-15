@@ -365,7 +365,7 @@ async fn start_server_and_connect() -> (
             use udex_api::entry::bulk_write_entry_operation_result::Result as WriteResult;
             match r.result? {
                 WriteResult::CreateEntry(resp) => Some(resp.key),
-                WriteResult::DeleteEntry(_) => None,
+                WriteResult::DeleteEntry(_) | WriteResult::LookupOrCreate(_) => None,
             }
         })
         .collect();

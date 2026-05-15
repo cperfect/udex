@@ -10,7 +10,8 @@ use udex_api::{
         BulkWriteEntryOperationRequest, BulkWriteEntryOperationResponse,
         BulkWriteEntryOperationResult, Context, ContextInput, CreateEntryRequest,
         CreateEntryResponse, DeleteEntryRequest, DeleteEntryResponse, LookupContextByKeyRequest,
-        LookupContextByKeyResponse, LookupKeyByContextRequest, LookupKeyByContextResponse,
+        LookupContextByKeyResponse, LookupKeyByContextOrCreateRequest,
+        LookupKeyByContextOrCreateResponse, LookupKeyByContextRequest, LookupKeyByContextResponse,
     },
     hash::{xxh3_context_hash, ContextHasher},
     index::{index_service_server::IndexService, ListIndicesRequest},
@@ -318,6 +319,58 @@ where
         Ok(Response::new(response))
     }
 
+    /// Looks up the key for a context, creating the entry if it does not exist.
+    ///
+    /// The server recomputes the context hash from the supplied pairs and returns
+    /// `INVALID_ARGUMENT` if it does not match `context_hash` — even before
+    /// checking whether an entry exists. This catches algorithm mismatches early.
+    async fn lookup_key_by_context_or_create(
+        &self,
+        request: Request<LookupKeyByContextOrCreateRequest>,
+    ) -> Result<Response<LookupKeyByContextOrCreateResponse>, Status> {
+        let req = request.into_inner();
+
+        if req.index_name.is_empty() {
+            return Err(Status::invalid_argument("index_name is required"));
+        }
+
+        let context_input = req
+            .context
+            .ok_or_else(|| Status::invalid_argument("context is required"))?;
+
+        if req.context_hash.is_empty() {
+            return Err(Status::invalid_argument("context_hash is required"));
+        }
+
+        // Server always recomputes the hash; mismatch means the client used a
+        // different algorithm or corrupted the payload.
+        let context = self.context_input_to_context(req.index_name.clone(), context_input)?;
+        if context.hash != req.context_hash {
+            return Err(Status::invalid_argument(format!(
+                "context_hash mismatch: client supplied {}, server computed {}",
+                req.context_hash, context.hash
+            )));
+        }
+
+        let entry = Entry {
+            key: Uuid::new_v4(),
+            context,
+            index_name: req.index_name,
+        };
+
+        let (key, created) = self
+            .datastore
+            .lookup_or_create_entry(entry)
+            .await
+            .map_err(|e| self.datastore_error_to_status(e))?;
+
+        Ok(Response::new(LookupKeyByContextOrCreateResponse {
+            key: key.to_string(),
+            context_hash: req.context_hash,
+            created,
+        }))
+    }
+
     /// Performs bulk write operations in a single transaction.
     /// All operations succeed or all fail together.
     async fn bulk_write_entry_operation(
@@ -378,6 +431,38 @@ where
                         None,
                     ));
                 }
+                Some(udex_api::entry::bulk_write_entry_operation::Operation::LookupOrCreate(
+                    lookup_op,
+                )) => {
+                    let context_input = lookup_op
+                        .context
+                        .ok_or_else(|| Status::invalid_argument("context is required"))?;
+
+                    if lookup_op.context_hash.is_empty() {
+                        return Err(Status::invalid_argument("context_hash is required"));
+                    }
+
+                    let context =
+                        self.context_input_to_context(req.index_name.clone(), context_input)?;
+                    if context.hash != lookup_op.context_hash {
+                        return Err(Status::invalid_argument(format!(
+                            "context_hash mismatch: client supplied {}, server computed {}",
+                            lookup_op.context_hash, context.hash
+                        )));
+                    }
+
+                    let context_hash = context.hash.clone();
+                    let entry = Entry {
+                        key: Uuid::new_v4(),
+                        context,
+                        index_name: req.index_name.clone(),
+                    };
+
+                    ops_with_meta.push((
+                        EntryWriteOperation::LookupOrCreate(entry),
+                        Some(context_hash),
+                    ));
+                }
                 None => {
                     return Err(Status::invalid_argument("operation is required"));
                 }
@@ -427,6 +512,22 @@ where
                         result: Some(
                             udex_api::entry::bulk_write_entry_operation_result::Result::DeleteEntry(
                                 DeleteEntryResponse {},
+                            ),
+                        ),
+                    });
+                }
+                EntryWriteResult::LookedUpOrCreated { key, created } => {
+                    let context_hash = context_hash.ok_or_else(|| {
+                        Status::internal("bulk write LookedUpOrCreated result missing context_hash")
+                    })?;
+                    response_results.push(BulkWriteEntryOperationResult {
+                        result: Some(
+                            udex_api::entry::bulk_write_entry_operation_result::Result::LookupOrCreate(
+                                LookupKeyByContextOrCreateResponse {
+                                    key: key.to_string(),
+                                    context_hash,
+                                    created,
+                                },
                             ),
                         ),
                     });

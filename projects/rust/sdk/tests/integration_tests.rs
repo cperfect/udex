@@ -585,6 +585,9 @@ async fn test_sdk_bulk_write_and_read() {
             bulk_write_entry_operation_result::Result::DeleteEntry(_) => {
                 panic!("unexpected delete")
             }
+            bulk_write_entry_operation_result::Result::LookupOrCreate(_) => {
+                panic!("unexpected lookup_or_create")
+            }
         })
         .collect();
 
@@ -925,6 +928,9 @@ async fn test_hydra_sdk_bulk_write_and_read() {
             bulk_write_entry_operation_result::Result::CreateEntry(c) => c.key.clone(),
             bulk_write_entry_operation_result::Result::DeleteEntry(_) => {
                 panic!("unexpected delete")
+            }
+            bulk_write_entry_operation_result::Result::LookupOrCreate(_) => {
+                panic!("unexpected lookup_or_create")
             }
         })
         .collect();

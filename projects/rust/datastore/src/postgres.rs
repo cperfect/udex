@@ -734,6 +734,10 @@ impl Datastore for PostgresDatastore {
                     .delete_entry_tx(&index_name, key, &mut tx)
                     .await
                     .map(|_| EntryWriteResult::Deleted),
+                EntryWriteOperation::LookupOrCreate(entry) => self
+                    .lookup_or_create_entry_tx(entry, &mut tx)
+                    .await
+                    .map(|(key, created)| EntryWriteResult::LookedUpOrCreated { key, created }),
             };
             match result {
                 Ok(r) => results.push(r),

@@ -91,6 +91,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             bulk_write_entry_operation_result::Result::DeleteEntry(_) => {
                 println!("  [{i}] deleted");
             }
+            bulk_write_entry_operation_result::Result::LookupOrCreate(r) => {
+                println!(
+                    "  [{i}] key={} hash={} created={}",
+                    r.key, r.context_hash, r.created
+                );
+            }
         }
     }
 

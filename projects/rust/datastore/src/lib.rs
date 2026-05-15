@@ -108,7 +108,12 @@ pub struct Entry {
 
 pub enum EntryWriteOperation {
     Create(Entry),
-    Delete { index_name: String, key: Uuid },
+    Delete {
+        index_name: String,
+        key: Uuid,
+    },
+    /// Look up by context hash, creating the entry if it does not exist.
+    LookupOrCreate(Entry),
 }
 
 /// Result of a single write operation in a bulk write.
@@ -118,6 +123,12 @@ pub enum EntryWriteResult {
     /// for this context (idempotent create).
     Created(Uuid),
     Deleted,
+    /// Result of a `LookupOrCreate` operation.
+    /// `created` is `true` when the entry was inserted, `false` when found.
+    LookedUpOrCreated {
+        key: Uuid,
+        created: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
