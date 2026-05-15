@@ -51,6 +51,7 @@ I think the RPC model suits Udex better than REST, especially for the bulk scena
 * SDKs for other languages
 * Alternate hash algorithms
 * Alternate key generation algorithms/formats - as long as they are opaque and globally unique
+* Separate db connection Pools per index - this would allow for separation of connection resources and/or allow for different schemas/dbs/servers per index.
 
 ## What won't Udex support?
 * Non-transactional datastores
