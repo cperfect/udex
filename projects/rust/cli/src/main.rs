@@ -8,7 +8,8 @@ use clap::Parser;
 use udex_sdk::{ClientOptions, UdexClient};
 
 use cli::{
-    Cli, Commands, ConfigCommands, ContextCommands, EntryCommands, IndexCommands, TokenCommands,
+    Cli, Commands, ConfigCommands, ContextCommands, EntryCommands, IndexCommands, MigrateCommands,
+    TokenCommands,
 };
 
 fn main() {
@@ -149,6 +150,11 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
 
         Commands::Context { command } => match command {
             ContextCommands::Hash(args) => commands::context::hash(args),
+        },
+
+        Commands::Migrate { command } => match command {
+            MigrateCommands::Check(args) => commands::migrate::check(args).await,
+            MigrateCommands::Apply(args) => commands::migrate::apply(args).await,
         },
 
         Commands::Index { command } => {

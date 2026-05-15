@@ -10,5 +10,6 @@ pub mod config;
 pub mod context;
 pub mod entry;
 pub mod index;
+pub mod migrate;
 pub mod serve;
 pub mod token;

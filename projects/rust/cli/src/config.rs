@@ -253,6 +253,57 @@ impl UdexConfig {
         }
     }
 
+    /// Load only the `[datastore]` section from a config file and return a bound
+    /// [`udex_datastore::config::DatastoreConfig`].
+    ///
+    /// Unlike [`UdexConfig::load`], this does **not** bind or validate any server
+    /// TLS or auth secrets, making it safe to call in pre-deploy contexts where
+    /// cert files may not yet be present.
+    pub fn load_datastore_config(
+        path: &std::path::Path,
+    ) -> Result<udex_datastore::config::DatastoreConfig> {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read config file: {}", path.display()))?;
+
+        #[derive(serde::Deserialize)]
+        struct Wrapper {
+            datastore: DatastoreConfig,
+        }
+
+        let wrapper: Wrapper = toml::from_str(&content)
+            .with_context(|| format!("failed to parse config file: {}", path.display()))?;
+        let ds = wrapper.datastore;
+
+        let urn_str = ds.connection_url.urn().to_string();
+        let mut ds_config = udex_datastore::config::DatastoreConfig {
+            connection_url: Secret::new(&urn_str)
+                .expect("URN from a parsed Secret is always valid"),
+            max_connections: ds.max_connections,
+            min_connections: ds.min_connections,
+            connection_timeout: Duration::from_secs(ds.connection_timeout_secs),
+            query_timeout: Duration::from_secs(ds.query_timeout_secs),
+            dangerous_allow_non_tls: ds.dangerous_allow_non_tls,
+            apply_migrations: ds.apply_migrations,
+        };
+
+        let registry = SourceRegistry::new();
+        bind_all(&mut ds_config, &registry).map_err(|errs| {
+            anyhow::anyhow!(
+                "failed to bind datastore secrets: {}",
+                errs.iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })?;
+
+        ds_config
+            .validate()
+            .with_context(|| format!("datastore config is invalid: {}", path.display()))?;
+
+        Ok(ds_config)
+    }
+
     /// Convert into the server's [`udex_server::config::ServerConfig`] and the
     /// datastore's [`udex_datastore::config::DatastoreConfig`].
     ///

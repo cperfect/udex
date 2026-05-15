@@ -3,7 +3,7 @@ verblock: "15 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-03
 title: "Add migrate check and migrate apply CLI commands"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: Add migrate check and migrate apply CLI commands
