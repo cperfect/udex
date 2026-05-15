@@ -120,7 +120,46 @@ impl PostgresDatastore {
                     Error::InvalidIndex(format!("Index '{}' not found", entry.index_name))
                 })?;
 
-        let result = sqlx::query(
+        // WHY a single upsert instead of INSERT + follow-up SELECT:
+        //
+        // The naive two-statement approach (INSERT ... DO NOTHING, then SELECT on
+        // rows_affected == 0) has a TOCTOU window: a concurrent DELETE can remove
+        // the conflicting row between the INSERT and the SELECT, causing the SELECT
+        // to return nothing and the operation to fail with an internal error rather
+        // than linearizing correctly as "create a new entry".
+        //
+        // HOW this query makes the operation atomic:
+        //
+        // ON CONFLICT DO UPDATE acquires an ExclusiveLock on the conflicting row
+        // before executing the SET clause. That lock blocks any concurrent DELETE
+        // until our transaction commits or rolls back, so the RETURNING clause
+        // always sees a live row — either the one we just inserted or the one we
+        // just locked. There is no window between conflict detection and key return.
+        //
+        // The SET clause performs a no-op update (`hash_algorithm = entry_context.hash_algorithm`)
+        // to satisfy the DO UPDATE syntax. It does NOT change any context data:
+        // `key`, `pairs`, and `context_hash` are untouched. The immutability
+        // guarantee for contexts is fully preserved at the application level.
+        //
+        // CONSEQUENCES of using DO UPDATE instead of DO NOTHING:
+        //
+        // * PostgreSQL writes a new physical tuple version for the conflicting row
+        //   (MVCC row churn), even though no column value changes. This is a minor
+        //   write-amplification cost on the conflict path.
+        // * Any UPDATE triggers or audit hooks on entry_context will fire on the
+        //   conflict path. If such triggers are added in future, they must handle
+        //   the case where no column value actually changed.
+        // * pg_stat_user_tables.n_tup_upd is incremented on each conflict.
+        //
+        // HOW created/found is detected:
+        //
+        // (xmax = 0)::bool exploits PostgreSQL's MVCC bookkeeping:
+        // - Fresh INSERT: the new tuple has xmax = 0 (no transaction has updated
+        //   or deleted it yet) → created = true.
+        // - DO UPDATE path: PostgreSQL sets xmax on the updated tuple to the current
+        //   transaction XID before RETURNING evaluates → created = false.
+        // This is a well-established PostgreSQL idiom for upsert result detection.
+        let (key, created) = sqlx::query_as::<_, (Uuid, bool)>(
             r#"
             INSERT INTO entry_context (
                 key,
@@ -136,7 +175,9 @@ impl PostgresDatastore {
                 $4,
                 $5
             )
-            ON CONFLICT (index_name, context_hash) DO NOTHING
+            ON CONFLICT (index_name, context_hash) DO UPDATE
+                SET hash_algorithm = entry_context.hash_algorithm
+            RETURNING key, (xmax = 0)::bool AS created
             "#,
         )
         .bind(UuidWrapper(entry.key))
@@ -144,31 +185,11 @@ impl PostgresDatastore {
         .bind(&entry.context.hash)
         .bind(serde_json::to_value(&entry.context.pairs).map_err(Error::Serialization)?)
         .bind(hash_algorithm_str)
-        .execute(&mut **tx)
+        .fetch_one(&mut **tx)
         .await
         .map_err(Error::Database)?;
 
-        if result.rows_affected() == 1 {
-            return Ok((entry.key, true));
-        }
-
-        // Context already existed — fetch the pre-existing key.
-        let existing_key: Uuid = sqlx::query_scalar(
-            "SELECT key FROM entry_context WHERE index_name = $1 AND context_hash = $2",
-        )
-        .bind(&entry.index_name)
-        .bind(&entry.context.hash)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(Error::Database)?
-        .ok_or_else(|| {
-            Error::Transaction(
-                "entry was concurrently deleted between conflict detection and key fetch"
-                    .to_string(),
-            )
-        })?;
-
-        Ok((existing_key, false))
+        Ok((key, created))
     }
 
     /// Delete an entry within an existing transaction.

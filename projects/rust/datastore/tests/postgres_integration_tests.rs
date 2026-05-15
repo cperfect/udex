@@ -1352,3 +1352,68 @@ async fn test_lookup_or_create_entry_found(#[context] ctx: Context) {
         "created flag must be false when entry already existed"
     );
 }
+
+/// lookup_or_create_entry on an existing entry must not mutate the stored context.
+///
+/// The upsert implementation uses `ON CONFLICT DO UPDATE SET hash_algorithm =
+/// entry_context.hash_algorithm` — a deliberate no-op update — to atomically
+/// lock the conflicting row and return its key in a single statement. This
+/// technically executes an UPDATE path in PostgreSQL, even though no column
+/// value changes. This test guards against any future regression where a
+/// refactor of that SET clause accidentally overwrites context data (pairs,
+/// hash, key) with values from the conflicting candidate.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_lookup_or_create_entry_does_not_mutate_context(#[context] ctx: Context) {
+    let data = data(false).await;
+    let datastore = &data.0;
+    let idx_name = index_name(&ctx);
+
+    datastore
+        .create_index(create_sample_index(&idx_name))
+        .await
+        .expect("Failed to create index");
+
+    let original_key = Uuid::new_v4();
+    let original_context = create_sample_context("loc_immutability_hash");
+
+    datastore
+        .create_entry(Entry {
+            key: original_key,
+            context: original_context.clone(),
+            index_name: idx_name.clone(),
+        })
+        .await
+        .expect("initial create_entry should succeed");
+
+    // Call lookup_or_create with a different candidate key but the same context.
+    // The upsert conflict path runs; no context data should change.
+    let different_candidate = Uuid::new_v4();
+    let (returned_key, created) = datastore
+        .lookup_or_create_entry(Entry {
+            key: different_candidate,
+            context: original_context.clone(),
+            index_name: idx_name.clone(),
+        })
+        .await
+        .expect("lookup_or_create_entry should succeed on existing entry");
+
+    assert_eq!(returned_key, original_key, "key must be unchanged");
+    assert!(!created, "created must be false");
+
+    // Re-fetch the stored entry and verify every context field is identical
+    // to what was written by the original create_entry call.
+    let stored = datastore
+        .get_entry_by_key(original_key)
+        .await
+        .expect("get_entry_by_key should find the original entry");
+
+    assert_eq!(
+        stored.context.hash, original_context.hash,
+        "context hash must not be mutated by the upsert conflict path"
+    );
+    assert_eq!(
+        stored.context.pairs, original_context.pairs,
+        "context pairs must not be mutated by the upsert conflict path"
+    );
+}
