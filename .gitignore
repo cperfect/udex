@@ -12,6 +12,9 @@ projects/rust/server/tests/jwt/*.pem
 # ignore mcp state
 .mcp/
 
+# Claude Code local settings (machine-specific, not for version control)
+.claude/settings.local.json
+
 # macOS system files
 .DS_Store
 .DS_Store?
