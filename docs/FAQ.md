@@ -49,6 +49,8 @@ I think the RPC model suits Udex better than REST, especially for the bulk scena
 * Tracing/APM
 * Support for other datastores, as long as they are transactional
 * SDKs for other languages
+* Alternate hash algorithms
+* Alternate key generation algorithms/formats - as long as they are opaque and globally unique
 
 ## What won't Udex support?
 * Non-transactional datastores

@@ -25,7 +25,7 @@ For full detail on the data model, operations, components, security model, and d
 
 For common questions, see the [FAQs](docs/FAQ.md).
 
-> This project also gives me chance to learn rust, develop AI coding processes and tools and play with a few other technologies.
+> This project also gives me a chance to learn rust, develop AI coding processes and tools and play with a few other technologies.
 
 ## Documentation
 
@@ -114,12 +114,11 @@ There are a number of client roles:
 
 Combinations of the first three roles are possible: A single logical client could play both Key Holder and Context Holder roles, though generally not for the same index, and also act as an Indexer, or a client could be both the Context Holder and Indexer etc.
 
-The Key Holder must obviously retain the key, however the Indexer has a choice - it can resolve the hash from the context (as long as it know which hash function to apply - and it should always use the SDK for this to ensure hash stability) or it can retain the hash for re-use.
+The Key Holder must obviously retain the key, however the Indexer has a choice - it can resolve the hash from the context (as long as it knows which hash function to apply - and it should always use the SDK for this to ensure hash stability) or it can retain the hash for re-use.
 
-Admin is expected to be CI or Operational role and generally would not be a Key Holder or Context Holder.
+Admin is expected to be CI/CD or Operational role and generally would not be a Key Holder or Context Holder.
 
-#### Example
-In this scenario a Context Holder wishes to distribute data to one or more parties who act as Key Holders. The Context Holder does not want to distribute its own keys to the data so the Indexer uses Udex to assign and lookup keys, effectively acting as transformation proxy.
+As an example of this see [Open Banking Consumer Data Right (CDR)](./docs/use_cases/AU_Open_Banking_CDR.md) use case - more specifically the [Resource Data Retrieval with Id Permanence data flow](./docs/use_cases/AU_Open_Banking_CDR.md#4a-phase-3-resource-data-retrieval-with-id-permanence-implemented-with-udex). 
 
 > This is meant to be indicative only
 
