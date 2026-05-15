@@ -120,37 +120,6 @@ Admin is expected to be CI/CD or Operational role and generally would not be a K
 
 As an example of this see [Open Banking Consumer Data Right (CDR)](./docs/use_cases/AU_Open_Banking_CDR.md) use case - more specifically the [Resource Data Retrieval with Id Permanence data flow](./docs/use_cases/AU_Open_Banking_CDR.md#4a-phase-3-resource-data-retrieval-with-id-permanence-implemented-with-udex). 
 
-> This is meant to be indicative only
-
-```mermaid
-sequenceDiagram
-  title Data Distribution with Keys
-
-  Context Holder->>+Indexer:Send Data
-  Indexer->>Indexer: Generate Contexts
-  Indexer->>+Udex: Resolve existing Contexts
-  Udex->>-Indexer: Existing Keys for Contexts
-  Indexer->>+Udex: Index new Contexts
-  Udex-->-Indexer: New Keys for Contexts
-  Indexer->>Indexer: Enhance data with keys
-  Indexer->>Key Holder: Send data with keys
-  Key Holder->>Key Holder: Store data with keys
-  Indexer->>-Context Holder: done
-```
-```mermaid
-sequenceDiagram
-  title Use Keys to access Data
-
-  Key Holder->>+Indexer: Access Data with Keys
-  Indexer->>+Udex: Lookup Contexts for Keys
-  Udex->>-Indexer: Keys for Contexts
-  Indexer->>Indexer: Enhance Request with Contexts
-  Indexer->>+Context Holder: Access data with Contexts
-  Context Holder->>-Indexer: Respond with data
-  Indexer->>Indexer: Enhance data with Keys
-  Indexer->>-Key Holder: Respond with data
-```
-
 ## Tech Stack
 
 | Concern | Technology |
