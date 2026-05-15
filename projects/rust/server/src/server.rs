@@ -57,84 +57,6 @@ async fn apply_and_check_migrations(
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
-    use udex_datastore::{Error as DatastoreError, Migrator};
-
-    struct MockMigrator {
-        current: AtomicI64,
-        latest: i64,
-        migrate_called: AtomicBool,
-    }
-
-    impl MockMigrator {
-        fn new(current: i64, latest: i64) -> Self {
-            Self {
-                current: AtomicI64::new(current),
-                latest,
-                migrate_called: AtomicBool::new(false),
-            }
-        }
-    }
-
-    #[tonic::async_trait]
-    impl Migrator for MockMigrator {
-        async fn migrate(&self) -> Result<(), DatastoreError> {
-            self.migrate_called.store(true, Ordering::SeqCst);
-            self.current.store(self.latest, Ordering::SeqCst);
-            Ok(())
-        }
-        async fn current_version(&self) -> Result<i64, DatastoreError> {
-            Ok(self.current.load(Ordering::SeqCst))
-        }
-        async fn latest_version(&self) -> Result<i64, DatastoreError> {
-            Ok(self.latest)
-        }
-    }
-
-    #[tokio::test]
-    async fn migration_apply_false_db_current_ok() {
-        let m = MockMigrator::new(1, 1);
-        assert!(apply_and_check_migrations(&m, false).await.is_ok());
-        assert!(
-            !m.migrate_called.load(Ordering::SeqCst),
-            "migrate must not be called when apply_migrations=false"
-        );
-    }
-
-    #[tokio::test]
-    async fn migration_apply_false_db_behind_fails() {
-        let m = MockMigrator::new(0, 1);
-        assert!(apply_and_check_migrations(&m, false).await.is_err());
-        assert!(
-            !m.migrate_called.load(Ordering::SeqCst),
-            "migrate must not be called when apply_migrations=false"
-        );
-    }
-
-    #[tokio::test]
-    async fn migration_apply_true_db_behind_migrates_and_succeeds() {
-        let m = MockMigrator::new(0, 1);
-        assert!(apply_and_check_migrations(&m, true).await.is_ok());
-        assert!(
-            m.migrate_called.load(Ordering::SeqCst),
-            "migrate must be called when apply_migrations=true"
-        );
-    }
-
-    #[tokio::test]
-    async fn migration_apply_true_db_current_still_calls_migrate() {
-        let m = MockMigrator::new(1, 1);
-        assert!(apply_and_check_migrations(&m, true).await.is_ok());
-        assert!(
-            m.migrate_called.load(Ordering::SeqCst),
-            "migrate must be called even when db is already current"
-        );
-    }
-}
-
 /// Starts the Udex server with the provided configuration and datastore.
 pub async fn serve<D>(config: ServerConfig, datastore: D) -> Result<(), Error>
 where
@@ -212,4 +134,82 @@ where
         .map_err(|e| Error::ServerError(format!("Server error: {e:?}")))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+    use udex_datastore::{Error as DatastoreError, Migrator};
+
+    struct MockMigrator {
+        current: AtomicI64,
+        latest: i64,
+        migrate_called: AtomicBool,
+    }
+
+    impl MockMigrator {
+        fn new(current: i64, latest: i64) -> Self {
+            Self {
+                current: AtomicI64::new(current),
+                latest,
+                migrate_called: AtomicBool::new(false),
+            }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl Migrator for MockMigrator {
+        async fn migrate(&self) -> Result<(), DatastoreError> {
+            self.migrate_called.store(true, Ordering::SeqCst);
+            self.current.store(self.latest, Ordering::SeqCst);
+            Ok(())
+        }
+        async fn current_version(&self) -> Result<i64, DatastoreError> {
+            Ok(self.current.load(Ordering::SeqCst))
+        }
+        async fn latest_version(&self) -> Result<i64, DatastoreError> {
+            Ok(self.latest)
+        }
+    }
+
+    #[tokio::test]
+    async fn migration_apply_false_db_current_ok() {
+        let m = MockMigrator::new(1, 1);
+        assert!(apply_and_check_migrations(&m, false).await.is_ok());
+        assert!(
+            !m.migrate_called.load(Ordering::SeqCst),
+            "migrate must not be called when apply_migrations=false"
+        );
+    }
+
+    #[tokio::test]
+    async fn migration_apply_false_db_behind_fails() {
+        let m = MockMigrator::new(0, 1);
+        assert!(apply_and_check_migrations(&m, false).await.is_err());
+        assert!(
+            !m.migrate_called.load(Ordering::SeqCst),
+            "migrate must not be called when apply_migrations=false"
+        );
+    }
+
+    #[tokio::test]
+    async fn migration_apply_true_db_behind_migrates_and_succeeds() {
+        let m = MockMigrator::new(0, 1);
+        assert!(apply_and_check_migrations(&m, true).await.is_ok());
+        assert!(
+            m.migrate_called.load(Ordering::SeqCst),
+            "migrate must be called when apply_migrations=true"
+        );
+    }
+
+    #[tokio::test]
+    async fn migration_apply_true_db_current_still_calls_migrate() {
+        let m = MockMigrator::new(1, 1);
+        assert!(apply_and_check_migrations(&m, true).await.is_ok());
+        assert!(
+            m.migrate_called.load(Ordering::SeqCst),
+            "migrate must be called even when db is already current"
+        );
+    }
 }
