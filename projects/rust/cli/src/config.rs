@@ -52,6 +52,10 @@ pub struct DatastoreConfig {
     /// Disable TLS enforcement on the connection URL. MUST NOT be set in production.
     #[serde(default)]
     pub dangerous_allow_non_tls: bool,
+    /// Allow the server to apply outstanding migrations on startup. Defaults to `false`.
+    /// Prefer `udex migrate apply` as an explicit pre-deploy step in production.
+    #[serde(default)]
+    pub apply_migrations: bool,
 }
 
 impl Default for UdexConfig {
@@ -89,6 +93,7 @@ impl Default for UdexConfig {
                 connection_timeout_secs: 10,
                 query_timeout_secs: 30,
                 dangerous_allow_non_tls: false,
+                apply_migrations: false,
             },
         }
     }
@@ -289,6 +294,7 @@ impl UdexConfig {
             connection_timeout: Duration::from_secs(datastore.connection_timeout_secs),
             query_timeout: Duration::from_secs(datastore.query_timeout_secs),
             dangerous_allow_non_tls: datastore.dangerous_allow_non_tls,
+            apply_migrations: datastore.apply_migrations,
         };
 
         // EnvSource is pre-registered by SourceRegistry::new() in secrets-rs 1.0.0.

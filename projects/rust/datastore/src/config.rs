@@ -29,6 +29,15 @@ pub struct DatastoreConfig {
     /// stronger) in the connection URL.
     #[serde(default)]
     pub dangerous_allow_non_tls: bool,
+    /// Allow the server to apply outstanding database migrations on startup.
+    ///
+    /// Defaults to `false`. When `false` the server will refuse to start if the
+    /// database schema is not already at the expected version. Set to `true` only
+    /// in environments where the server process is authorised to mutate the schema
+    /// (e.g. development, CI). In production, prefer running `udex migrate apply`
+    /// as a dedicated pre-deploy step.
+    #[serde(default)]
+    pub apply_migrations: bool,
 }
 
 /// Returns `true` if the URL contains a TLS-enforcing `sslmode` value
@@ -144,6 +153,7 @@ mod tests {
             connection_timeout: Duration::from_secs(10),
             query_timeout: Duration::from_secs(30),
             dangerous_allow_non_tls: false,
+            apply_migrations: false,
         };
         let mut registry = SourceRegistry::new();
         registry
@@ -189,6 +199,7 @@ mod tests {
             connection_timeout: Duration::from_secs(10),
             query_timeout: Duration::from_secs(30),
             dangerous_allow_non_tls: false,
+            apply_migrations: false,
         };
         assert!(cfg.validate().is_err());
     }
@@ -238,5 +249,32 @@ mod tests {
         let mut cfg = bound_config("postgres://host:5432/db");
         cfg.dangerous_allow_non_tls = true;
         assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn apply_migrations_defaults_to_false_when_absent() {
+        let json = r#"{
+            "connection_url": "urn:secrets-rs:env:DATABASE_URL",
+            "max_connections": 10,
+            "min_connections": 1,
+            "connection_timeout": { "secs": 10, "nanos": 0 },
+            "query_timeout": { "secs": 30, "nanos": 0 }
+        }"#;
+        let cfg: DatastoreConfig = serde_json::from_str(json).unwrap();
+        assert!(!cfg.apply_migrations);
+    }
+
+    #[test]
+    fn apply_migrations_true_round_trips() {
+        let json = r#"{
+            "connection_url": "urn:secrets-rs:env:DATABASE_URL",
+            "max_connections": 10,
+            "min_connections": 1,
+            "connection_timeout": { "secs": 10, "nanos": 0 },
+            "query_timeout": { "secs": 30, "nanos": 0 },
+            "apply_migrations": true
+        }"#;
+        let cfg: DatastoreConfig = serde_json::from_str(json).unwrap();
+        assert!(cfg.apply_migrations);
     }
 }
