@@ -172,6 +172,12 @@ pub trait Datastore: Send + Sync {
     /// candidate key for new inserts; it is ignored when the context already exists.
     async fn create_entry(&self, entry: Entry) -> Result<Uuid, Error>;
 
+    /// Look up the key for a context, creating the entry if it does not exist.
+    ///
+    /// Returns `(key, created)` where `created` is `true` when the entry was
+    /// inserted by this call and `false` when a pre-existing entry was found.
+    async fn lookup_or_create_entry(&self, entry: Entry) -> Result<(Uuid, bool), Error>;
+
     /// Get an entry by key
     async fn get_entry_by_key(&self, key: Uuid) -> Result<Entry, Error>;
 

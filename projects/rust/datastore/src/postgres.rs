@@ -101,6 +101,76 @@ impl PostgresDatastore {
         Ok(existing_key)
     }
 
+    /// Look up or create an entry within an existing transaction.
+    ///
+    /// Identical to [`create_entry_tx`] in SQL terms but returns `(Uuid, bool)`:
+    /// `true` when the row was inserted, `false` when the context already existed.
+    async fn lookup_or_create_entry_tx(
+        &self,
+        entry: Entry,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<(Uuid, bool), Error> {
+        let hash_algorithm_str =
+            sqlx::query_scalar::<_, String>("SELECT hash_algorithm FROM \"index\" WHERE name = $1")
+                .bind(&entry.index_name)
+                .fetch_optional(&mut **tx)
+                .await
+                .map_err(Error::Database)?
+                .ok_or_else(|| {
+                    Error::InvalidIndex(format!("Index '{}' not found", entry.index_name))
+                })?;
+
+        let result = sqlx::query(
+            r#"
+            INSERT INTO entry_context (
+                key,
+                index_name,
+                context_hash,
+                pairs,
+                hash_algorithm
+            )
+            VALUES (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5
+            )
+            ON CONFLICT (index_name, context_hash) DO NOTHING
+            "#,
+        )
+        .bind(UuidWrapper(entry.key))
+        .bind(&entry.index_name)
+        .bind(&entry.context.hash)
+        .bind(serde_json::to_value(&entry.context.pairs).map_err(Error::Serialization)?)
+        .bind(hash_algorithm_str)
+        .execute(&mut **tx)
+        .await
+        .map_err(Error::Database)?;
+
+        if result.rows_affected() == 1 {
+            return Ok((entry.key, true));
+        }
+
+        // Context already existed — fetch the pre-existing key.
+        let existing_key: Uuid = sqlx::query_scalar(
+            "SELECT key FROM entry_context WHERE index_name = $1 AND context_hash = $2",
+        )
+        .bind(&entry.index_name)
+        .bind(&entry.context.hash)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(Error::Database)?
+        .ok_or_else(|| {
+            Error::Transaction(
+                "entry was concurrently deleted between conflict detection and key fetch"
+                    .to_string(),
+            )
+        })?;
+
+        Ok((existing_key, false))
+    }
+
     /// Delete an entry within an existing transaction.
     async fn delete_entry_tx(
         &self,
@@ -534,6 +604,13 @@ impl Datastore for PostgresDatastore {
         let key = self.create_entry_tx(entry, &mut tx).await?;
         tx.commit().await.map_err(Error::Database)?;
         Ok(key)
+    }
+
+    async fn lookup_or_create_entry(&self, entry: Entry) -> Result<(Uuid, bool), Error> {
+        let mut tx = self.pool.begin().await.map_err(Error::Database)?;
+        let result = self.lookup_or_create_entry_tx(entry, &mut tx).await?;
+        tx.commit().await.map_err(Error::Database)?;
+        Ok(result)
     }
 
     async fn get_entry_by_key(&self, key: Uuid) -> Result<Entry, Error> {

@@ -1270,3 +1270,85 @@ async fn test_delete_index_not_found(#[context] ctx: Context) {
         err
     );
 }
+
+/// lookup_or_create_entry: first call creates the entry (created=true) and returns the
+/// candidate key; second call with the same context finds the existing entry (created=false)
+/// and returns the same key.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_lookup_or_create_entry_created(#[context] ctx: Context) {
+    let data = data(false).await;
+    let datastore = &data.0;
+    let idx_name = index_name(&ctx);
+
+    datastore
+        .create_index(create_sample_index(&idx_name))
+        .await
+        .expect("Failed to create index");
+
+    let candidate_key = Uuid::new_v4();
+    let entry = Entry {
+        key: candidate_key,
+        context: create_sample_context("loc_hash_create"),
+        index_name: idx_name.clone(),
+    };
+
+    let (key, created) = datastore
+        .lookup_or_create_entry(entry)
+        .await
+        .expect("lookup_or_create_entry should succeed");
+
+    assert_eq!(
+        key, candidate_key,
+        "should return the candidate key on create"
+    );
+    assert!(created, "created flag must be true for a new entry");
+}
+
+/// lookup_or_create_entry: when an entry already exists, created=false and the
+/// pre-existing key is returned (not the candidate key supplied in the second call).
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_lookup_or_create_entry_found(#[context] ctx: Context) {
+    let data = data(false).await;
+    let datastore = &data.0;
+    let idx_name = index_name(&ctx);
+
+    datastore
+        .create_index(create_sample_index(&idx_name))
+        .await
+        .expect("Failed to create index");
+
+    let first_key = Uuid::new_v4();
+    let context = create_sample_context("loc_hash_found");
+
+    // Create the entry first via create_entry so the state is known.
+    datastore
+        .create_entry(Entry {
+            key: first_key,
+            context: context.clone(),
+            index_name: idx_name.clone(),
+        })
+        .await
+        .expect("initial create_entry should succeed");
+
+    // Now call lookup_or_create — the entry already exists.
+    let different_candidate = Uuid::new_v4();
+    let (key, created) = datastore
+        .lookup_or_create_entry(Entry {
+            key: different_candidate,
+            context: context.clone(),
+            index_name: idx_name.clone(),
+        })
+        .await
+        .expect("lookup_or_create_entry should succeed on existing entry");
+
+    assert_eq!(
+        key, first_key,
+        "should return the pre-existing key, not the candidate"
+    );
+    assert!(
+        !created,
+        "created flag must be false when entry already existed"
+    );
+}
