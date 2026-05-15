@@ -702,7 +702,10 @@ async fn test_lookup_or_create_creates_new_entry() {
 
     assert!(resp.created, "created must be true for a new entry");
     assert!(!resp.key.is_empty(), "key must not be empty");
-    assert_eq!(resp.context_hash, hash, "response hash must echo the request hash");
+    assert_eq!(
+        resp.context_hash, hash,
+        "response hash must echo the request hash"
+    );
     Uuid::parse_str(&resp.key).expect("key must be a valid UUID");
 }
 
@@ -772,7 +775,11 @@ async fn test_lookup_or_create_validation_errors() {
         }))
         .await
         .expect_err("missing context must be rejected");
-    assert_eq!(err.code(), Code::InvalidArgument, "missing context → INVALID_ARGUMENT");
+    assert_eq!(
+        err.code(),
+        Code::InvalidArgument,
+        "missing context → INVALID_ARGUMENT"
+    );
 
     // Missing context_hash
     let err = entry_server
@@ -783,7 +790,11 @@ async fn test_lookup_or_create_validation_errors() {
         }))
         .await
         .expect_err("empty context_hash must be rejected");
-    assert_eq!(err.code(), Code::InvalidArgument, "empty context_hash → INVALID_ARGUMENT");
+    assert_eq!(
+        err.code(),
+        Code::InvalidArgument,
+        "empty context_hash → INVALID_ARGUMENT"
+    );
 
     // Empty index_name
     let err = entry_server
@@ -794,7 +805,11 @@ async fn test_lookup_or_create_validation_errors() {
         }))
         .await
         .expect_err("empty index_name must be rejected");
-    assert_eq!(err.code(), Code::InvalidArgument, "empty index_name → INVALID_ARGUMENT");
+    assert_eq!(
+        err.code(),
+        Code::InvalidArgument,
+        "empty index_name → INVALID_ARGUMENT"
+    );
 }
 
 /// lookup_key_by_context_or_create: a context_hash that does not match the
@@ -840,8 +855,9 @@ async fn test_lookup_or_create_hash_mismatch_invalid_argument() {
 async fn test_bulk_write_lookup_or_create() {
     use tonic::Request;
     use udex_api::entry::{
-        bulk_write_entry_operation::Operation, bulk_write_entry_operation_result::Result as WriteResult,
-        BulkWriteEntryOperation, BulkWriteEntryOperationRequest, LookupKeyByContextOrCreateRequest,
+        bulk_write_entry_operation::Operation,
+        bulk_write_entry_operation_result::Result as WriteResult, BulkWriteEntryOperation,
+        BulkWriteEntryOperationRequest, LookupKeyByContextOrCreateRequest,
     };
 
     let data = data(false).await;
@@ -873,7 +889,10 @@ async fn test_bulk_write_lookup_or_create() {
         WriteResult::LookupOrCreate(r) => {
             assert!(r.created, "created must be true for a new entry");
             assert!(!r.key.is_empty(), "key must not be empty");
-            assert_eq!(r.context_hash, hash, "response hash must echo the request hash");
+            assert_eq!(
+                r.context_hash, hash,
+                "response hash must echo the request hash"
+            );
             Uuid::parse_str(&r.key).expect("key must be a valid UUID");
         }
         other => panic!("expected LookupOrCreate result, got {:?}", other),
