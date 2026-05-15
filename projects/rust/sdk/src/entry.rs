@@ -3,8 +3,10 @@ use udex_api::entry::{
     BulkReadEntryOperation, BulkReadEntryOperationRequest, BulkReadEntryOperationResult,
     BulkWriteEntryOperation, BulkWriteEntryOperationRequest, BulkWriteEntryOperationResult,
     Context, ContextInput, CreateEntryRequest, CreateEntryResponse, DeleteEntryRequest,
-    LookupContextByKeyRequest, LookupKeyByContextRequest,
+    LookupContextByKeyRequest, LookupKeyByContextOrCreateRequest,
+    LookupKeyByContextOrCreateResponse, LookupKeyByContextRequest,
 };
+use udex_api::hash::xxh3_context_hash;
 
 use crate::client::{make_auth_interceptor, UdexClient};
 use crate::error::Error;
@@ -81,6 +83,31 @@ impl UdexClient {
             .await?
             .into_inner();
         Ok(resp.key)
+    }
+
+    /// Looks up the key for `context` in `index_name`; creates the entry if it
+    /// does not exist. The client computes the context hash and the server
+    /// verifies it, returning `INVALID_ARGUMENT` if they disagree.
+    ///
+    /// The response `created` field is `true` when the entry was created by
+    /// this call and `false` when a pre-existing entry was found.
+    pub async fn lookup_or_create_entry(
+        &self,
+        index_name: &str,
+        context: ContextInput,
+    ) -> Result<LookupKeyByContextOrCreateResponse, Error> {
+        let context_hash =
+            xxh3_context_hash(&context).map_err(|e| Error::InvalidResponse(e.to_string()))?;
+        let mut client = self.entry_client().await?;
+        let resp = client
+            .lookup_key_by_context_or_create(LookupKeyByContextOrCreateRequest {
+                index_name: index_name.to_owned(),
+                context: Some(context),
+                context_hash,
+            })
+            .await?
+            .into_inner();
+        Ok(resp)
     }
 
     /// Executes multiple write operations in a single transaction.

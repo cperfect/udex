@@ -5,7 +5,10 @@ use tabled::{Table, Tabled};
 use udex_api::hash::xxh3_context_hash;
 use udex_sdk::{value, ContextInput, KeyValuePair, UdexClient, Value};
 
-use crate::cli::{EntryCreateArgs, EntryDeleteArgs, EntryGetArgs, EntryLookupArgs, OutputFormat};
+use crate::cli::{
+    EntryCreateArgs, EntryDeleteArgs, EntryGetArgs, EntryLookupArgs, EntryLookupOrCreateArgs,
+    OutputFormat,
+};
 
 // ---------------------------------------------------------------------------
 // Context K=V parsing
@@ -164,6 +167,46 @@ pub async fn lookup(
                 print!("{}", serde_yaml::to_string(&key)?);
             }
         },
+    }
+    Ok(())
+}
+
+/// Look up the key for a context, creating the entry if it does not exist.
+pub async fn lookup_or_create(
+    client: &UdexClient,
+    args: EntryLookupOrCreateArgs,
+    output: &OutputFormat,
+) -> Result<()> {
+    let context = build_context_input(&args.context)?;
+    let resp = client
+        .lookup_or_create_entry(&args.index, context)
+        .await
+        .context("lookup_or_create_entry RPC failed")?;
+
+    match output {
+        OutputFormat::Table => {
+            let rows = vec![
+                KvRow {
+                    key: "key".to_string(),
+                    value: resp.key,
+                },
+                KvRow {
+                    key: "context_hash".to_string(),
+                    value: resp.context_hash,
+                },
+                KvRow {
+                    key: "created".to_string(),
+                    value: resp.created.to_string(),
+                },
+            ];
+            println!("{}", Table::new(rows));
+        }
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&resp)?);
+        }
+        OutputFormat::Yaml => {
+            print!("{}", serde_yaml::to_string(&resp)?);
+        }
     }
     Ok(())
 }
