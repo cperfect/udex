@@ -98,11 +98,11 @@ The canonical case is **Id Permanence**: an Indexer receives an entity — say, 
 
 ```bash
 # First call — entry does not exist yet
-udex entry lookup-or-create --index customers --context id=alice version=1
+udex entry lookup-or-create customers --context id=alice --context version=1
 # → key: 550e8400-..., context_hash: abc123, created: true
 
 # Second call — same context, different process or retry
-udex entry lookup-or-create --index customers --context id=alice version=1
+udex entry lookup-or-create customers --context id=alice --context version=1
 # → key: 550e8400-..., context_hash: abc123, created: false
 ```
 
