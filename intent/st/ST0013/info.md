@@ -1,7 +1,7 @@
 ---
 verblock: "15 May 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: Not Started
+status: WIP
 slug: lookup-or-create-entry
 created: 20260515
 completed:

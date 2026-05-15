@@ -140,11 +140,41 @@ pub struct LookupKeyByContextResponse {
     #[prost(string, optional, tag = "1")]
     pub key: ::core::option::Option<::prost::alloc::string::String>,
 }
+/// LookupKeyByContextOrCreateRequest looks up or creates an entry for a context.
+/// context_hash must be the client-computed hash of the context pairs.
+/// The server recomputes the hash and returns INVALID_ARGUMENT if they differ.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LookupKeyByContextOrCreateRequest {
+    /// Name of the index to which this entry belongs
+    #[prost(string, tag = "1")]
+    pub index_name: ::prost::alloc::string::String,
+    /// Full context pairs — used to create the entry if not found
+    #[prost(message, optional, tag = "2")]
+    pub context: ::core::option::Option<ContextInput>,
+    /// Client-pre-computed hash — server verifies this matches
+    #[prost(string, tag = "3")]
+    pub context_hash: ::prost::alloc::string::String,
+}
+/// LookupKeyByContextOrCreateResponse returns the entry key and whether it was created.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LookupKeyByContextOrCreateResponse {
+    /// UUIDv4 entry key (new or pre-existing)
+    #[prost(string, tag = "1")]
+    pub key: ::prost::alloc::string::String,
+    /// Server-computed context hash
+    #[prost(string, tag = "2")]
+    pub context_hash: ::prost::alloc::string::String,
+    /// true if the entry was created by this call; false if it already existed
+    #[prost(bool, tag = "3")]
+    pub created: bool,
+}
 /// BulkWriteEntryOperation represents a single write operation in a bulk write request
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BulkWriteEntryOperation {
-    #[prost(oneof = "bulk_write_entry_operation::Operation", tags = "1, 2")]
+    #[prost(oneof = "bulk_write_entry_operation::Operation", tags = "1, 2, 3")]
     pub operation: ::core::option::Option<bulk_write_entry_operation::Operation>,
 }
 /// Nested message and enum types in `BulkWriteEntryOperation`.
@@ -156,6 +186,8 @@ pub mod bulk_write_entry_operation {
         CreateEntry(super::CreateEntryRequest),
         #[prost(message, tag = "2")]
         DeleteEntry(super::DeleteEntryRequest),
+        #[prost(message, tag = "3")]
+        LookupOrCreate(super::LookupKeyByContextOrCreateRequest),
     }
 }
 /// BulkWriteEntryOperationRequest performs multiple write operations in a single transaction
@@ -179,7 +211,7 @@ pub struct BulkWriteEntryOperationResponse {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BulkWriteEntryOperationResult {
-    #[prost(oneof = "bulk_write_entry_operation_result::Result", tags = "1, 2")]
+    #[prost(oneof = "bulk_write_entry_operation_result::Result", tags = "1, 2, 3")]
     pub result: ::core::option::Option<bulk_write_entry_operation_result::Result>,
 }
 /// Nested message and enum types in `BulkWriteEntryOperationResult`.
@@ -191,6 +223,8 @@ pub mod bulk_write_entry_operation_result {
         CreateEntry(super::CreateEntryResponse),
         #[prost(message, tag = "2")]
         DeleteEntry(super::DeleteEntryResponse),
+        #[prost(message, tag = "3")]
+        LookupOrCreate(super::LookupKeyByContextOrCreateResponse),
     }
 }
 /// BulkReadEntryOperation represents a single read operation in a bulk read request
@@ -506,6 +540,42 @@ pub mod entry_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        /// LookupKeyByContextOrCreate looks up the key for a context; if no entry exists,
+        /// creates one and returns the new key.
+        /// The client must supply a pre-computed context_hash alongside the full context pairs.
+        /// The server recomputes the hash from the pairs and returns INVALID_ARGUMENT if they
+        /// do not match — even before checking whether an entry exists.
+        /// This operation is classified as a write: it requires write permission and may only
+        /// appear inside BulkWriteEntryOperation, not BulkReadEntryOperation.
+        pub async fn lookup_key_by_context_or_create(
+            &mut self,
+            request: impl tonic::IntoRequest<super::LookupKeyByContextOrCreateRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::LookupKeyByContextOrCreateResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/udex.entry.v1.EntryService/LookupKeyByContextOrCreate",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "udex.entry.v1.EntryService",
+                        "LookupKeyByContextOrCreate",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -571,6 +641,20 @@ pub mod entry_service_server {
             request: tonic::Request<super::BulkReadEntryOperationRequest>,
         ) -> std::result::Result<
             tonic::Response<super::BulkReadEntryOperationResponse>,
+            tonic::Status,
+        >;
+        /// LookupKeyByContextOrCreate looks up the key for a context; if no entry exists,
+        /// creates one and returns the new key.
+        /// The client must supply a pre-computed context_hash alongside the full context pairs.
+        /// The server recomputes the hash from the pairs and returns INVALID_ARGUMENT if they
+        /// do not match — even before checking whether an entry exists.
+        /// This operation is classified as a write: it requires write permission and may only
+        /// appear inside BulkWriteEntryOperation, not BulkReadEntryOperation.
+        async fn lookup_key_by_context_or_create(
+            &self,
+            request: tonic::Request<super::LookupKeyByContextOrCreateRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::LookupKeyByContextOrCreateResponse>,
             tonic::Status,
         >;
     }
@@ -918,6 +1002,58 @@ pub mod entry_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = BulkReadEntryOperationSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/udex.entry.v1.EntryService/LookupKeyByContextOrCreate" => {
+                    #[allow(non_camel_case_types)]
+                    struct LookupKeyByContextOrCreateSvc<T: EntryService>(pub Arc<T>);
+                    impl<
+                        T: EntryService,
+                    > tonic::server::UnaryService<
+                        super::LookupKeyByContextOrCreateRequest,
+                    > for LookupKeyByContextOrCreateSvc<T> {
+                        type Response = super::LookupKeyByContextOrCreateResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::LookupKeyByContextOrCreateRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as EntryService>::lookup_key_by_context_or_create(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = LookupKeyByContextOrCreateSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

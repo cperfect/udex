@@ -30,6 +30,15 @@ service EntryService {
   
   // BulkReadEntryOperation performs multiple read operations
   rpc BulkReadEntryOperation(BulkReadEntryOperationRequest) returns (BulkReadEntryOperationResponse);
+
+  // LookupKeyByContextOrCreate looks up the key for a context; if no entry exists,
+  // creates one and returns the new key.
+  // The client must supply a pre-computed context_hash alongside the full context pairs.
+  // The server recomputes the hash from the pairs and returns INVALID_ARGUMENT if they
+  // do not match — even before checking whether an entry exists.
+  // This operation is classified as a write: it requires write permission and may only
+  // appear inside BulkWriteEntryOperation, not BulkReadEntryOperation.
+  rpc LookupKeyByContextOrCreate(LookupKeyByContextOrCreateRequest) returns (LookupKeyByContextOrCreateResponse);
 }
 
 // Value represents a context value that can be of different types
@@ -120,11 +129,28 @@ message LookupKeyByContextResponse {
   optional string key = 1;
 }
 
+// LookupKeyByContextOrCreateRequest looks up or creates an entry for a context.
+// context_hash must be the client-computed hash of the context pairs.
+// The server recomputes the hash and returns INVALID_ARGUMENT if they differ.
+message LookupKeyByContextOrCreateRequest {
+  string index_name = 1;                // Name of the index to which this entry belongs
+  ContextInput context = 2;             // Full context pairs — used to create the entry if not found
+  string context_hash = 3;             // Client-pre-computed hash — server verifies this matches
+}
+
+// LookupKeyByContextOrCreateResponse returns the entry key and whether it was created.
+message LookupKeyByContextOrCreateResponse {
+  string key = 1;           // UUIDv4 entry key (new or pre-existing)
+  string context_hash = 2;  // Server-computed context hash
+  bool created = 3;         // true if the entry was created by this call; false if it already existed
+}
+
 // BulkWriteEntryOperation represents a single write operation in a bulk write request
 message BulkWriteEntryOperation {
   oneof operation {
     CreateEntryRequest create_entry = 1;
     DeleteEntryRequest delete_entry = 2;
+    LookupKeyByContextOrCreateRequest lookup_or_create = 3;
   }
 }
 
@@ -144,6 +170,7 @@ message BulkWriteEntryOperationResult {
   oneof result {
     CreateEntryResponse create_entry = 1;
     DeleteEntryResponse delete_entry = 2;
+    LookupKeyByContextOrCreateResponse lookup_or_create = 3;
   }
 }
 
