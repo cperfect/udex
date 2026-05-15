@@ -97,7 +97,7 @@ impl UdexClient {
         context: ContextInput,
     ) -> Result<LookupKeyByContextOrCreateResponse, Error> {
         let context_hash =
-            xxh3_context_hash(&context).map_err(|e| Error::InvalidResponse(e.to_string()))?;
+            xxh3_context_hash(&context).map_err(|e| Error::InvalidArgument(e.to_string()))?;
         let mut client = self.entry_client().await?;
         let resp = client
             .lookup_key_by_context_or_create(LookupKeyByContextOrCreateRequest {
