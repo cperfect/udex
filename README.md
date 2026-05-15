@@ -21,110 +21,135 @@ It has been built with the following integration and data management scenarios i
 
 It is not intended to be a generic entity database and aggregate queries are deliberately not supported.
 
-For full detail on the data model, operations, components, security model, and design principles, see [docs/intent/ARCHITECTURE.md](docs/intent/ARCHITECTURE.md).
+For full detail on the data model, operations, components, security model, and design principles, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## The 1:1 Entry–Context Model
+For common questions, see the [FAQs](docs/FAQ.md).
+
+> This project also gives me a chance to learn rust, develop AI coding processes and tools and play with a few other technologies.
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Data model, operations, security model, and design principles |
+| [docs/FAQ.md](docs/FAQ.md) | Design rationale and common questions |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Getting started, development guidelines, and testing standards |
+| [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) | Rust-specific coding standards and conventions |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting policy |
+| [.devcontainer/](.devcontainer/README.md) | VS Code dev container — tools and first-time setup |
+| [projects/compose/](projects/compose/README.md) | Docker Compose — local PostgreSQL + Hydra services |
+| [projects/protobuf/](projects/protobuf/README.md) | Protobuf API definitions — source of truth for all API types |
+| [projects/rust/api/](projects/rust/api/README.md) | `udex-api` — generated types, authz, hashing |
+| [projects/rust/server/](projects/rust/server/README.md) | `udex-server` — gRPC server |
+| [projects/rust/datastore/](projects/rust/datastore/README.md) | `udex-datastore` — PostgreSQL implementation |
+| [projects/rust/sdk/](projects/rust/sdk/README.md) | `udex-sdk` — Rust client SDK |
+| [projects/rust/cli/](projects/rust/cli/README.md) | `udex-cli` — command-line interface |
+
+## Core Concepts
+
+There are four core domain concepts:
+
+- **Index** — a named, configured namespace for entries. Indices are independent: the same context can appear in multiple indices with different keys. Index names are lowercase strings and are immutable once set.
+- **Context** — a set of key-value pairs that uniquely identifies an entity. Udex hashes the pairs to produce a stable **context fingerprint**. Contexts are immutable — they cannot be updated, only deleted and recreated.
+- **Key** — a server-generated UUIDv4 assigned to a context within an index. Keys are globally unique across all indices and permanent for the lifetime of the entry.
+- **Entry** — the binding of a key to a context within an index. The 1:1 invariant ensures that one context fingerprint maps to exactly one key within any given index (see [The 1:1 Entry–Context Model](#the-11-entrycontext-model) below).
+
+```mermaid
+classDiagram
+    direction LR
+    class Index {
+        +String name
+        +String description
+        +i32 max_bulk_operations
+        +HashAlgorithm hash_algorithm
+    }
+    class Entry {
+        +UUID key
+    }
+    class Context {
+        +String hash
+    }
+    class KeyValuePair {
+        +String key
+        +Value value
+        +String? kek_id
+        +String? dek
+    }
+
+    Index "1" *-- "0..*" Entry : contains
+    Entry --> Context : key maps to
+    Context "1" *-- "1..*" KeyValuePair : described by
+```
+
+`Value` is a union of `String`, `i64`, `f64`, and `bool`. `kek_id` and `dek` are optional envelope-encryption fields — when present they signal that the value is ciphertext and carry the wrapped key metadata. Both are opaque to the server and excluded from the context hash.
+
+### The 1:1 Entry–Context Model
 
 A **context** is a set of key-value pairs that uniquely describes an entity at a point in time. Udex hashes the pairs to produce a **context fingerprint**. The core invariant is:
 
 > **One context fingerprint maps to exactly one entry key — always.**
 
-`create_entry` is idempotent: submitting the same context twice returns the same key both times. No duplicates accumulate. This makes Udex safe to call from retry-prone systems without coordination.
+See [the FAQ](docs/FAQ.md#why-are-keyscontexts-11) for the reasoning behind this.
 
-### Why 1:1?
+`create_entry` is idempotent: submitting the same context twice returns the same key both times. No duplicates accumulate. For the rationale behind this design and how to handle key migrations, see [the FAQ](docs/FAQ.md#why-are-contexts-immutable).
 
-The driving use case is cross-party key resolution. If Party A sends the same entity twice (perhaps because of a network retry or a restart), Udex must return the same stable key. Returning a different key each time would break any downstream system that caches or stores the first key. The 1:1 invariant provides that guarantee at the database level — no application-layer deduplication is needed.
+### Access
 
-### Migrating to a new key
+The API is three gRPC services (defined in [`projects/protobuf/`](projects/protobuf/)):
 
-Sometimes a key genuinely needs to change — for example when a user is re-enrolled under new credentials, or when a context value is corrected. Because Udex enforces 1:1, you cannot create a second entry for the same context. Instead, **encode the migration intent in the context** using a version pair.
+| Service | Operations |
+|---|---|
+| `IndexService` | Create, describe, update, list, delete indices |
+| `EntryService` | Create, delete, lookup by key, lookup by context, bulk read/write |
+| `HealthzService` | Server liveness check |
 
-**Example — re-enrolling a user after a credential rotation:**
+All requests require a JWT (ES256) issued via **OAuth2 Client Credentials** flow. Permissions are scoped per index per operation — a token for one index cannot access another. The [Rust SDK](projects/rust/sdk/) and [`udex` CLI](projects/rust/cli/) are the primary clients.
 
-```text
-# Original entry: context fingerprint for alice, version 1
-create_entry index=users context={user_id: alice, version: 1}
-→ key: 550e8400-e29b-41d4-a716-446655440000
+### Client Usage
+There are a number of client roles:
+* Key Holder - uses keys to access data.
+* Context Holder - has the context, but doesn't want to hand out its own keys.
+* Indexer - performs indexing operations between Key Holders and Context Holders.
+* Admin - maintains indices.
 
-# Migrate: bump the version to produce a distinct context fingerprint
-create_entry index=users context={user_id: alice, version: 2}
-→ key: 6ba7b810-9dad-11d1-80b4-00c04fd430c8   ← fresh key
+Combinations of the first three roles are possible: A single logical client could play both Key Holder and Context Holder roles, though generally not for the same index, and also act as an Indexer, or a client could be both the Context Holder and Indexer etc.
 
-# Optionally retire the old entry
-delete_entry key=550e8400-e29b-41d4-a716-446655440000
+The Key Holder must obviously retain the key, however the Indexer has a choice - it can resolve the hash from the context (as long as it knows which hash function to apply - and it should always use the SDK for this to ensure hash stability) or it can retain the hash for re-use.
+
+Admin is expected to be CI/CD or Operational role and generally would not be a Key Holder or Context Holder.
+
+As an example of this see [Open Banking Consumer Data Right (CDR)](./docs/use_cases/AU_Open_Banking_CDR.md) use case - more specifically the [Resource Data Retrieval with Id Permanence data flow](./docs/use_cases/AU_Open_Banking_CDR.md#4a-phase-3-resource-data-retrieval-with-id-permanence-implemented-with-udex). 
+
+> This is meant to be indicative only
+
+```mermaid
+sequenceDiagram
+  title Data Distribution with Keys
+
+  Context Holder->>+Indexer:Send Data
+  Indexer->>Indexer: Generate Contexts
+  Indexer->>+Udex: Resolve existing Contexts
+  Udex->>-Indexer: Existing Keys for Contexts
+  Indexer->>+Udex: Index new Contexts
+  Udex-->-Indexer: New Keys for Contexts
+  Indexer->>Indexer: Enhance data with keys
+  Indexer->>Key Holder: Send data with keys
+  Key Holder->>Key Holder: Store data with keys
+  Indexer->>-Context Holder: done
 ```
+```mermaid
+sequenceDiagram
+  title Use Keys to access Data
 
-The `version` pair is just a convention — any pair that changes the fingerprint works (`epoch`, `tenant`, `rotation_id`, etc.). Callers that need to look up the current entry include the expected version in their context and let the hash do the rest. No out-of-band state is needed to track "which version is current" beyond what is already in the context pairs themselves.
-
-> This project also gives me chance to learn rust, develop AI coding processes and tools and play with a few other technologies.
-
-## Getting Started
-
-### Prerequisites
-
-- **Rust** (1.95.0) — install via [rustup](https://rustup.rs/)
-- **PostgreSQL 16+** — the datastore; run locally via Docker or use the dev container (which starts it automatically)
-- **Docker** — used to run a local PostgreSQL instance for integration tests
-- **protoc** (Protocol Buffers compiler) — required to build the API crate from `.proto` definitions
-
-  ```bash
-  # macOS
-  brew install protobuf
-
-  # Debian/Ubuntu
-  apt-get install protobuf-compiler
-  ```
-
-A [VS Code dev container](.devcontainer) is provided that installs all prerequisites automatically — this is the recommended way to get a consistent environment.
-
-### Build & Test
-
-```bash
-# Clone the repository
-git clone https://github.com/cperfect/udex.git && cd udex
-
-# Start PostgreSQL (or use the dev container, which starts it automatically)
-docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16
-
-# Build the workspace
-cargo build
-
-# Run the full test suite
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres cargo test
+  Key Holder->>+Indexer: Access Data with Keys
+  Indexer->>+Udex: Lookup Contexts for Keys
+  Udex->>-Indexer: Keys for Contexts
+  Indexer->>Indexer: Enhance Request with Contexts
+  Indexer->>+Context Holder: Access data with Contexts
+  Context Holder->>-Indexer: Respond with data
+  Indexer->>Indexer: Enhance data with Keys
+  Indexer->>-Key Holder: Respond with data
 ```
-
-See [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) for the full pre-commit checklist and local check commands.
-
-### Security scanning
-> Dependabot has been disabled and replaced by regular scanning with trivy. The results are uploaded to the GitHub security panel for this repository.
-
-[Trivy](https://trivy.dev) is pre-installed in the dev container. To run the same scan that CI runs:
-
-```bash
-trivy fs --config .trivy.yaml .
-```
-
-Findings at MEDIUM severity or higher cause a non-zero exit and will block merging on GitHub. To suppress an accepted finding, add its ID to `.trivyignore` with a comment explaining the rationale.
-
-Outside the devcontainer, install Trivy first:
-
-```bash
-# macOS
-brew install trivy
-
-# Debian/Ubuntu (from official Trivy apt repo)
-wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
-echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-sudo apt-get update && sudo apt-get install trivy
-```
-
-## Contributing Guides
-
-- [CONTRIBUTING.md](CONTRIBUTING.md) — general development principles, guidelines, and testing standards for all contributors
-- [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) — Rust-specific coding standards, error conventions, and local check commands
-- [docs/intent/ARCHITECTURE.md](docs/intent/ARCHITECTURE.md) — full architecture intent: components, operations, security model, and design principles
-
-This project is developed using [Claude Code](https://claude.ai/code) (Anthropic) with [Intent v2.8.0](https://github.com/matthewsinclair/intent) for steel thread and work package management. Plugins: [`rust-analyzer-lsp`](https://github.com/anthropics/claude-code-plugins). Skills: [`in-essentials`](https://github.com/matthewsinclair/intent).
 
 ## Tech Stack
 
@@ -133,15 +158,31 @@ This project is developed using [Claude Code](https://claude.ai/code) (Anthropic
 | API spec | [Protobuf v3](https://protobuf.dev) — server, client, data models, and SDKs generated from `.proto` definitions via [prost](https://docs.rs/prost) / [tonic-build](https://docs.rs/tonic-build) |
 | Transport | [tonic](https://docs.rs/tonic) — gRPC over HTTP/2 with TLS |
 | Async runtime | [tokio](https://docs.rs/tokio) |
-| TLS | [rustls](https://docs.rs/rustls) with [aws-lc-rs](https://docs.rs/aws-lc-rs) crypto backend |
+| TLS | [rustls](https://docs.rs/rustls) with [aws-lc-rs](https://docs.rs/aws-lc-rs) crypto backend — used for gRPC transport, datastore connections, and HTTP clients |
 | Datastore | [PostgreSQL 16+](https://www.postgresql.org) accessed via [sqlx](https://docs.rs/sqlx) (compile-time verified queries, async, connection pooling) |
-| Authentication | JWT (ES256) via [jsonwebtoken](https://docs.rs/jsonwebtoken) |
+| Hashing | [xxhash-rust](https://docs.rs/xxhash-rust) (XXH3) — fast non-cryptographic hash used to fingerprint contexts |
+| Serialization | [serde](https://docs.rs/serde) / [serde_json](https://docs.rs/serde_json) / [serde_yaml](https://docs.rs/serde_yaml) — derived on all API types; drives JSON and YAML output in the CLI |
+| Authorization | OAuth2 Client Credentials flow — JWT (ES256) validated on every request via [jsonwebtoken](https://docs.rs/jsonwebtoken); permissions are scoped per index per operation |
 | Logging | [tracing](https://docs.rs/tracing) + [tracing-subscriber](https://docs.rs/tracing-subscriber) (structured JSON in production, human-readable in development) |
 | CLI | [clap](https://docs.rs/clap) — `udex` binary for server lifecycle, index/entry management, JWT inspection, and context hashing |
 | Error handling | [thiserror](https://docs.rs/thiserror) (library errors) + [anyhow](https://docs.rs/anyhow) (application errors) |
 
-_(Deferred)_ Optional REST interface and OpenTelemetry tracing/metrics.
+For the roadmap of deferred features, see the [FAQ](docs/FAQ.md#what-future-features-might-udex-support).
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Installation
+> Placeholder will be filled in prior to release
+
+### Deployment
+> Placeholder will be filled in prior to release
+
+## Development / Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to get started. All key documents are indexed in the [Documentation](#documentation) section above.
+
+## Info
+
+This project is developed using [Claude Code](https://claude.ai/code) (Anthropic) with [Intent v2.8.0](https://github.com/matthewsinclair/intent) for steel thread and work package management. Plugins: [`rust-analyzer-lsp`](https://github.com/anthropics/claude-code-plugins). Skills: [`in-essentials`](https://github.com/matthewsinclair/intent).
