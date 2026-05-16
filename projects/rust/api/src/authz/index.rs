@@ -288,6 +288,7 @@ mod tests {
 
         let mut request = Request::new(CreateIndexRequest {
             name: "test-index".to_string(),
+            display_name: "Test Index".to_string(),
             description: "Test index".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,
@@ -313,6 +314,7 @@ mod tests {
 
         let mut request = Request::new(CreateIndexRequest {
             name: "test-index".to_string(),
+            display_name: "Test Index".to_string(),
             description: "Test index".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,
@@ -387,6 +389,7 @@ mod tests {
 
         let mut request = Request::new(CreateIndexRequest {
             name: "test-index".to_string(),
+            display_name: "Test Index".to_string(),
             description: "Test index".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,
@@ -412,6 +415,7 @@ mod tests {
 
         let mut request = Request::new(CreateIndexRequest {
             name: "test-index".to_string(),
+            display_name: "Test Index".to_string(),
             description: "Test index".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,

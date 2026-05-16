@@ -121,6 +121,7 @@ async fn init_jwt_fixture() -> JwtFixture {
             name: index_name.clone(),
             update: Some(IndexUpdate {
                 description: Some(index_name.clone()),
+                display_name: Some(index_name.clone()),
                 max_bulk_operations: Some(100),
                 max_key_length: Some(256),
                 max_value_length: Some(1024),
@@ -231,6 +232,7 @@ async fn init_hydra_fixture() -> HydraFixture {
             name: index_name.clone(),
             update: Some(IndexUpdate {
                 description: Some(index_name.clone()),
+                display_name: Some(index_name.clone()),
                 max_bulk_operations: Some(100),
                 max_key_length: Some(256),
                 max_value_length: Some(1024),
@@ -1087,6 +1089,7 @@ async fn test_sdk_delete_index_empty() {
     client
         .create_index(CreateIndexRequest {
             name: name.clone(),
+            display_name: "Delete Empty".to_string(),
             description: "delete test".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,

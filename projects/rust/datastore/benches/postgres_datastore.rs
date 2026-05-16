@@ -144,6 +144,7 @@ async fn setup_datastore() -> (
     datastore
         .create_index(Index {
             name: index_name.clone(),
+            display_name: "Benchmark Index".to_string(),
             description: "Benchmark index".to_string(),
             max_bulk_operations: 1000,
             max_key_length: 256,

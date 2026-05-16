@@ -84,6 +84,7 @@ fn bind_file_secret(path: &str) -> Secret<String> {
 fn index_update(description: &str) -> IndexUpdate {
     IndexUpdate {
         description: Some(description.to_string()),
+        display_name: Some(description.to_string()),
         max_bulk_operations: Some(100),
         max_key_length: Some(256),
         max_value_length: Some(1024),
@@ -109,6 +110,7 @@ async fn init_fixture() -> Fixture {
     datastore
         .create_index(Index {
             name: NON_EMPTY_INDEX_NAME.to_string(),
+            display_name: "Pre-seeded Non-empty Index".to_string(),
             description: "pre-seeded non-empty index".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,

@@ -8,6 +8,7 @@
 
 CREATE TABLE IF NOT EXISTS "index" (
     name                    TEXT        PRIMARY KEY,
+    display_name            TEXT        NOT NULL,
     description             TEXT        NOT NULL,
     max_bulk_operations     INTEGER     NOT NULL,
     max_key_length          INTEGER     NOT NULL,

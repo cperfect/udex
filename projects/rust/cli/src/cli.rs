@@ -141,9 +141,12 @@ pub enum IndexCommands {
 pub struct IndexCreateArgs {
     /// Index name
     pub name: String,
+    /// Short human-readable label for UI use
+    #[arg(long)]
+    pub display_name: String,
     /// Human-readable description
     #[arg(long)]
-    pub description: Option<String>,
+    pub description: String,
     /// Maximum number of bulk operations per request [default: 100]
     #[arg(long, default_value = "100")]
     pub bulk_limit: u32,

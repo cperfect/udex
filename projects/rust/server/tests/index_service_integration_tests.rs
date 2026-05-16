@@ -36,6 +36,7 @@ async fn init_index_service() -> MaybeOnceType {
         name: "test_index".to_string(),
         update: Some(udex_api::index::IndexUpdate {
             description: Some("Test index description".to_string()),
+            display_name: Some("Test Index".to_string()),
             max_bulk_operations: Some(100),
             max_key_length: Some(256),
             max_value_length: Some(1024),
@@ -153,6 +154,7 @@ async fn test_create_index_valid_input() {
 
     let request = Request::new(CreateIndexRequest {
         name: "created_test_index".to_string(),
+        display_name: "Created Test Index".to_string(),
         description: "A newly created index".to_string(),
         max_bulk_operations: 50,
         max_key_length: 128,
@@ -192,6 +194,7 @@ async fn test_create_index_unsupported_hash_algorithm() {
 
     let request = Request::new(CreateIndexRequest {
         name: "unsupported_hash_index".to_string(),
+        display_name: "Unsupported Hash Index".to_string(),
         description: "Should fail".to_string(),
         max_bulk_operations: 10,
         max_key_length: 64,
@@ -220,6 +223,7 @@ async fn test_create_index_duplicate_name() {
     // First creation should succeed
     let request = Request::new(CreateIndexRequest {
         name: "duplicate_test_index".to_string(),
+        display_name: "Duplicate Test Index".to_string(),
         description: "First".to_string(),
         max_bulk_operations: 10,
         max_key_length: 64,
@@ -237,6 +241,7 @@ async fn test_create_index_duplicate_name() {
     // Second creation with same name should fail
     let request = Request::new(CreateIndexRequest {
         name: "duplicate_test_index".to_string(),
+        display_name: "Duplicate Test Index".to_string(),
         description: "Second".to_string(),
         max_bulk_operations: 10,
         max_key_length: 64,
@@ -260,6 +265,7 @@ async fn test_create_index_empty_name() {
 
     let request = Request::new(CreateIndexRequest {
         name: "".to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index description".to_string(),
         max_bulk_operations: 100,
         max_key_length: 256,
@@ -289,6 +295,7 @@ async fn test_create_index_invalid_max_bulk_operations() {
 
     let request = Request::new(CreateIndexRequest {
         name: "test_index".to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index description".to_string(),
         max_bulk_operations: 0, // Invalid: should be >= 1
         max_key_length: 256,
@@ -320,6 +327,7 @@ async fn test_create_index_invalid_max_key_length() {
 
     let request = Request::new(CreateIndexRequest {
         name: "test_index".to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index description".to_string(),
         max_bulk_operations: 100,
         max_key_length: 0, // Invalid: should be >= 1
@@ -349,6 +357,7 @@ async fn test_create_index_invalid_max_value_length() {
 
     let request = Request::new(CreateIndexRequest {
         name: "test_index".to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index description".to_string(),
         max_bulk_operations: 100,
         max_key_length: 256,
@@ -378,6 +387,7 @@ async fn test_create_index_invalid_max_kv_pairs_per_context() {
 
     let request = Request::new(CreateIndexRequest {
         name: "test_index".to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index description".to_string(),
         max_bulk_operations: 100,
         max_key_length: 256,
@@ -409,6 +419,7 @@ async fn test_create_index_invalid_hash_algorithm() {
 
     let request = Request::new(CreateIndexRequest {
         name: "test_index".to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index description".to_string(),
         max_bulk_operations: 100,
         max_key_length: 256,
@@ -429,6 +440,136 @@ async fn test_create_index_invalid_hash_algorithm() {
     }
 }
 
+/// Tests that index names with invalid characters are rejected
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_create_index_invalid_name_chars() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    let invalid_names = vec![
+        "has space",
+        "has@symbol",
+        "has.dot",
+        "has/slash",
+        "has!bang",
+    ];
+
+    for name in invalid_names {
+        let request = Request::new(CreateIndexRequest {
+            name: name.to_string(),
+            display_name: "Test Index".to_string(),
+            description: "Test description".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        });
+        let result = index_server.create_index(with_test_claims(request)).await;
+        assert!(result.is_err(), "Name '{name}' should be rejected");
+        assert_eq!(
+            result.unwrap_err().code(),
+            tonic::Code::InvalidArgument,
+            "Name '{name}' should return InvalidArgument"
+        );
+    }
+}
+
+/// Tests that valid name characters (Unicode letters, digits, hyphens, underscores) are accepted
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_create_index_valid_name_chars() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    let valid_names = vec![
+        "simple",
+        "with-hyphen",
+        "with_underscore",
+        "MixedCase",
+        "123digits",
+        "a-b_c1",
+    ];
+
+    for name in valid_names {
+        let request = Request::new(CreateIndexRequest {
+            name: name.to_string(),
+            display_name: "Test Index".to_string(),
+            description: "Test description".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        });
+        let result = index_server.create_index(with_test_claims(request)).await;
+        assert!(
+            result.is_ok(),
+            "Name '{name}' should be accepted: {:?}",
+            result.err()
+        );
+    }
+}
+
+/// Tests that empty display_name is rejected
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_create_index_empty_display_name() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    for display_name in ["", "   "] {
+        let request = Request::new(CreateIndexRequest {
+            name: "valid-name".to_string(),
+            display_name: display_name.to_string(),
+            description: "Test description".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        });
+        let result = index_server.create_index(with_test_claims(request)).await;
+        assert!(
+            result.is_err(),
+            "Empty display_name '{display_name}' should be rejected"
+        );
+        let status = result.unwrap_err();
+        assert_eq!(status.code(), tonic::Code::InvalidArgument);
+        assert!(status.message().contains("display_name is required"));
+    }
+}
+
+/// Tests that empty description is rejected
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_create_index_empty_description() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    for description in ["", "   "] {
+        let request = Request::new(CreateIndexRequest {
+            name: "valid-name".to_string(),
+            display_name: "Valid Display Name".to_string(),
+            description: description.to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        });
+        let result = index_server.create_index(with_test_claims(request)).await;
+        assert!(
+            result.is_err(),
+            "Empty description '{description}' should be rejected"
+        );
+        let status = result.unwrap_err();
+        assert_eq!(status.code(), tonic::Code::InvalidArgument);
+        assert!(status.message().contains("description is required"));
+    }
+}
+
 /// Tests the update_index endpoint with valid input returns NotImplemented
 #[rstest]
 #[tokio_shared_rt::test]
@@ -440,6 +581,7 @@ async fn test_update_index_valid_input() {
         name: "test_index_not_found".to_string(),
         update: Some(IndexUpdate {
             description: Some("Updated test index description".to_string()),
+            display_name: None,
             max_bulk_operations: None,
             max_key_length: None,
             max_value_length: None,
@@ -477,6 +619,7 @@ async fn test_update_index_empty_name() {
         name: "".to_string(),
         update: Some(IndexUpdate {
             description: Some("Updated test index description".to_string()),
+            display_name: None,
             max_bulk_operations: None,
             max_key_length: None,
             max_value_length: None,
@@ -562,6 +705,7 @@ async fn test_update_index_empty_update() {
         name: "test_index".to_string(),
         update: Some(IndexUpdate {
             description: None,
+            display_name: None,
             max_bulk_operations: None,
             max_key_length: None,
             max_value_length: None,
@@ -595,6 +739,7 @@ async fn test_validation_error_consistency() {
     let invalid_requests = vec![
         CreateIndexRequest {
             name: "".to_string(),
+            display_name: "Test".to_string(),
             description: "Test".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,
@@ -604,6 +749,7 @@ async fn test_validation_error_consistency() {
         },
         CreateIndexRequest {
             name: "valid_name".to_string(),
+            display_name: "Test".to_string(),
             description: "Test".to_string(),
             max_bulk_operations: -1,
             max_key_length: 256,
@@ -613,6 +759,7 @@ async fn test_validation_error_consistency() {
         },
         CreateIndexRequest {
             name: "valid_name".to_string(),
+            display_name: "Test".to_string(),
             description: "Test".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,
@@ -646,6 +793,7 @@ async fn test_delete_index_empty_index() {
     index_server
         .create_index(with_test_claims(Request::new(CreateIndexRequest {
             name: "del_test_empty".to_string(),
+            display_name: "Delete Test Empty".to_string(),
             description: "delete test".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,
@@ -687,6 +835,7 @@ async fn test_delete_index_not_empty() {
     index_server
         .create_index(with_test_claims(Request::new(CreateIndexRequest {
             name: "del_test_nonempty".to_string(),
+            display_name: "Delete Test Non-empty".to_string(),
             description: "delete test".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,
