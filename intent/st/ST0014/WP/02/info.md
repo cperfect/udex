@@ -3,7 +3,7 @@ verblock: "16 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Fix BulkWriteEntryOperation — derive permissions from contained operations"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-02: Fix BulkWriteEntryOperation — derive permissions from contained operations

@@ -197,12 +197,29 @@ impl Permissable<LookupKeyByContextRequest> for LookupKeyByContextRequest {
 
 impl Permissable<BulkWriteEntryOperationRequest> for BulkWriteEntryOperationRequest {
     fn required_permissions(&self) -> Vec<String> {
-        vec![format!("udex:entry:v1:{}:write", self.index_name)]
+        use crate::entry::bulk_write_entry_operation::Operation;
+
+        let mut perms: Vec<String> = self
+            .operations
+            .iter()
+            .filter_map(|op| op.operation.as_ref())
+            .flat_map(|op| match op {
+                Operation::CreateEntry(r) => r.required_permissions(),
+                Operation::DeleteEntry(r) => r.required_permissions(),
+                Operation::LookupOrCreate(r) => r.required_permissions(),
+            })
+            .collect();
+
+        perms.sort();
+        perms.dedup();
+        perms
     }
 }
 
 impl Permissable<BulkReadEntryOperationRequest> for BulkReadEntryOperationRequest {
     fn required_permissions(&self) -> Vec<String> {
+        // All bulk read variants (LookupContext, LookupKey) require only `read`, so a blanket
+        // permission is correct here — no per-operation derivation needed.
         vec![format!("udex:entry:v1:{}:read", self.index_name)]
     }
 }
@@ -446,7 +463,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_bulk_write_entry_operation_with_valid_permissions() {
+    async fn test_bulk_write_create_only_requires_create_permission() {
+        use crate::entry::{bulk_write_entry_operation::Operation, BulkWriteEntryOperation};
+
         let mut mock_service = MockEntryServiceImpl::new();
         mock_service
             .expect_bulk_write_entry_operation()
@@ -458,20 +477,185 @@ mod tests {
             });
 
         let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
-        let claims = create_test_claims_with_permissions(vec![format!(
-            "udex:entry:v1:{}:write",
-            "test-index"
-        )
-        .as_str()]);
+        let claims = create_test_claims_with_permissions(vec!["udex:entry:v1:test-index:create"]);
 
         let mut request = Request::new(BulkWriteEntryOperationRequest {
             index_name: "test-index".to_string(),
-            operations: vec![],
+            operations: vec![BulkWriteEntryOperation {
+                operation: Some(Operation::CreateEntry(CreateEntryRequest {
+                    index_name: "test-index".to_string(),
+                    context: None,
+                })),
+            }],
         });
         request.extensions_mut().insert(claims);
 
         let result = authorizor.bulk_write_entry_operation(request).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_bulk_write_delete_only_requires_delete_permission() {
+        use crate::entry::{bulk_write_entry_operation::Operation, BulkWriteEntryOperation};
+
+        let mut mock_service = MockEntryServiceImpl::new();
+        mock_service
+            .expect_bulk_write_entry_operation()
+            .times(1)
+            .returning(|_| {
+                Ok(Response::new(BulkWriteEntryOperationResponse {
+                    results: vec![],
+                }))
+            });
+
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let claims = create_test_claims_with_permissions(vec!["udex:entry:v1:test-index:delete"]);
+
+        let mut request = Request::new(BulkWriteEntryOperationRequest {
+            index_name: "test-index".to_string(),
+            operations: vec![BulkWriteEntryOperation {
+                operation: Some(Operation::DeleteEntry(DeleteEntryRequest {
+                    index_name: "test-index".to_string(),
+                    key: "some-key".to_string(),
+                })),
+            }],
+        });
+        request.extensions_mut().insert(claims);
+
+        let result = authorizor.bulk_write_entry_operation(request).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_bulk_write_lookup_or_create_requires_read_and_write_permissions() {
+        use crate::entry::{bulk_write_entry_operation::Operation, BulkWriteEntryOperation};
+
+        let mut mock_service = MockEntryServiceImpl::new();
+        mock_service
+            .expect_bulk_write_entry_operation()
+            .times(1)
+            .returning(|_| {
+                Ok(Response::new(BulkWriteEntryOperationResponse {
+                    results: vec![],
+                }))
+            });
+
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let claims = create_test_claims_with_permissions(vec![
+            "udex:entry:v1:test-index:read",
+            "udex:entry:v1:test-index:write",
+        ]);
+
+        let mut request = Request::new(BulkWriteEntryOperationRequest {
+            index_name: "test-index".to_string(),
+            operations: vec![BulkWriteEntryOperation {
+                operation: Some(Operation::LookupOrCreate(
+                    LookupKeyByContextOrCreateRequest {
+                        index_name: "test-index".to_string(),
+                        context: None,
+                        context_hash: "hash".to_string(),
+                    },
+                )),
+            }],
+        });
+        request.extensions_mut().insert(claims);
+
+        let result = authorizor.bulk_write_entry_operation(request).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_bulk_write_mixed_requires_union_of_permissions() {
+        use crate::entry::{bulk_write_entry_operation::Operation, BulkWriteEntryOperation};
+
+        let mut mock_service = MockEntryServiceImpl::new();
+        mock_service
+            .expect_bulk_write_entry_operation()
+            .times(1)
+            .returning(|_| {
+                Ok(Response::new(BulkWriteEntryOperationResponse {
+                    results: vec![],
+                }))
+            });
+
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        // Mixed: create + delete + lookup_or_create → needs create, delete, read, write
+        let claims = create_test_claims_with_permissions(vec![
+            "udex:entry:v1:test-index:create",
+            "udex:entry:v1:test-index:delete",
+            "udex:entry:v1:test-index:read",
+            "udex:entry:v1:test-index:write",
+        ]);
+
+        let mut request = Request::new(BulkWriteEntryOperationRequest {
+            index_name: "test-index".to_string(),
+            operations: vec![
+                BulkWriteEntryOperation {
+                    operation: Some(Operation::CreateEntry(CreateEntryRequest {
+                        index_name: "test-index".to_string(),
+                        context: None,
+                    })),
+                },
+                BulkWriteEntryOperation {
+                    operation: Some(Operation::DeleteEntry(DeleteEntryRequest {
+                        index_name: "test-index".to_string(),
+                        key: "some-key".to_string(),
+                    })),
+                },
+                BulkWriteEntryOperation {
+                    operation: Some(Operation::LookupOrCreate(
+                        LookupKeyByContextOrCreateRequest {
+                            index_name: "test-index".to_string(),
+                            context: None,
+                            context_hash: "hash".to_string(),
+                        },
+                    )),
+                },
+            ],
+        });
+        request.extensions_mut().insert(claims);
+
+        let result = authorizor.bulk_write_entry_operation(request).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_bulk_write_mixed_missing_permission_denied() {
+        use crate::entry::{bulk_write_entry_operation::Operation, BulkWriteEntryOperation};
+
+        let mock_service = MockEntryServiceImpl::new();
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        // Has create + delete but missing read + write for the LookupOrCreate op
+        let claims = create_test_claims_with_permissions(vec![
+            "udex:entry:v1:test-index:create",
+            "udex:entry:v1:test-index:delete",
+        ]);
+
+        let mut request = Request::new(BulkWriteEntryOperationRequest {
+            index_name: "test-index".to_string(),
+            operations: vec![
+                BulkWriteEntryOperation {
+                    operation: Some(Operation::CreateEntry(CreateEntryRequest {
+                        index_name: "test-index".to_string(),
+                        context: None,
+                    })),
+                },
+                BulkWriteEntryOperation {
+                    operation: Some(Operation::LookupOrCreate(
+                        LookupKeyByContextOrCreateRequest {
+                            index_name: "test-index".to_string(),
+                            context: None,
+                            context_hash: "hash".to_string(),
+                        },
+                    )),
+                },
+            ],
+        });
+        request.extensions_mut().insert(claims);
+
+        let result = authorizor.bulk_write_entry_operation(request).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::PermissionDenied);
     }
 
     #[tokio::test]
