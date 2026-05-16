@@ -206,21 +206,31 @@ impl Permissable<LookupKeyByContextRequest> for LookupKeyByContextRequest {
 impl Permissable<BulkWriteEntryOperationRequest> for BulkWriteEntryOperationRequest {
     fn required_permissions(&self) -> Vec<String> {
         use crate::entry::bulk_write_entry_operation::Operation;
+        use std::collections::HashSet;
 
-        let mut perms: Vec<String> = self
-            .operations
+        // The complete permission universe for bulk write — one scope per contained op type.
+        // Defined here so the short-circuit condition stays in line of sight.
+        // This pattern is specific to this impl's bounded set; don't generalise it.
+        let universe: HashSet<String> = ["create", "delete", "read", "write"]
             .iter()
-            .filter_map(|op| op.operation.as_ref())
-            .flat_map(|op| match op {
+            .map(|op| format!("udex:entry:v1:{}:{op}", self.index_name))
+            .collect();
+
+        let mut perms = HashSet::new();
+        for op in self.operations.iter().filter_map(|o| o.operation.as_ref()) {
+            perms.extend(match op {
                 Operation::CreateEntry(r) => r.required_permissions(),
                 Operation::DeleteEntry(r) => r.required_permissions(),
                 Operation::LookupOrCreate(r) => r.required_permissions(),
-            })
-            .collect();
+            });
+            if perms == universe {
+                break; // All possible permissions collected; further ops add nothing.
+            }
+        }
 
-        perms.sort();
-        perms.dedup();
-        perms
+        let mut result: Vec<String> = perms.into_iter().collect();
+        result.sort();
+        result
     }
 }
 
