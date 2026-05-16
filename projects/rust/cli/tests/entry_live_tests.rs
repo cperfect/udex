@@ -162,8 +162,8 @@ async fn init_server() -> String {
     let ca_pem = std::fs::read(CA_CERT).expect("read CA cert");
     wait_for_server(BIND_ADDR, &ca_pem).await;
 
-    // Sign a long-lived JWT with write permission for the test index.
-    // `lookup-or-create` requires write because it may create.
+    // Sign a 1-hour JWT with read+write permissions for the test index.
+    // `lookup-or-create` requires both: it reads and may create.
     let private_key_pem = std::fs::read_to_string(JWT_PRIVATE_KEY).expect("read JWT private key");
     let signing_key =
         EncodingKey::from_ec_pem(private_key_pem.as_bytes()).expect("EncodingKey from PEM");
