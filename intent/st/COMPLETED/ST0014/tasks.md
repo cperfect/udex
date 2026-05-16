@@ -2,15 +2,14 @@
 
 ## Tasks
 
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
-- ...
+- [x] WP-01 — Done
+- [x] WP-02 — Done
+- [x] WP-03 — Done
 
 ## Task Notes
 
-[Additional notes about specific tasks if needed]
+- Completion summary recorded; no outstanding task-specific notes.
 
 ## Dependencies
 
-[Task dependencies and sequencing requirements]
+- No unresolved dependencies; all work packages are complete.
