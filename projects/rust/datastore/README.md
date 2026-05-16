@@ -56,7 +56,7 @@ Two tables make up the schema. `"index"` holds policy configuration for a named 
 | `key` | `UUID` | Primary key — server-generated |
 | `index_name` | `TEXT` | Foreign key → `"index".name` |
 | `context_hash` | `TEXT` | Hash of `pairs`; unique per `index_name` — one context, one key within an index |
-| `pairs` | `JSONB` | Serialised `KeyValuePair` array; each pair may carry its own `kek_id` and `dek` for per-pair envelope encryption |
+| `pairs` | `JSONB` | Versioned envelope `{ "app_version": "<semver>", "pairs": [KeyValuePair…] }`. `app_version` is the `udex-datastore` crate version at write time — a version marker for future migration authors, not a guarantee of a breaking schema change. Never exposed outside the datastore crate. |
 | `hash_algorithm` | `TEXT` | Algorithm used to compute `context_hash` |
 
 ### Indexes
@@ -87,7 +87,7 @@ erDiagram
         uuid key PK
         text index_name FK
         text context_hash "UNIQUE per index_name"
-        jsonb pairs "KeyValuePair array; per-pair kek_id and dek live here"
+        jsonb pairs "{ app_version, pairs: KeyValuePair[] } — internal envelope only"
         text hash_algorithm
     }
 
