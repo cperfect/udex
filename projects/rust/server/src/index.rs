@@ -21,6 +21,10 @@ fn invalid_name_char(name: &str) -> Option<char> {
         .find(|&c| !c.is_alphabetic() && !c.is_numeric() && c != '-' && c != '_')
 }
 
+fn format_invalid_name_char(c: char) -> String {
+    format!("'{}' (U+{:04X})", c.escape_default(), c as u32)
+}
+
 /// Server implementation for the Index service.
 /// Handles all index-related operations including health checks, CRUD operations.
 pub struct IndexService<D> {
@@ -88,8 +92,9 @@ where
             }
             if let Some(bad) = invalid_name_char(&index_request.name) {
                 return Err(Error::ServerError(format!(
-                    "Index name '{}' contains invalid character '{}'; allowed: Unicode letters, digits, hyphens, underscores",
-                    index_request.name, bad
+                    "Index name '{}' contains invalid character {}; allowed: Unicode letters, digits, hyphens, underscores",
+                    index_request.name,
+                    format_invalid_name_char(bad)
                 )));
             }
             if update
@@ -262,8 +267,9 @@ where
         }
         if let Some(bad) = invalid_name_char(&req.name) {
             return Err(Status::invalid_argument(format!(
-                "index name '{}' contains invalid character '{}'; allowed: Unicode letters, digits, hyphens, underscores",
-                req.name, bad
+                "index name '{}' contains invalid character {}; allowed: Unicode letters, digits, hyphens, underscores",
+                req.name,
+                format_invalid_name_char(bad)
             )));
         }
         if req.display_name.trim().is_empty() {
