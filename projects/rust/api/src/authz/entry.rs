@@ -119,16 +119,25 @@ where
         &self,
         request: tonic::Request<BulkWriteEntryOperationRequest>,
     ) -> std::result::Result<tonic::Response<BulkWriteEntryOperationResponse>, tonic::Status> {
-        if request.get_ref().operations.is_empty() {
-            return Err(tonic::Status::invalid_argument(
-                "bulk write requires at least one operation",
-            ));
-        }
-
+        // Auth before validation: unauthenticated callers must not learn about request shape.
         let claims = request
             .extensions()
             .get::<Claims>()
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
+
+        let ops = &request.get_ref().operations;
+        if ops.is_empty() {
+            return Err(tonic::Status::invalid_argument(
+                "bulk write requires at least one operation",
+            ));
+        }
+        // An element with operation: None produces no required permissions, which would
+        // silently pass is_permitted(). Reject malformed ops before the authz check.
+        if ops.iter().any(|o| o.operation.is_none()) {
+            return Err(tonic::Status::invalid_argument(
+                "every bulk write operation must have an operation set",
+            ));
+        }
 
         if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
@@ -142,16 +151,25 @@ where
         &self,
         request: tonic::Request<BulkReadEntryOperationRequest>,
     ) -> std::result::Result<tonic::Response<BulkReadEntryOperationResponse>, tonic::Status> {
-        if request.get_ref().operations.is_empty() {
-            return Err(tonic::Status::invalid_argument(
-                "bulk read requires at least one operation",
-            ));
-        }
-
+        // Auth before validation: unauthenticated callers must not learn about request shape.
         let claims = request
             .extensions()
             .get::<Claims>()
             .ok_or_else(|| tonic::Status::unauthenticated("No claims found in request"))?;
+
+        let ops = &request.get_ref().operations;
+        if ops.is_empty() {
+            return Err(tonic::Status::invalid_argument(
+                "bulk read requires at least one operation",
+            ));
+        }
+        // An element with operation: None produces no required permissions, which would
+        // silently pass is_permitted(). Reject malformed ops before the authz check.
+        if ops.iter().any(|o| o.operation.is_none()) {
+            return Err(tonic::Status::invalid_argument(
+                "every bulk read operation must have an operation set",
+            ));
+        }
 
         if !is_permitted(request.get_ref(), claims).map_err(tonic::Status::from)? {
             return Err(tonic::Status::permission_denied("Insufficient permissions"));
@@ -749,6 +767,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_bulk_write_unauthenticated_returns_unauthenticated_not_invalid_argument() {
+        // Auth must be checked before validation — unauthenticated callers must not learn
+        // about request shape (e.g. whether ops is empty) from the error code.
+        let mock_service = MockEntryServiceImpl::new();
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+
+        let request = Request::new(BulkWriteEntryOperationRequest {
+            index_name: "test-index".to_string(),
+            operations: vec![],
+        });
+        // No claims inserted.
+
+        let result = authorizor.bulk_write_entry_operation(request).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
+    }
+
+    #[tokio::test]
     async fn test_bulk_write_empty_operations_invalid_argument() {
         let mock_service = MockEntryServiceImpl::new();
         let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
@@ -766,6 +802,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_bulk_write_all_none_operations_invalid_argument() {
+        use crate::entry::BulkWriteEntryOperation;
+
+        let mock_service = MockEntryServiceImpl::new();
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let claims = create_test_claims_with_permissions(vec!["udex:entry:v1:test-index:write"]);
+
+        let mut request = Request::new(BulkWriteEntryOperationRequest {
+            index_name: "test-index".to_string(),
+            operations: vec![BulkWriteEntryOperation { operation: None }],
+        });
+        request.extensions_mut().insert(claims);
+
+        let result = authorizor.bulk_write_entry_operation(request).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+    }
+
+    #[tokio::test]
+    async fn test_bulk_read_unauthenticated_returns_unauthenticated_not_invalid_argument() {
+        let mock_service = MockEntryServiceImpl::new();
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+
+        let request = Request::new(BulkReadEntryOperationRequest {
+            index_name: "test-index".to_string(),
+            operations: vec![],
+        });
+        // No claims inserted.
+
+        let result = authorizor.bulk_read_entry_operation(request).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
+    }
+
+    #[tokio::test]
     async fn test_bulk_read_empty_operations_invalid_argument() {
         let mock_service = MockEntryServiceImpl::new();
         let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
@@ -774,6 +845,25 @@ mod tests {
         let mut request = Request::new(BulkReadEntryOperationRequest {
             index_name: "test-index".to_string(),
             operations: vec![],
+        });
+        request.extensions_mut().insert(claims);
+
+        let result = authorizor.bulk_read_entry_operation(request).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::InvalidArgument);
+    }
+
+    #[tokio::test]
+    async fn test_bulk_read_all_none_operations_invalid_argument() {
+        use crate::entry::BulkReadEntryOperation;
+
+        let mock_service = MockEntryServiceImpl::new();
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let claims = create_test_claims_with_permissions(vec!["udex:entry:v1:test-index:read"]);
+
+        let mut request = Request::new(BulkReadEntryOperationRequest {
+            index_name: "test-index".to_string(),
+            operations: vec![BulkReadEntryOperation { operation: None }],
         });
         request.extensions_mut().insert(claims);
 
