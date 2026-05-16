@@ -3,7 +3,7 @@ verblock: "16 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-03
 title: "Reject empty bulk operations — validation and authz"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: Reject empty bulk operations — validation and authz

@@ -522,6 +522,58 @@ async fn test_bulk_read_entry_operation() {
     }
 }
 
+/// An empty BulkWriteEntryOperationRequest is rejected with INVALID_ARGUMENT.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_bulk_write_empty_operations_invalid_argument() {
+    use tonic::{Code, Request};
+    use udex_api::entry::BulkWriteEntryOperationRequest;
+
+    let data = data(false).await;
+    let entry_server = &data.0;
+    let index_name = &data.1;
+
+    let err = entry_server
+        .bulk_write_entry_operation(Request::new(BulkWriteEntryOperationRequest {
+            index_name: index_name.clone(),
+            operations: vec![],
+        }))
+        .await
+        .expect_err("empty bulk write must be rejected");
+
+    assert_eq!(
+        err.code(),
+        Code::InvalidArgument,
+        "empty bulk write must return INVALID_ARGUMENT"
+    );
+}
+
+/// An empty BulkReadEntryOperationRequest is rejected with INVALID_ARGUMENT.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_bulk_read_empty_operations_invalid_argument() {
+    use tonic::{Code, Request};
+    use udex_api::entry::BulkReadEntryOperationRequest;
+
+    let data = data(false).await;
+    let entry_server = &data.0;
+    let index_name = &data.1;
+
+    let err = entry_server
+        .bulk_read_entry_operation(Request::new(BulkReadEntryOperationRequest {
+            index_name: index_name.clone(),
+            operations: vec![],
+        }))
+        .await
+        .expect_err("empty bulk read must be rejected");
+
+    assert_eq!(
+        err.code(),
+        Code::InvalidArgument,
+        "empty bulk read must return INVALID_ARGUMENT"
+    );
+}
+
 /// Verifies that the context hash is computed from (key, value) only — kek_id and dek on a
 /// pair are excluded. Two creates with the same (key, value) but different per-pair dek/kek_id
 /// resolve to the same context hash and return the first entry's key.
