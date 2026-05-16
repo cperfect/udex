@@ -81,6 +81,11 @@ where
             };
 
             // check all mandatory fields are present
+            if index_request.name.trim().is_empty() {
+                return Err(Error::ServerError(
+                    "Index name must be non-empty".to_string(),
+                ));
+            }
             if let Some(bad) = invalid_name_char(&index_request.name) {
                 return Err(Error::ServerError(format!(
                     "Index name '{}' contains invalid character '{}'; allowed: Unicode letters, digits, hyphens, underscores",
