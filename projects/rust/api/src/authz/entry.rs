@@ -151,7 +151,7 @@ where
         &self,
         request: tonic::Request<BulkReadEntryOperationRequest>,
     ) -> std::result::Result<tonic::Response<BulkReadEntryOperationResponse>, tonic::Status> {
-        // Auth before validation: unauthenticated callers must not learn about request shape.
+        // Authenticate before validation: unauthenticated callers must not learn about request shape.
         let claims = request
             .extensions()
             .get::<Claims>()
