@@ -17,13 +17,13 @@ enum HashAlgorithm {
 service IndexService {
   // Describe returns information about the index
   rpc Describe(DescribeRequest) returns (DescribeResponse);
-  
+
   // CreateIndex creates a new index
   rpc CreateIndex(CreateIndexRequest) returns (CreateIndexResponse);
-  
+
   // UpdateIndex updates an existing index's mutable fields
   rpc UpdateIndex(UpdateIndexRequest) returns (UpdateIndexResponse);
-  
+
   // ListIndices returns a list of all indices
   rpc ListIndices(ListIndicesRequest) returns (ListIndicesResponse);
 
@@ -36,32 +36,31 @@ message DescribeRequest {
   string name = 1; // index name to describe
 }
 
-
-
 // Index represents an index configuration and metadata
 message Index {
-  string name = 1; // lowercase string, unique, immutable
-  string description = 2; // optional, mutable
-  int32 max_bulk_operations = 3; // ≥ 1
-  int32 max_key_length = 4;
-  int32 max_value_length = 5;
-  int32 max_kv_pairs_per_context = 6;
-  HashAlgorithm hash_algorithm = 7; // e.g., "xxh3"
-  google.protobuf.Timestamp created_at = 8;
-  string created_by = 9;
-  optional google.protobuf.Timestamp updated_at = 10;
-  optional string updated_by = 11;
+  string name = 1;         // Identifier: Unicode letters, digits, hyphens, underscores. Immutable, unique.
+  string display_name = 2; // Short human-readable label for UI use. Mandatory, mutable.
+  string description = 3;  // Human-readable description. Mandatory, mutable.
+  int32 max_bulk_operations = 4;    // ≥ 1
+  int32 max_key_length = 5;
+  int32 max_value_length = 6;
+  int32 max_kv_pairs_per_context = 7;
+  HashAlgorithm hash_algorithm = 8;
+  google.protobuf.Timestamp created_at = 9;
+  string created_by = 10;
+  optional google.protobuf.Timestamp updated_at = 11;
+  optional string updated_by = 12;
 }
 
 message IndexUpdate {
-  optional string description = 1; // optional, mutable
-  optional int32 max_bulk_operations = 2; // ≥ 1
-  optional int32 max_key_length = 3;
-  optional int32 max_value_length = 4;
-  optional int32 max_kv_pairs_per_context = 5;
-  optional HashAlgorithm hash_algorithm = 6; // e.g., "xxh3"
+  optional string description = 1;            // mutable
+  optional string display_name = 2;           // mutable
+  optional int32 max_bulk_operations = 3;     // ≥ 1
+  optional int32 max_key_length = 4;
+  optional int32 max_value_length = 5;
+  optional int32 max_kv_pairs_per_context = 6;
+  optional HashAlgorithm hash_algorithm = 7;
 }
-
 
 // DescribeResponse contains index information
 message DescribeResponse {
@@ -70,13 +69,14 @@ message DescribeResponse {
 
 // CreateIndexRequest creates a new index
 message CreateIndexRequest {
-  string name = 1; // lowercase string, unique, immutable
-  string description = 2; // optional
-  int32 max_bulk_operations = 3; // ≥ 1, required
-  int32 max_key_length = 4; // required
-  int32 max_value_length = 5; // required
-  int32 max_kv_pairs_per_context = 6; // required
-  HashAlgorithm hash_algorithm = 7; // required
+  string name = 1;         // Identifier: Unicode letters, digits, hyphens, underscores. Immutable, unique.
+  string display_name = 2; // Short human-readable label. Mandatory.
+  string description = 3;  // Human-readable description. Mandatory.
+  int32 max_bulk_operations = 4; // ≥ 1, required
+  int32 max_key_length = 5;      // required
+  int32 max_value_length = 6;    // required
+  int32 max_kv_pairs_per_context = 7; // required
+  HashAlgorithm hash_algorithm = 8;   // required
 }
 
 // CreateIndexResponse returns the created index
@@ -86,8 +86,8 @@ message CreateIndexResponse {
 
 // UpdateIndexRequest updates mutable fields of an index
 message UpdateIndexRequest {
-  string name = 1; // index name (immutable, used for identification)
-  IndexUpdate update = 2; // mutable fields to update, if not fields are set then an error is returned
+  string name = 1;        // index name (immutable, used for identification)
+  IndexUpdate update = 2; // mutable fields to update; error if no fields are set
 }
 
 // UpdateIndexResponse returns the updated index
@@ -109,4 +109,4 @@ message ListIndicesRequest {}
 // ListIndicesResponse returns all indices
 message ListIndicesResponse {
   repeated Index indices = 1;
-} 
+}

@@ -11,54 +11,58 @@ pub struct DescribeRequest {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Index {
-    /// lowercase string, unique, immutable
+    /// Identifier: Unicode letters, digits, hyphens, underscores. Immutable, unique.
     #[prost(string, tag = "1")]
     pub name: ::prost::alloc::string::String,
-    /// optional, mutable
+    /// Short human-readable label for UI use. Mandatory, mutable.
     #[prost(string, tag = "2")]
+    pub display_name: ::prost::alloc::string::String,
+    /// Human-readable description. Mandatory, mutable.
+    #[prost(string, tag = "3")]
     pub description: ::prost::alloc::string::String,
     /// ≥ 1
-    #[prost(int32, tag = "3")]
-    pub max_bulk_operations: i32,
     #[prost(int32, tag = "4")]
-    pub max_key_length: i32,
+    pub max_bulk_operations: i32,
     #[prost(int32, tag = "5")]
-    pub max_value_length: i32,
+    pub max_key_length: i32,
     #[prost(int32, tag = "6")]
+    pub max_value_length: i32,
+    #[prost(int32, tag = "7")]
     pub max_kv_pairs_per_context: i32,
-    /// e.g., "xxh3"
-    #[prost(enumeration = "HashAlgorithm", tag = "7")]
+    #[prost(enumeration = "HashAlgorithm", tag = "8")]
     pub hash_algorithm: i32,
-    #[prost(message, optional, tag = "8")]
+    #[prost(message, optional, tag = "9")]
     pub created_at: ::core::option::Option<
         super::super::super::google::protobuf::Timestamp,
     >,
-    #[prost(string, tag = "9")]
+    #[prost(string, tag = "10")]
     pub created_by: ::prost::alloc::string::String,
-    #[prost(message, optional, tag = "10")]
+    #[prost(message, optional, tag = "11")]
     pub updated_at: ::core::option::Option<
         super::super::super::google::protobuf::Timestamp,
     >,
-    #[prost(string, optional, tag = "11")]
+    #[prost(string, optional, tag = "12")]
     pub updated_by: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct IndexUpdate {
-    /// optional, mutable
+    /// mutable
     #[prost(string, optional, tag = "1")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
+    /// mutable
+    #[prost(string, optional, tag = "2")]
+    pub display_name: ::core::option::Option<::prost::alloc::string::String>,
     /// ≥ 1
-    #[prost(int32, optional, tag = "2")]
-    pub max_bulk_operations: ::core::option::Option<i32>,
     #[prost(int32, optional, tag = "3")]
-    pub max_key_length: ::core::option::Option<i32>,
+    pub max_bulk_operations: ::core::option::Option<i32>,
     #[prost(int32, optional, tag = "4")]
-    pub max_value_length: ::core::option::Option<i32>,
+    pub max_key_length: ::core::option::Option<i32>,
     #[prost(int32, optional, tag = "5")]
+    pub max_value_length: ::core::option::Option<i32>,
+    #[prost(int32, optional, tag = "6")]
     pub max_kv_pairs_per_context: ::core::option::Option<i32>,
-    /// e.g., "xxh3"
-    #[prost(enumeration = "HashAlgorithm", optional, tag = "6")]
+    #[prost(enumeration = "HashAlgorithm", optional, tag = "7")]
     pub hash_algorithm: ::core::option::Option<i32>,
 }
 /// DescribeResponse contains index information
@@ -72,26 +76,29 @@ pub struct DescribeResponse {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CreateIndexRequest {
-    /// lowercase string, unique, immutable
+    /// Identifier: Unicode letters, digits, hyphens, underscores. Immutable, unique.
     #[prost(string, tag = "1")]
     pub name: ::prost::alloc::string::String,
-    /// optional
+    /// Short human-readable label. Mandatory.
     #[prost(string, tag = "2")]
+    pub display_name: ::prost::alloc::string::String,
+    /// Human-readable description. Mandatory.
+    #[prost(string, tag = "3")]
     pub description: ::prost::alloc::string::String,
     /// ≥ 1, required
-    #[prost(int32, tag = "3")]
+    #[prost(int32, tag = "4")]
     pub max_bulk_operations: i32,
     /// required
-    #[prost(int32, tag = "4")]
+    #[prost(int32, tag = "5")]
     pub max_key_length: i32,
     /// required
-    #[prost(int32, tag = "5")]
+    #[prost(int32, tag = "6")]
     pub max_value_length: i32,
     /// required
-    #[prost(int32, tag = "6")]
+    #[prost(int32, tag = "7")]
     pub max_kv_pairs_per_context: i32,
     /// required
-    #[prost(enumeration = "HashAlgorithm", tag = "7")]
+    #[prost(enumeration = "HashAlgorithm", tag = "8")]
     pub hash_algorithm: i32,
 }
 /// CreateIndexResponse returns the created index
@@ -108,7 +115,7 @@ pub struct UpdateIndexRequest {
     /// index name (immutable, used for identification)
     #[prost(string, tag = "1")]
     pub name: ::prost::alloc::string::String,
-    /// mutable fields to update, if not fields are set then an error is returned
+    /// mutable fields to update; error if no fields are set
     #[prost(message, optional, tag = "2")]
     pub update: ::core::option::Option<IndexUpdate>,
 }

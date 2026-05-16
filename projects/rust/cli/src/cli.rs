@@ -141,6 +141,9 @@ pub enum IndexCommands {
 pub struct IndexCreateArgs {
     /// Index name
     pub name: String,
+    /// Short human-readable label for UI use
+    #[arg(long)]
+    pub display_name: Option<String>,
     /// Human-readable description
     #[arg(long)]
     pub description: Option<String>,

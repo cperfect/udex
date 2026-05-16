@@ -135,6 +135,7 @@ async fn init_server() -> String {
             name: INDEX_NAME.to_string(),
             update: Some(IndexUpdate {
                 description: Some("CLI lookup-or-create test index".to_string()),
+                display_name: Some("CLI Test Index".to_string()),
                 max_bulk_operations: Some(100),
                 max_key_length: Some(256),
                 max_value_length: Some(1024),

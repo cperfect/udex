@@ -279,6 +279,7 @@ async fn start_server_and_connect() -> (
             name: index_name.clone(),
             update: Some(IndexUpdate {
                 description: Some("Benchmark index".to_string()),
+                display_name: Some("Benchmark Index".to_string()),
                 // Allow up to 1000 for bulk operation benchmarks (WP-03).
                 max_bulk_operations: Some(1000),
                 max_key_length: Some(256),

@@ -76,6 +76,7 @@ async fn init_server() -> MaybeOnceType {
             name: index_name.clone(),
             update: Some(IndexUpdate {
                 description: Some(index_name.clone()),
+                display_name: Some(index_name.clone()),
                 max_bulk_operations: Some(100),
                 max_key_length: Some(256),
                 max_value_length: Some(1024),
@@ -197,6 +198,7 @@ async fn init_server_hydra() -> HydraFixtureType {
             name: index_name.clone(),
             update: Some(IndexUpdate {
                 description: Some(index_name.clone()),
+                display_name: Some(index_name.clone()),
                 max_bulk_operations: Some(100),
                 max_key_length: Some(256),
                 max_value_length: Some(1024),
@@ -551,6 +553,7 @@ async fn test_create_index_records_sub_as_created_by() {
 
     let mut create_req = tonic::Request::new(udex_api::index::CreateIndexRequest {
         name: new_index_name.to_string(),
+        display_name: "Test Index Created By".to_string(),
         description: "test index for created_by verification".to_string(),
         max_bulk_operations: 10,
         max_key_length: 128,

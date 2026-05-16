@@ -496,6 +496,7 @@ impl Datastore for PostgresDatastore {
 
         Ok(Index {
             name: row.try_get("name").map_err(Error::Database)?,
+            display_name: row.try_get("display_name").map_err(Error::Database)?,
             description: row.try_get("description").map_err(Error::Database)?,
             max_bulk_operations: row
                 .try_get("max_bulk_operations")
@@ -628,6 +629,7 @@ impl Datastore for PostgresDatastore {
 
                 Ok(Index {
                     name: row.try_get("name").map_err(Error::Database)?,
+                    display_name: row.try_get("display_name").map_err(Error::Database)?,
                     description: row.try_get("description").map_err(Error::Database)?,
                     max_bulk_operations: row
                         .try_get("max_bulk_operations")

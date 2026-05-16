@@ -3,7 +3,7 @@ verblock: "16 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-01
 title: "Update proto schema: add display_name and document name format"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-01: Update proto schema: add display_name and document name format
@@ -25,11 +25,11 @@ Update `projects/protobuf/udex.index.v1.proto` to add a `display_name` field to 
 
 ## Acceptance Criteria
 
-- [ ] `display_name` field present in `Index`, `CreateIndexRequest`, and `IndexUpdate` with correct tags
-- [ ] `name` field comment in proto accurately describes the allowed character set
-- [ ] `description` in `CreateIndexRequest` is no longer commented as "optional"
-- [ ] Generated Rust file updated to match the proto changes
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo build` all pass
+- [x] `display_name` field present in `Index`, `CreateIndexRequest`, and `IndexUpdate` with correct tags
+- [x] `name` field comment in proto accurately describes the allowed character set
+- [x] `description` in `CreateIndexRequest` is no longer commented as "optional"
+- [x] Generated Rust file updated to match the proto changes
+- [x] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo build` all pass
 
 ## Dependencies
 

@@ -112,6 +112,9 @@ where
             // so we can safely create the index
             let index = Index {
                 name: index_request.name.clone(),
+                display_name: update_for_index
+                    .display_name
+                    .expect("Index update must contain a display_name"),
                 description: update_for_index
                     .description
                     .expect("Index update must contain a description"),
@@ -251,6 +254,7 @@ where
 
         let index = Index {
             name: req.name,
+            display_name: req.display_name,
             description: req.description,
             max_bulk_operations: req.max_bulk_operations,
             max_key_length: req.max_key_length,

@@ -31,6 +31,7 @@ fn create_sample_index(name: &str) -> Index {
 
     Index {
         name: name.to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index".to_string(),
         max_bulk_operations: 100,
         max_key_length: 256,
@@ -499,6 +500,7 @@ async fn test_update_index(#[context] ctx: Context) {
     let new_description_value = new_description.clone().unwrap_or_default();
     let update = IndexUpdate {
         description: new_description.clone(),
+        display_name: None,
         max_bulk_operations: None,
         max_key_length: None,
         max_value_length: None,
@@ -528,6 +530,7 @@ async fn test_update_index(#[context] ctx: Context) {
     // Test updating to empty description
     let empty_description_update = IndexUpdate {
         description: Some("".to_string()),
+        display_name: None,
         max_bulk_operations: None,
         max_key_length: None,
         max_value_length: None,
@@ -543,6 +546,7 @@ async fn test_update_index(#[context] ctx: Context) {
     // Test all mutable fields can be updated
     let full_update = IndexUpdate {
         description: Some("Full update test index".to_string()),
+        display_name: Some("Full Update Index".to_string()),
         max_bulk_operations: Some(200),
         max_key_length: Some(512),
         max_value_length: Some(2048),
@@ -567,6 +571,7 @@ async fn test_update_index(#[context] ctx: Context) {
     // Test updating no fields throws an error
     let no_update = IndexUpdate {
         description: None,
+        display_name: None,
         max_bulk_operations: None,
         max_key_length: None,
         max_value_length: None,

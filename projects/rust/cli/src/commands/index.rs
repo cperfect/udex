@@ -103,6 +103,7 @@ pub async fn create(
     let index = client
         .create_index(CreateIndexRequest {
             name: args.name,
+            display_name: args.display_name.unwrap_or_default(),
             description: args.description.unwrap_or_default(),
             max_bulk_operations,
             max_key_length,

@@ -36,6 +36,7 @@ async fn init_index_service() -> MaybeOnceType {
         name: "test_index".to_string(),
         update: Some(udex_api::index::IndexUpdate {
             description: Some("Test index description".to_string()),
+            display_name: Some("Test Index".to_string()),
             max_bulk_operations: Some(100),
             max_key_length: Some(256),
             max_value_length: Some(1024),
@@ -153,6 +154,7 @@ async fn test_create_index_valid_input() {
 
     let request = Request::new(CreateIndexRequest {
         name: "created_test_index".to_string(),
+        display_name: "Created Test Index".to_string(),
         description: "A newly created index".to_string(),
         max_bulk_operations: 50,
         max_key_length: 128,
@@ -192,6 +194,7 @@ async fn test_create_index_unsupported_hash_algorithm() {
 
     let request = Request::new(CreateIndexRequest {
         name: "unsupported_hash_index".to_string(),
+        display_name: "Unsupported Hash Index".to_string(),
         description: "Should fail".to_string(),
         max_bulk_operations: 10,
         max_key_length: 64,
@@ -220,6 +223,7 @@ async fn test_create_index_duplicate_name() {
     // First creation should succeed
     let request = Request::new(CreateIndexRequest {
         name: "duplicate_test_index".to_string(),
+        display_name: "Duplicate Test Index".to_string(),
         description: "First".to_string(),
         max_bulk_operations: 10,
         max_key_length: 64,
@@ -237,6 +241,7 @@ async fn test_create_index_duplicate_name() {
     // Second creation with same name should fail
     let request = Request::new(CreateIndexRequest {
         name: "duplicate_test_index".to_string(),
+        display_name: "Duplicate Test Index".to_string(),
         description: "Second".to_string(),
         max_bulk_operations: 10,
         max_key_length: 64,
@@ -260,6 +265,7 @@ async fn test_create_index_empty_name() {
 
     let request = Request::new(CreateIndexRequest {
         name: "".to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index description".to_string(),
         max_bulk_operations: 100,
         max_key_length: 256,
@@ -289,6 +295,7 @@ async fn test_create_index_invalid_max_bulk_operations() {
 
     let request = Request::new(CreateIndexRequest {
         name: "test_index".to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index description".to_string(),
         max_bulk_operations: 0, // Invalid: should be >= 1
         max_key_length: 256,
@@ -320,6 +327,7 @@ async fn test_create_index_invalid_max_key_length() {
 
     let request = Request::new(CreateIndexRequest {
         name: "test_index".to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index description".to_string(),
         max_bulk_operations: 100,
         max_key_length: 0, // Invalid: should be >= 1
@@ -349,6 +357,7 @@ async fn test_create_index_invalid_max_value_length() {
 
     let request = Request::new(CreateIndexRequest {
         name: "test_index".to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index description".to_string(),
         max_bulk_operations: 100,
         max_key_length: 256,
@@ -378,6 +387,7 @@ async fn test_create_index_invalid_max_kv_pairs_per_context() {
 
     let request = Request::new(CreateIndexRequest {
         name: "test_index".to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index description".to_string(),
         max_bulk_operations: 100,
         max_key_length: 256,
@@ -409,6 +419,7 @@ async fn test_create_index_invalid_hash_algorithm() {
 
     let request = Request::new(CreateIndexRequest {
         name: "test_index".to_string(),
+        display_name: "Test Index".to_string(),
         description: "Test index description".to_string(),
         max_bulk_operations: 100,
         max_key_length: 256,
@@ -440,6 +451,7 @@ async fn test_update_index_valid_input() {
         name: "test_index_not_found".to_string(),
         update: Some(IndexUpdate {
             description: Some("Updated test index description".to_string()),
+            display_name: None,
             max_bulk_operations: None,
             max_key_length: None,
             max_value_length: None,
@@ -477,6 +489,7 @@ async fn test_update_index_empty_name() {
         name: "".to_string(),
         update: Some(IndexUpdate {
             description: Some("Updated test index description".to_string()),
+            display_name: None,
             max_bulk_operations: None,
             max_key_length: None,
             max_value_length: None,
@@ -562,6 +575,7 @@ async fn test_update_index_empty_update() {
         name: "test_index".to_string(),
         update: Some(IndexUpdate {
             description: None,
+            display_name: None,
             max_bulk_operations: None,
             max_key_length: None,
             max_value_length: None,
@@ -595,6 +609,7 @@ async fn test_validation_error_consistency() {
     let invalid_requests = vec![
         CreateIndexRequest {
             name: "".to_string(),
+            display_name: "Test".to_string(),
             description: "Test".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,
@@ -604,6 +619,7 @@ async fn test_validation_error_consistency() {
         },
         CreateIndexRequest {
             name: "valid_name".to_string(),
+            display_name: "Test".to_string(),
             description: "Test".to_string(),
             max_bulk_operations: -1,
             max_key_length: 256,
@@ -613,6 +629,7 @@ async fn test_validation_error_consistency() {
         },
         CreateIndexRequest {
             name: "valid_name".to_string(),
+            display_name: "Test".to_string(),
             description: "Test".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,
@@ -646,6 +663,7 @@ async fn test_delete_index_empty_index() {
     index_server
         .create_index(with_test_claims(Request::new(CreateIndexRequest {
             name: "del_test_empty".to_string(),
+            display_name: "Delete Test Empty".to_string(),
             description: "delete test".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,
@@ -687,6 +705,7 @@ async fn test_delete_index_not_empty() {
     index_server
         .create_index(with_test_claims(Request::new(CreateIndexRequest {
             name: "del_test_nonempty".to_string(),
+            display_name: "Delete Test Non-empty".to_string(),
             description: "delete test".to_string(),
             max_bulk_operations: 100,
             max_key_length: 256,

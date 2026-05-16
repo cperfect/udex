@@ -36,6 +36,7 @@ async fn init_entry_service() -> MaybeOnceType {
         name: index_name.clone(),
         update: Some(udex_api::index::IndexUpdate {
             description: Some("Test entry description".to_string()),
+            display_name: Some("Test Entry Index".to_string()),
             max_bulk_operations: Some(100),
             max_key_length: Some(256),
             max_value_length: Some(1024),
