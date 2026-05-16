@@ -41,11 +41,11 @@ deserialises `pairs` to go through this envelope instead of serialising the `Vec
 
 ## Acceptance Criteria
 
-- [ ] All write paths store `{ "app_version": "...", "pairs": [...] }` in the `pairs` column
-- [ ] All read paths deserialise the envelope and return `Vec<KeyValuePair>` to the caller unchanged
-- [ ] `app_version` never appears in any type outside `udex-datastore`
-- [ ] Integration test confirms the `app_version` field is present in the stored JSONB
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test` all pass
+- [x] All write paths store `{ "app_version": "...", "pairs": [...] }` in the `pairs` column
+- [x] All read paths deserialise the envelope and return `Vec<KeyValuePair>` to the caller unchanged
+- [x] `app_version` never appears in any type outside `udex-datastore`
+- [x] Integration test confirms the `app_version` field is present in the stored JSONB
+- [x] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test` all pass
 
 ## Dependencies
 

@@ -30,9 +30,9 @@ than a bare array.
 
 ## Acceptance Criteria
 
-- [ ] Migration file comment accurately describes the JSONB envelope
-- [ ] README Data Model section documents the envelope and `app_version` semantics
-- [ ] README is clear that `app_version` is an internal datastore concern, not exposed to the API
+- [x] Migration file comment accurately describes the JSONB envelope
+- [x] README Data Model section documents the envelope and `app_version` semantics
+- [x] README is clear that `app_version` is an internal datastore concern, not exposed to the API
 
 ## Dependencies
 
