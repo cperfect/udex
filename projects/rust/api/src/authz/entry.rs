@@ -119,7 +119,7 @@ where
         &self,
         request: tonic::Request<BulkWriteEntryOperationRequest>,
     ) -> std::result::Result<tonic::Response<BulkWriteEntryOperationResponse>, tonic::Status> {
-        // Auth before validation: unauthenticated callers must not learn about request shape.
+        // Authenticate before validation: unauthenticated callers must not learn about request shape.
         let claims = request
             .extensions()
             .get::<Claims>()
