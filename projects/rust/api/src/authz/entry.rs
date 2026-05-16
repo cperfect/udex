@@ -218,11 +218,22 @@ impl Permissable<BulkWriteEntryOperationRequest> for BulkWriteEntryOperationRequ
 
         let mut perms = HashSet::new();
         for op in self.operations.iter().filter_map(|o| o.operation.as_ref()) {
-            perms.extend(match op {
-                Operation::CreateEntry(r) => r.required_permissions(),
-                Operation::DeleteEntry(r) => r.required_permissions(),
-                Operation::LookupOrCreate(r) => r.required_permissions(),
-            });
+            // Always derive permissions from self.index_name, not from the nested op's
+            // index_name. The handler executes all ops against self.index_name and ignores
+            // the nested field; using the nested value here would let an attacker authorise
+            // against an index they control while targeting a different one.
+            // TODO: figure out if we should validate individual op index names match the
+            // bulk op index name (or make individual op index names optional in the proto).
+            let op_perms: &[&str] = match op {
+                Operation::CreateEntry(_) => &["create"],
+                Operation::DeleteEntry(_) => &["delete"],
+                Operation::LookupOrCreate(_) => &["read", "write"],
+            };
+            perms.extend(
+                op_perms
+                    .iter()
+                    .map(|p| format!("udex:entry:v1:{}:{p}", self.index_name)),
+            );
             if perms == universe {
                 break; // All possible permissions collected; further ops add nothing.
             }
@@ -668,6 +679,35 @@ mod tests {
                     )),
                 },
             ],
+        });
+        request.extensions_mut().insert(claims);
+
+        let result = authorizor.bulk_write_entry_operation(request).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::PermissionDenied);
+    }
+
+    #[tokio::test]
+    async fn test_bulk_write_cross_index_authz_bypass_prevented() {
+        // Regression: attacker sets outer index_name to a target index they lack access to,
+        // but sets each nested op's index_name to an index they do control — hoping that
+        // required_permissions() uses the nested index_name for the authz check.
+        use crate::entry::{bulk_write_entry_operation::Operation, BulkWriteEntryOperation};
+
+        let mock_service = MockEntryServiceImpl::new();
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        // Token grants create on the attacker's own index, not the victim index.
+        let claims =
+            create_test_claims_with_permissions(vec!["udex:entry:v1:attacker-index:create"]);
+
+        let mut request = Request::new(BulkWriteEntryOperationRequest {
+            index_name: "victim-index".to_string(), // target the victim index
+            operations: vec![BulkWriteEntryOperation {
+                operation: Some(Operation::CreateEntry(CreateEntryRequest {
+                    index_name: "attacker-index".to_string(), // authorise against own index
+                    context: None,
+                })),
+            }],
         });
         request.extensions_mut().insert(claims);
 
