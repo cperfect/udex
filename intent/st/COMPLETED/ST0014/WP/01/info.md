@@ -28,12 +28,12 @@ permission so that callers must hold both grants explicitly.
 
 ## Acceptance Criteria
 
-- [ ] `Permissable` impl returns `[udex:entry:v1:{index}:read, udex:entry:v1:{index}:write]`
-- [ ] Caller with only `write` is denied with `PermissionDenied`
-- [ ] Caller with only `read` is denied with `PermissionDenied`
-- [ ] Caller with both `read` and `write` succeeds
-- [ ] All existing tests pass with the updated scopes
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test` all pass
+- [x] `Permissable` impl returns `[udex:entry:v1:{index}:read, udex:entry:v1:{index}:write]`
+- [x] Caller with only `write` is denied with `PermissionDenied`
+- [x] Caller with only `read` is denied with `PermissionDenied`
+- [x] Caller with both `read` and `write` succeeds
+- [x] All existing tests pass with the updated scopes
+- [x] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test` all pass
 
 ## Dependencies
 

@@ -37,11 +37,11 @@ operations as a permission-layer error, not just a handler-layer error.
 
 ## Acceptance Criteria
 
-- [ ] Empty `BulkWriteEntryOperationRequest` returns `InvalidArgument` — rejected before
+- [x] Empty `BulkWriteEntryOperationRequest` returns `InvalidArgument` — rejected before
   reaching the handler (authz layer, not just handler validation)
-- [ ] Empty `BulkReadEntryOperationRequest` returns `InvalidArgument` — same
-- [ ] Non-empty bulk requests are unaffected
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test` all pass
+- [x] Empty `BulkReadEntryOperationRequest` returns `InvalidArgument` — same
+- [x] Non-empty bulk requests are unaffected
+- [x] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test` all pass
 
 ## Dependencies
 

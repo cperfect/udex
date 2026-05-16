@@ -30,12 +30,12 @@ with dynamic derivation: iterate the operations, call each operation type's own
 
 ## Acceptance Criteria
 
-- [ ] A bulk request containing only `CreateEntry` ops requires only `create`
-- [ ] A bulk request containing only `DeleteEntry` ops requires only `delete`
-- [ ] A bulk request containing `LookupOrCreate` ops requires `read` + `write`
-- [ ] A mixed request requires the union of all contained operations' permissions
-- [ ] An empty bulk request is handled by WP-03 (not in scope here)
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test` all pass
+- [x] A bulk request containing only `CreateEntry` ops requires only `create`
+- [x] A bulk request containing only `DeleteEntry` ops requires only `delete`
+- [x] A bulk request containing `LookupOrCreate` ops requires `read` + `write`
+- [x] A mixed request requires the union of all contained operations' permissions
+- [x] An empty bulk request is handled by WP-03 (not in scope here)
+- [x] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test` all pass
 
 ## Dependencies
 
