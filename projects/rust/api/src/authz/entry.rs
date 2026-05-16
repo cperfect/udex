@@ -152,7 +152,7 @@ where
         self.inner.bulk_read_entry_operation(request).await
     }
 
-    /// LookupKeyByContextOrCreate looks up or creates an entry. Requires write permission.
+    /// LookupKeyByContextOrCreate looks up or creates an entry. Requires both read and write permissions.
     async fn lookup_key_by_context_or_create(
         &self,
         request: tonic::Request<LookupKeyByContextOrCreateRequest>,
@@ -209,7 +209,11 @@ impl Permissable<BulkReadEntryOperationRequest> for BulkReadEntryOperationReques
 
 impl Permissable<LookupKeyByContextOrCreateRequest> for LookupKeyByContextOrCreateRequest {
     fn required_permissions(&self) -> Vec<String> {
-        vec![format!("udex:entry:v1:{}:write", self.index_name)]
+        // Requires both: read (check existence) and write (create if absent).
+        vec![
+            format!("udex:entry:v1:{}:read", self.index_name),
+            format!("udex:entry:v1:{}:write", self.index_name),
+        ]
     }
 }
 
@@ -569,7 +573,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_lookup_or_create_with_write_permission() {
+    async fn test_lookup_or_create_with_read_and_write_permission() {
         let mut mock_service = MockEntryServiceImpl::new();
         mock_service
             .expect_lookup_key_by_context_or_create()
@@ -583,11 +587,10 @@ mod tests {
             });
 
         let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
-        let claims = create_test_claims_with_permissions(vec![format!(
-            "udex:entry:v1:{}:write",
-            "test-index"
-        )
-        .as_str()]);
+        let claims = create_test_claims_with_permissions(vec![
+            format!("udex:entry:v1:{}:read", "test-index").as_str(),
+            format!("udex:entry:v1:{}:write", "test-index").as_str(),
+        ]);
 
         let mut request = Request::new(LookupKeyByContextOrCreateRequest {
             index_name: "test-index".to_string(),
@@ -604,10 +607,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_lookup_or_create_write_only_permission_denied() {
+        let mock_service = MockEntryServiceImpl::new();
+        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        // write-only is insufficient — read is also required
+        let claims = create_test_claims_with_permissions(vec![format!(
+            "udex:entry:v1:{}:write",
+            "test-index"
+        )
+        .as_str()]);
+
+        let mut request = Request::new(LookupKeyByContextOrCreateRequest {
+            index_name: "test-index".to_string(),
+            context: None,
+            context_hash: "test-hash".to_string(),
+        });
+        request.extensions_mut().insert(claims);
+
+        let result = authorizor.lookup_key_by_context_or_create(request).await;
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code(), tonic::Code::PermissionDenied);
+    }
+
+    #[tokio::test]
     async fn test_lookup_or_create_read_permission_denied() {
         let mock_service = MockEntryServiceImpl::new();
         let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
-        // read permission is insufficient — write is required
+        // read-only is insufficient — write is also required
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:entry:v1:{}:read",
             "test-index"

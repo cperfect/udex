@@ -3,7 +3,7 @@ verblock: "16 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-01
 title: "Fix LookupKeyByContextOrCreate — require read + write"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-01: Fix LookupKeyByContextOrCreate — require read + write

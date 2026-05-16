@@ -176,7 +176,9 @@ async fn init_server() -> String {
         now + 3600,
         now,
     )
-    .with_scope(format!("udex:entry:v1:{INDEX_NAME}:write"));
+    .with_scope(format!(
+        "udex:entry:v1:{INDEX_NAME}:read udex:entry:v1:{INDEX_NAME}:write"
+    ));
 
     let mut header = Header::new(jsonwebtoken::Algorithm::ES256);
     header.typ = Some("JWT".to_string());
