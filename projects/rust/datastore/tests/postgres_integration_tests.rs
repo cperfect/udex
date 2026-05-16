@@ -1462,9 +1462,10 @@ async fn test_pairs_jsonb_envelope(#[context] ctx: Context) {
         .get("app_version")
         .and_then(|v| v.as_str())
         .expect("pairs envelope must contain a string app_version field");
-    assert!(
-        !app_version.is_empty(),
-        "app_version must be a non-empty semver string"
+    let expected_app_version = env!("CARGO_PKG_VERSION");
+    assert_eq!(
+        app_version, expected_app_version,
+        "app_version must exactly match the compile-time package version"
     );
     assert!(
         raw.get("pairs").map(|v| v.is_array()).unwrap_or(false),
