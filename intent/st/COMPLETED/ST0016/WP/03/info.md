@@ -3,7 +3,7 @@ verblock: "16 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-03
 title: "Server validation: name format, mandatory display_name and description"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: Server validation: name format, mandatory display_name and description
@@ -32,11 +32,11 @@ Add server-layer validation to enforce the index `name` character-set constraint
 
 ## Acceptance Criteria
 
-- [ ] `name` containing characters outside the allowed set is rejected with `invalid_argument`
-- [ ] Empty or whitespace-only `display_name` is rejected with `invalid_argument`
-- [ ] Empty or whitespace-only `description` is rejected with `invalid_argument`
-- [ ] Valid requests succeed end-to-end (create → describe round-trip confirms `display_name`)
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test` all pass
+- [x] `name` containing characters outside the allowed set is rejected with `invalid_argument`
+- [x] Empty or whitespace-only `display_name` is rejected with `invalid_argument`
+- [x] Empty or whitespace-only `description` is rejected with `invalid_argument`
+- [x] Valid requests succeed end-to-end (create → describe round-trip confirms `display_name`)
+- [x] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test` all pass
 
 ## Dependencies
 

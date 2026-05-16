@@ -440,6 +440,136 @@ async fn test_create_index_invalid_hash_algorithm() {
     }
 }
 
+/// Tests that index names with invalid characters are rejected
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_create_index_invalid_name_chars() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    let invalid_names = vec![
+        "has space",
+        "has@symbol",
+        "has.dot",
+        "has/slash",
+        "has!bang",
+    ];
+
+    for name in invalid_names {
+        let request = Request::new(CreateIndexRequest {
+            name: name.to_string(),
+            display_name: "Test Index".to_string(),
+            description: "Test description".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        });
+        let result = index_server.create_index(with_test_claims(request)).await;
+        assert!(result.is_err(), "Name '{name}' should be rejected");
+        assert_eq!(
+            result.unwrap_err().code(),
+            tonic::Code::InvalidArgument,
+            "Name '{name}' should return InvalidArgument"
+        );
+    }
+}
+
+/// Tests that valid name characters (Unicode letters, digits, hyphens, underscores) are accepted
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_create_index_valid_name_chars() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    let valid_names = vec![
+        "simple",
+        "with-hyphen",
+        "with_underscore",
+        "MixedCase",
+        "123digits",
+        "a-b_c1",
+    ];
+
+    for name in valid_names {
+        let request = Request::new(CreateIndexRequest {
+            name: name.to_string(),
+            display_name: "Test Index".to_string(),
+            description: "Test description".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        });
+        let result = index_server.create_index(with_test_claims(request)).await;
+        assert!(
+            result.is_ok(),
+            "Name '{name}' should be accepted: {:?}",
+            result.err()
+        );
+    }
+}
+
+/// Tests that empty display_name is rejected
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_create_index_empty_display_name() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    for display_name in ["", "   "] {
+        let request = Request::new(CreateIndexRequest {
+            name: "valid-name".to_string(),
+            display_name: display_name.to_string(),
+            description: "Test description".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        });
+        let result = index_server.create_index(with_test_claims(request)).await;
+        assert!(
+            result.is_err(),
+            "Empty display_name '{display_name}' should be rejected"
+        );
+        let status = result.unwrap_err();
+        assert_eq!(status.code(), tonic::Code::InvalidArgument);
+        assert!(status.message().contains("display_name is required"));
+    }
+}
+
+/// Tests that empty description is rejected
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_create_index_empty_description() {
+    let data = data(false).await;
+    let index_server = &data.0;
+
+    for description in ["", "   "] {
+        let request = Request::new(CreateIndexRequest {
+            name: "valid-name".to_string(),
+            display_name: "Valid Display Name".to_string(),
+            description: description.to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        });
+        let result = index_server.create_index(with_test_claims(request)).await;
+        assert!(
+            result.is_err(),
+            "Empty description '{description}' should be rejected"
+        );
+        let status = result.unwrap_err();
+        assert_eq!(status.code(), tonic::Code::InvalidArgument);
+        assert!(status.message().contains("description is required"));
+    }
+}
+
 /// Tests the update_index endpoint with valid input returns NotImplemented
 #[rstest]
 #[tokio_shared_rt::test]

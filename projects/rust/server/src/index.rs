@@ -14,6 +14,13 @@ use udex_datastore::Datastore;
 
 use crate::{Error, HealthCheck};
 
+/// Returns `Some(invalid_char)` if `name` contains a character outside the allowed set
+/// (Unicode letters, Unicode digits, hyphens, underscores), or `None` if the name is valid.
+fn invalid_name_char(name: &str) -> Option<char> {
+    name.chars()
+        .find(|&c| !c.is_alphabetic() && !c.is_numeric() && c != '-' && c != '_')
+}
+
 /// Server implementation for the Index service.
 /// Handles all index-related operations including health checks, CRUD operations.
 pub struct IndexService<D> {
@@ -74,6 +81,23 @@ where
             };
 
             // check all mandatory fields are present
+            if let Some(bad) = invalid_name_char(&index_request.name) {
+                return Err(Error::ServerError(format!(
+                    "Index name '{}' contains invalid character '{}'; allowed: Unicode letters, digits, hyphens, underscores",
+                    index_request.name, bad
+                )));
+            }
+            if update
+                .display_name
+                .as_deref()
+                .unwrap_or("")
+                .trim()
+                .is_empty()
+            {
+                return Err(Error::ServerError(
+                    "Index update must contain a non-empty display_name".to_string(),
+                ));
+            }
             if update.description.is_none() {
                 return Err(Error::ServerError(
                     "Index update must contain a description".to_string(),
@@ -231,6 +255,18 @@ where
         if req.name.is_empty() {
             return Err(Status::invalid_argument("index name is required"));
         }
+        if let Some(bad) = invalid_name_char(&req.name) {
+            return Err(Status::invalid_argument(format!(
+                "index name '{}' contains invalid character '{}'; allowed: Unicode letters, digits, hyphens, underscores",
+                req.name, bad
+            )));
+        }
+        if req.display_name.trim().is_empty() {
+            return Err(Status::invalid_argument("display_name is required"));
+        }
+        if req.description.trim().is_empty() {
+            return Err(Status::invalid_argument("description is required"));
+        }
         if req.max_bulk_operations < 1 {
             return Err(Status::invalid_argument("max_bulk_operations must be >= 1"));
         }
@@ -295,6 +331,7 @@ where
 
         // Validate that at least one field is provided for update
         if update.description.is_none()
+            && update.display_name.is_none()
             && update.max_bulk_operations.is_none()
             && update.max_key_length.is_none()
             && update.max_value_length.is_none()
