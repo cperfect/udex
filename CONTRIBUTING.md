@@ -148,7 +148,8 @@ The API definitions in `projects/protobuf/` drive code generation for the server
 
 #### Security
 1. **`SECRETS.md` MUST be kept current** — any change that adds, removes, or modifies a credential, key, certificate, or closely associated principal (e.g. OAuth client ID, JWKS URL) MUST include a corresponding update to [`SECRETS.md`](docs/SECRETS.md) in the same commit.
-1. **Never commit real credentials** — test fixtures MUST use purpose-generated dev-only values. Production credentials MUST be supplied at runtime via environment variables or a secrets manager.
+1. **Credentials MUST NOT be committed** — test fixtures MUST use purpose-generated dev-only values. Production credentials MUST be supplied at runtime via environment variables or a secrets manager.
+1. **All permissions MUST be explicit** — for example "read" and "write" are separate permissions and "write" does not imply "read". If a subject needs to do both they must have both.
 
 #### Development
 1. **Code SHOULD be safe & secure** Code should implement secure code practices, e.g. [OWASP](https://owasp.org/www-project-secure-coding-practices-quick-reference-guide/stable-en/02-checklist/05-checklist)

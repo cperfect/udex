@@ -151,7 +151,10 @@ async fn init_jwt_fixture() -> JwtFixture {
 
     wait_for_server(SDK_JWT_BIND_ADDR, &ca_pem).await;
 
-    // Sign a JWT that grants full access to the test index.
+    // Sign a JWT for the test index using `make_token`'s default settings:
+    // a 1-hour lifetime and the helper's default scope set (broader than only entry read/write).
+    // `lookup_or_create` still requires read and write behavior because it reads to check existence
+    // and writes when creating.
     let private_key_pem = tokio::fs::read_to_string(jwt_key_path("signing_private_key.pem"))
         .await
         .expect("read JWT private key");
