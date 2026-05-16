@@ -13,6 +13,26 @@ use udex_api::index::{HashAlgorithm, Index, IndexUpdate};
 use udex_api::{google_timestamp_to_offset_datetime, offset_datetime_to_google_timestamp};
 use uuid::Uuid;
 
+/// Internal envelope for the `pairs` JSONB column.
+///
+/// `app_version` records the `udex-datastore` crate version at write time so that
+/// future migration authors can detect structural changes to the pairs model.
+/// This type must never be exposed outside this crate.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PairsEnvelope {
+    app_version: String,
+    pairs: Vec<KeyValuePair>,
+}
+
+impl PairsEnvelope {
+    fn new(pairs: Vec<KeyValuePair>) -> Self {
+        Self {
+            app_version: env!("CARGO_PKG_VERSION").to_string(),
+            pairs,
+        }
+    }
+}
+
 pub struct PostgresDatastore {
     pool: Arc<PgPool>,
 }
@@ -69,7 +89,10 @@ impl PostgresDatastore {
         .bind(UuidWrapper(entry.key))
         .bind(&entry.index_name)
         .bind(&entry.context.hash)
-        .bind(serde_json::to_value(&entry.context.pairs).map_err(Error::Serialization)?)
+        .bind(
+            serde_json::to_value(PairsEnvelope::new(entry.context.pairs))
+                .map_err(Error::Serialization)?,
+        )
         .bind(hash_algorithm_str)
         .execute(&mut **tx)
         .await
@@ -183,7 +206,10 @@ impl PostgresDatastore {
         .bind(UuidWrapper(entry.key))
         .bind(&entry.index_name)
         .bind(&entry.context.hash)
-        .bind(serde_json::to_value(&entry.context.pairs).map_err(Error::Serialization)?)
+        .bind(
+            serde_json::to_value(PairsEnvelope::new(entry.context.pairs))
+                .map_err(Error::Serialization)?,
+        )
         .bind(hash_algorithm_str)
         .fetch_one(&mut **tx)
         .await
@@ -285,8 +311,9 @@ impl PostgresDatastore {
 /// Map a database row from `entry_context` to an `Entry`.
 fn row_to_entry(row: &sqlx::postgres::PgRow) -> Result<Entry, Error> {
     let pairs_value: serde_json::Value = row.try_get("pairs").map_err(Error::Database)?;
-    let pairs: Vec<KeyValuePair> =
+    let envelope: PairsEnvelope =
         serde_json::from_value(pairs_value).map_err(Error::Serialization)?;
+    let pairs = envelope.pairs;
 
     let context = Context {
         hash: row.try_get("context_hash").map_err(Error::Database)?,

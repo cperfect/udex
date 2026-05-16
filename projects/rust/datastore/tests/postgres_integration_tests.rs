@@ -2,6 +2,7 @@
 // Integration tests for PostgreSQL datastore implementation.
 // Updated for ST0009: 1:1 entry-context semantics.
 use rstest::*;
+use sqlx::Row;
 use udex_api::entry::{
     Context as UdexContext, // Aliased to avoid clash with rstest Context - aliasing rstest Context causes issues with the `#[rstest]` attribute.
     KeyValuePair,
@@ -1415,5 +1416,58 @@ async fn test_lookup_or_create_entry_does_not_mutate_context(#[context] ctx: Con
     assert_eq!(
         stored.context.pairs, original_context.pairs,
         "context pairs must not be mutated by the upsert conflict path"
+    );
+}
+
+/// Verify that the raw JSONB stored in `entry_context.pairs` is wrapped in the
+/// versioned envelope — i.e. it is an object with `app_version` and `pairs` keys,
+/// not a bare array. This guards against future regressions where the envelope is
+/// accidentally removed.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_pairs_jsonb_envelope(#[context] ctx: Context) {
+    let data = data(false).await;
+    let datastore = &data.0;
+    let pool = &data.1;
+    let idx_name = index_name(&ctx);
+
+    datastore
+        .create_index(create_sample_index(&idx_name))
+        .await
+        .expect("create_index should succeed");
+
+    let context = create_sample_context("envelope_test_hash");
+    let key = datastore
+        .create_entry(Entry {
+            key: Uuid::new_v4(),
+            context,
+            index_name: idx_name.clone(),
+        })
+        .await
+        .expect("create_entry should succeed");
+
+    let row = sqlx::query("SELECT pairs FROM entry_context WHERE key = $1")
+        .bind(key)
+        .fetch_one(&**pool)
+        .await
+        .expect("raw pairs query should succeed");
+
+    let raw: serde_json::Value = row.try_get("pairs").expect("pairs column should exist");
+
+    assert!(
+        raw.is_object(),
+        "pairs JSONB must be an object (envelope), not a bare array"
+    );
+    let app_version = raw
+        .get("app_version")
+        .and_then(|v| v.as_str())
+        .expect("pairs envelope must contain a string app_version field");
+    assert!(
+        !app_version.is_empty(),
+        "app_version must be a non-empty semver string"
+    );
+    assert!(
+        raw.get("pairs").map(|v| v.is_array()).unwrap_or(false),
+        "pairs envelope must contain a 'pairs' array"
     );
 }

@@ -1,10 +1,10 @@
 ---
 verblock: "16 May 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: Not Started
+status: Completed
 slug: app-version-for-pairs-jsonb-data
 created: 20260516
-completed:
+completed: 20260516
 ---
 
 # ST0015: App Version for pairs jsonb data

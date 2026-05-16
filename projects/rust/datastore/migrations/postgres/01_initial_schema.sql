@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS entry_context (
     key             UUID        PRIMARY KEY,
     index_name      TEXT        NOT NULL REFERENCES "index"(name) ON DELETE RESTRICT,
     context_hash    TEXT        NOT NULL,
-    pairs           JSONB       NOT NULL,
+    pairs           JSONB       NOT NULL,   -- { "app_version": "<semver>", "pairs": [KeyValuePair…] }
     hash_algorithm  TEXT        NOT NULL,
     CONSTRAINT uq_entry_context_index_hash UNIQUE (index_name, context_hash)
 );
