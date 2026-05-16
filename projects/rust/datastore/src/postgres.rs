@@ -410,6 +410,7 @@ impl Datastore for PostgresDatastore {
             r#"
             INSERT INTO "index" (
                 name,
+                display_name,
                 description,
                 max_bulk_operations,
                 max_key_length,
@@ -428,11 +429,13 @@ impl Datastore for PostgresDatastore {
                 $6,
                 $7,
                 $8,
-                $9
+                $9,
+                $10
             )
             "#,
         )
         .bind(&index.name)
+        .bind(&index.display_name)
         .bind(&index.description)
         .bind(index.max_bulk_operations)
         .bind(index.max_key_length)
@@ -453,6 +456,7 @@ impl Datastore for PostgresDatastore {
             r#"
             SELECT
                 name,
+                display_name,
                 description,
                 max_bulk_operations,
                 max_key_length,
@@ -521,6 +525,7 @@ impl Datastore for PostgresDatastore {
         updated_by: &str,
     ) -> Result<Index, Error> {
         if update.description.is_none()
+            && update.display_name.is_none()
             && update.max_bulk_operations.is_none()
             && update.max_key_length.is_none()
             && update.max_value_length.is_none()
@@ -536,17 +541,19 @@ impl Datastore for PostgresDatastore {
             r#"
             UPDATE "index"
             SET
-                description = COALESCE($1, description),
-                max_bulk_operations = COALESCE($2, max_bulk_operations),
-                max_key_length = COALESCE($3, max_key_length),
-                max_value_length = COALESCE($4, max_value_length),
-                max_kv_pairs_per_context = COALESCE($5, max_kv_pairs_per_context),
-                hash_algorithm = COALESCE($6, hash_algorithm),
-                updated_at = $7,
-                updated_by = $8
-            WHERE name = $9
+                display_name = COALESCE($1, display_name),
+                description = COALESCE($2, description),
+                max_bulk_operations = COALESCE($3, max_bulk_operations),
+                max_key_length = COALESCE($4, max_key_length),
+                max_value_length = COALESCE($5, max_value_length),
+                max_kv_pairs_per_context = COALESCE($6, max_kv_pairs_per_context),
+                hash_algorithm = COALESCE($7, hash_algorithm),
+                updated_at = $8,
+                updated_by = $9
+            WHERE name = $10
             "#,
         )
+        .bind(&update.display_name)
         .bind(&update.description)
         .bind(update.max_bulk_operations)
         .bind(update.max_key_length)
@@ -579,6 +586,7 @@ impl Datastore for PostgresDatastore {
             r#"
             SELECT
                 name,
+                display_name,
                 description,
                 max_bulk_operations,
                 max_key_length,

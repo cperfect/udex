@@ -37,7 +37,8 @@ Two tables make up the schema. `"index"` holds policy configuration for a named 
 
 | Column | Type | Notes |
 |---|---|---|
-| `name` | `TEXT` | Primary key — unique index name |
+| `name` | `TEXT` | Primary key — identifier; Unicode letters, digits, hyphens, underscores |
+| `display_name` | `TEXT` | Short human-readable label for UI use |
 | `description` | `TEXT` | Human-readable description |
 | `max_bulk_operations` | `INTEGER` | Maximum operations per bulk request |
 | `max_key_length` | `INTEGER` | Maximum entry key length (bytes) |
@@ -71,6 +72,7 @@ Two tables make up the schema. `"index"` holds policy configuration for a named 
 erDiagram
     index {
         text name PK
+        text display_name
         text description
         integer max_bulk_operations
         integer max_key_length

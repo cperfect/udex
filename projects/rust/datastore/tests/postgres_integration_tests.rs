@@ -123,6 +123,7 @@ async fn test_create_and_get_index(#[context] ctx: Context) {
         .await
         .expect("Failed to get index");
     assert_eq!(retrieved_index.name, index.name);
+    assert_eq!(retrieved_index.display_name, index.display_name);
     assert_eq!(retrieved_index.description, index.description);
     assert_eq!(
         retrieved_index.max_bulk_operations,
@@ -558,6 +559,7 @@ async fn test_update_index(#[context] ctx: Context) {
         .await
         .expect("Failed to fully update index");
     assert_eq!(updated_full_index.name, index.name);
+    assert_eq!(updated_full_index.display_name, "Full Update Index");
     assert_eq!(updated_full_index.description, "Full update test index");
     assert_eq!(updated_full_index.max_bulk_operations, 200);
     assert_eq!(updated_full_index.max_key_length, 512);

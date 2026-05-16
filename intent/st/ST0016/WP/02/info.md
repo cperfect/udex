@@ -3,7 +3,7 @@ verblock: "16 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Datastore: add display_name column and update read/write paths"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-02: Datastore: add display_name column and update read/write paths
@@ -27,13 +27,13 @@ Add a `display_name TEXT NOT NULL` column to the `"index"` table in the existing
 
 ## Acceptance Criteria
 
-- [ ] Migration file includes `display_name TEXT NOT NULL` in the `"index"` table
-- [ ] `create_index` persists `display_name` to the DB
-- [ ] `get_index` and `list_indices` return the correct `display_name`
-- [ ] `update_index` applies `display_name` changes when provided
-- [ ] README Data Model section documents `display_name`
-- [ ] Integration tests confirm `display_name` round-trips
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test` all pass
+- [x] Migration file includes `display_name TEXT NOT NULL` in the `"index"` table
+- [x] `create_index` persists `display_name` to the DB
+- [x] `get_index` and `list_indices` return the correct `display_name`
+- [x] `update_index` applies `display_name` changes when provided
+- [x] README Data Model section documents `display_name`
+- [x] Integration tests confirm `display_name` round-trips
+- [x] `cargo fmt --check`, `cargo clippy --all-targets`, `cargo test` all pass
 
 ## Dependencies
 
