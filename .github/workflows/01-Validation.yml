@@ -28,14 +28,19 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Each step delegates to a script in scripts/ so developers can run the
+      # exact same command locally and get the same outcome as CI.
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        working-directory: .
+        run: bash scripts/validate-lint-fmt.sh
 
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        working-directory: .
+        run: bash scripts/validate-lint-clippy.sh
 
       - name: Benchmarks compile check
-        run: cargo bench --no-run
+        working-directory: .
+        run: bash scripts/validate-lint-bench.sh
 
   test:
     name: Build & Test
@@ -89,8 +94,8 @@ jobs:
         working-directory: .
         run: bash scripts/gen-keys-and-certs.sh
 
-      - name: Build
-        run: cargo build --all-targets
-
-      - name: Test
-        run: cargo test
+      # Delegates to a script so developers can run the same command locally
+      # (devcontainer provides services and env vars; CI sets them above).
+      - name: Build & Test
+        working-directory: .
+        run: bash scripts/validate-test-rust.sh
