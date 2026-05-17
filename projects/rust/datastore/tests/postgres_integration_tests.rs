@@ -99,7 +99,7 @@ async fn test_datastore_init() {
 // including name, description, limits, and hash algorithm.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_and_get_index(#[context] ctx: Context) {
+async fn test_datastore_create_and_get_index(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -154,7 +154,7 @@ async fn test_create_and_get_index(#[context] ctx: Context) {
 /// context returns the pre-existing key rather than inserting a new row.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_entry(#[context] ctx: Context) {
+async fn test_datastore_create_entry(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let _pool = &data.1;
@@ -241,7 +241,7 @@ async fn test_create_entry(#[context] ctx: Context) {
 /// is returned when querying by a key.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_get_entry_by_key(#[context] ctx: Context) {
+async fn test_datastore_get_entry_by_key(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let _pool = &data.1;
@@ -307,7 +307,7 @@ async fn test_get_entry_by_key(#[context] ctx: Context) {
 /// Returns None when no entry exists, Some(entry) when one does.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_get_entry_by_context(#[context] ctx: Context) {
+async fn test_datastore_get_entry_by_context(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let _pool = &data.1;
@@ -368,7 +368,7 @@ async fn test_get_entry_by_context(#[context] ctx: Context) {
 /// a subsequent create with the same context produces a fresh key.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_delete_entry(#[context] ctx: Context) {
+async fn test_datastore_delete_entry(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -448,7 +448,7 @@ async fn test_delete_entry(#[context] ctx: Context) {
 /// and that absent results are handled correctly.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_error_handling() {
+async fn test_datastore_error_handling() {
     let data = data(false).await;
     let datastore = &data.0;
 
@@ -483,7 +483,7 @@ async fn test_error_handling() {
 /// the updated values are correctly persisted and retrieved.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_update_index(#[context] ctx: Context) {
+async fn test_datastore_update_index(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -602,7 +602,7 @@ async fn test_update_index(#[context] ctx: Context) {
 /// and that the list is properly ordered by name.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_list_indices(#[context] ctx: Context) {
+async fn test_datastore_list_indices(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -653,7 +653,7 @@ async fn test_list_indices(#[context] ctx: Context) {
 /// without data corruption or race conditions.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_concurrent_operations(#[context] ctx: Context) {
+async fn test_datastore_concurrent_operations(#[context] ctx: Context) {
     let fixtures = data(false).await;
     let datastore = &fixtures.0;
     let idx_name = index_name(&ctx);
@@ -727,7 +727,7 @@ async fn test_concurrent_operations(#[context] ctx: Context) {
 /// actual key is returned for each create (new or pre-existing).
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_bulk_entry_write(#[context] ctx: Context) {
+async fn test_datastore_bulk_entry_write(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -825,7 +825,7 @@ async fn test_bulk_entry_write(#[context] ctx: Context) {
 /// with Some or None depending on whether an entry exists.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_bulk_entry_read(#[context] ctx: Context) {
+async fn test_datastore_bulk_entry_read(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -934,7 +934,7 @@ async fn test_bulk_entry_read(#[context] ctx: Context) {
 /// The rollback is triggered by attempting to delete a non-existent key.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_bulk_entry_write_rollback(#[context] ctx: Context) {
+async fn test_datastore_bulk_entry_write_rollback(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -1000,7 +1000,9 @@ async fn test_bulk_entry_write_rollback(#[context] ctx: Context) {
 /// would reject the second insert — this test would then fail, proving the bug.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_same_context_different_indexes_get_independent_keys(#[context] ctx: Context) {
+async fn test_datastore_same_context_different_indexes_get_independent_keys(
+    #[context] ctx: Context,
+) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_a = format!("{}_multi_idx_a", index_name(&ctx));
@@ -1064,7 +1066,7 @@ async fn test_same_context_different_indexes_get_independent_keys(#[context] ctx
 /// This verifies the full per-index idempotency contract.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_idempotent_create_is_per_index(#[context] ctx: Context) {
+async fn test_datastore_idempotent_create_is_per_index(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_a = format!("{}_idem_idx_a", index_name(&ctx));
@@ -1126,7 +1128,7 @@ async fn test_idempotent_create_is_per_index(#[context] ctx: Context) {
 /// indexes returns two distinct entries, one per index.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_bulk_read_get_by_context_is_index_scoped(#[context] ctx: Context) {
+async fn test_datastore_bulk_read_get_by_context_is_index_scoped(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_a = format!("{}_bulk_ctx_idx_a", index_name(&ctx));
@@ -1205,7 +1207,7 @@ async fn test_bulk_read_get_by_context_is_index_scoped(#[context] ctx: Context) 
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_delete_index_empty(#[context] ctx: Context) {
+async fn test_datastore_delete_index_empty(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -1229,7 +1231,7 @@ async fn test_delete_index_empty(#[context] ctx: Context) {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_delete_index_not_empty(#[context] ctx: Context) {
+async fn test_datastore_delete_index_not_empty(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -1262,7 +1264,7 @@ async fn test_delete_index_not_empty(#[context] ctx: Context) {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_delete_index_not_found(#[context] ctx: Context) {
+async fn test_datastore_delete_index_not_found(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -1284,7 +1286,7 @@ async fn test_delete_index_not_found(#[context] ctx: Context) {
 /// and returns the same key.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_lookup_or_create_entry_created(#[context] ctx: Context) {
+async fn test_datastore_lookup_or_create_entry_created(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -1317,7 +1319,7 @@ async fn test_lookup_or_create_entry_created(#[context] ctx: Context) {
 /// pre-existing key is returned (not the candidate key supplied in the second call).
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_lookup_or_create_entry_found(#[context] ctx: Context) {
+async fn test_datastore_lookup_or_create_entry_found(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -1372,7 +1374,7 @@ async fn test_lookup_or_create_entry_found(#[context] ctx: Context) {
 /// hash, key) with values from the conflicting candidate.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_lookup_or_create_entry_does_not_mutate_context(#[context] ctx: Context) {
+async fn test_datastore_lookup_or_create_entry_does_not_mutate_context(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let idx_name = index_name(&ctx);
@@ -1432,7 +1434,7 @@ async fn test_lookup_or_create_entry_does_not_mutate_context(#[context] ctx: Con
 /// accidentally removed.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_pairs_jsonb_envelope(#[context] ctx: Context) {
+async fn test_datastore_pairs_jsonb_envelope(#[context] ctx: Context) {
     let data = data(false).await;
     let datastore = &data.0;
     let pool = &data.1;

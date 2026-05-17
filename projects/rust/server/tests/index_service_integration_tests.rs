@@ -82,7 +82,7 @@ fn with_test_claims<T>(mut request: Request<T>) -> Request<T> {
 /// Tests that the index server can be initialized successfully.
 #[rstest]
 #[tokio_shared_rt::test] //We use tokio shared runtime to ensure the static variables are still valid between tests -https://docs.rs/tokio-shared-rt/latest/tokio_shared_rt/
-async fn test_index_server_init() {
+async fn test_index_service_server_init() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -97,7 +97,7 @@ async fn test_index_server_init() {
 /// Tests the describe endpoint with valid input returns the existing index
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_describe_valid_input() {
+async fn test_index_service_describe_valid_input() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -125,7 +125,7 @@ async fn test_describe_valid_input() {
 /// Tests the describe endpoint with empty name returns InvalidArgument
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_describe_empty_name() {
+async fn test_index_service_describe_empty_name() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -148,7 +148,7 @@ async fn test_describe_empty_name() {
 /// Tests the create_index endpoint with valid input creates the index and returns it
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_valid_input() {
+async fn test_index_service_create_valid_input() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -188,7 +188,7 @@ async fn test_create_index_valid_input() {
 /// Tests the create_index endpoint rejects an unknown hash algorithm enum value
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_unsupported_hash_algorithm() {
+async fn test_index_service_create_unsupported_hash_algorithm() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -216,7 +216,7 @@ async fn test_create_index_unsupported_hash_algorithm() {
 /// Tests the create_index endpoint rejects a duplicate index name
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_duplicate_name() {
+async fn test_index_service_create_duplicate_name() {
     let data = data(true).await; // serial: true to avoid races with test_create_index_valid_input
     let index_server = &data.0;
 
@@ -259,7 +259,7 @@ async fn test_create_index_duplicate_name() {
 /// Tests the create_index endpoint validation for empty name
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_empty_name() {
+async fn test_index_service_create_empty_name() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -289,7 +289,7 @@ async fn test_create_index_empty_name() {
 /// Tests the create_index endpoint validation for invalid max_bulk_operations
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_invalid_max_bulk_operations() {
+async fn test_index_service_create_invalid_max_bulk_operations() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -321,7 +321,7 @@ async fn test_create_index_invalid_max_bulk_operations() {
 /// Tests the create_index endpoint validation for invalid max_key_length
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_invalid_max_key_length() {
+async fn test_index_service_create_invalid_max_key_length() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -351,7 +351,7 @@ async fn test_create_index_invalid_max_key_length() {
 /// Tests the create_index endpoint validation for invalid max_value_length
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_invalid_max_value_length() {
+async fn test_index_service_create_invalid_max_value_length() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -381,7 +381,7 @@ async fn test_create_index_invalid_max_value_length() {
 /// Tests the create_index endpoint validation for invalid max_kv_pairs_per_context
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_invalid_max_kv_pairs_per_context() {
+async fn test_index_service_create_invalid_max_kv_pairs_per_context() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -413,7 +413,7 @@ async fn test_create_index_invalid_max_kv_pairs_per_context() {
 /// Tests the create_index endpoint rejects an unknown hash_algorithm enum value
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_invalid_hash_algorithm() {
+async fn test_index_service_create_invalid_hash_algorithm() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -443,7 +443,7 @@ async fn test_create_index_invalid_hash_algorithm() {
 /// Tests that index names with invalid characters are rejected
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_invalid_name_chars() {
+async fn test_index_service_create_invalid_name_chars() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -479,7 +479,7 @@ async fn test_create_index_invalid_name_chars() {
 /// Tests that valid name characters (Unicode letters, digits, hyphens, underscores) are accepted
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_valid_name_chars() {
+async fn test_index_service_create_valid_name_chars() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -515,7 +515,7 @@ async fn test_create_index_valid_name_chars() {
 /// Tests that empty display_name is rejected
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_empty_display_name() {
+async fn test_index_service_create_empty_display_name() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -544,7 +544,7 @@ async fn test_create_index_empty_display_name() {
 /// Tests that empty description is rejected
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_index_empty_description() {
+async fn test_index_service_create_empty_description() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -573,7 +573,7 @@ async fn test_create_index_empty_description() {
 /// Tests the update_index endpoint with valid input returns NotImplemented
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_update_index_valid_input() {
+async fn test_index_service_update_valid_input() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -611,7 +611,7 @@ async fn test_update_index_valid_input() {
 /// Tests the update_index endpoint validation for empty name
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_update_index_empty_name() {
+async fn test_index_service_update_empty_name() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -643,7 +643,7 @@ async fn test_update_index_empty_name() {
 /// Tests the list_indices endpoint returns success with initialized index
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_list_indices() {
+async fn test_index_service_list_indices() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -673,7 +673,7 @@ async fn test_list_indices() {
 /// Tests update index with missing update fields
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_update_index_missing_update() {
+async fn test_index_service_update_missing_update() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -697,7 +697,7 @@ async fn test_update_index_missing_update() {
 /// Tests update index with empty update fields
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_update_index_empty_update() {
+async fn test_index_service_update_empty_update() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -731,7 +731,7 @@ async fn test_update_index_empty_update() {
 /// Tests multiple validation errors in sequence to verify error handling consistency
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_validation_error_consistency() {
+async fn test_index_service_validation_error_consistency() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -784,7 +784,7 @@ async fn test_validation_error_consistency() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_delete_index_empty_index() {
+async fn test_index_service_delete_empty_index() {
     let fixtures = init_postgres().await;
     let datastore = Arc::new(fixtures.0);
     let _db_name = fixtures.2;
@@ -826,7 +826,7 @@ async fn test_delete_index_empty_index() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_delete_index_not_empty() {
+async fn test_index_service_delete_not_empty() {
     let fixtures = init_postgres().await;
     let datastore = Arc::new(fixtures.0);
     let _db_name = fixtures.2;
@@ -874,7 +874,7 @@ async fn test_delete_index_not_empty() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_delete_index_not_found() {
+async fn test_index_service_delete_not_found() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -894,7 +894,7 @@ async fn test_delete_index_not_found() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_delete_index_empty_name() {
+async fn test_index_service_delete_empty_name() {
     let data = data(false).await;
     let index_server = &data.0;
 
@@ -914,7 +914,7 @@ async fn test_delete_index_empty_name() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_delete_index_required_permissions_and_missing_claims() {
+async fn test_index_service_delete_required_permissions_and_missing_claims() {
     let data = data(false).await;
     let index_server = &data.0;
 

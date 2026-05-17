@@ -73,7 +73,7 @@ pub async fn data(serial: bool) -> Data<'static, MaybeOnceType> {
 /// Tests that the entry server can be initialized successfully.
 #[rstest]
 #[tokio_shared_rt::test] //We use tokio shared runtime to ensure the static variables are still valid between tests -https://docs.rs/tokio-shared-rt/latest/tokio_shared_rt/
-async fn test_entry_server_init() {
+async fn test_entry_service_server_init() {
     let data = data(false).await;
     let entry_server = &data.0;
     //check entry server health
@@ -87,7 +87,7 @@ async fn test_entry_server_init() {
 /// Tests creating an entry through the gRPC service
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_entry() {
+async fn test_entry_service_create_entry() {
     use tonic::Request;
     use udex_api::entry::{ContextInput, CreateEntryRequest, KeyValuePair, Value};
 
@@ -146,7 +146,7 @@ async fn test_create_entry() {
 /// Tests deleting an entry through the gRPC service
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_delete_entry() {
+async fn test_entry_service_delete_entry() {
     use tonic::Request;
     use udex_api::entry::{
         ContextInput, CreateEntryRequest, DeleteEntryRequest, KeyValuePair, Value,
@@ -206,7 +206,7 @@ async fn test_delete_entry() {
 /// Tests looking up context by key through the gRPC service
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_lookup_context_by_key() {
+async fn test_entry_service_lookup_context_by_key() {
     use tonic::Request;
     use udex_api::entry::{
         ContextInput, CreateEntryRequest, KeyValuePair, LookupContextByKeyRequest, Value,
@@ -275,7 +275,7 @@ async fn test_lookup_context_by_key() {
 /// calls return the same key. A subsequent lookup returns that single key.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_lookup_key_by_context() {
+async fn test_entry_service_lookup_key_by_context() {
     use tonic::Request;
     use udex_api::entry::{
         ContextInput, CreateEntryRequest, KeyValuePair, LookupKeyByContextRequest, Value,
@@ -342,7 +342,7 @@ async fn test_lookup_key_by_context() {
 /// Tests bulk write operations through the gRPC service
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_bulk_write_entry_operation() {
+async fn test_entry_service_bulk_write_entry_operation() {
     use tonic::Request;
     use udex_api::entry::{
         bulk_write_entry_operation::Operation, BulkWriteEntryOperation,
@@ -425,7 +425,7 @@ async fn test_bulk_write_entry_operation() {
 /// Tests bulk read operations through the gRPC service
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_bulk_read_entry_operation() {
+async fn test_entry_service_bulk_read_entry_operation() {
     use tonic::Request;
     use udex_api::entry::{
         bulk_read_entry_operation::Operation, BulkReadEntryOperation,
@@ -526,7 +526,7 @@ async fn test_bulk_read_entry_operation() {
 /// An empty BulkWriteEntryOperationRequest is rejected with INVALID_ARGUMENT.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_bulk_write_empty_operations_invalid_argument() {
+async fn test_entry_service_bulk_write_empty_invalid_argument() {
     use tonic::{Code, Request};
     use udex_api::entry::BulkWriteEntryOperationRequest;
 
@@ -552,7 +552,7 @@ async fn test_bulk_write_empty_operations_invalid_argument() {
 /// An empty BulkReadEntryOperationRequest is rejected with INVALID_ARGUMENT.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_bulk_read_empty_operations_invalid_argument() {
+async fn test_entry_service_bulk_read_empty_invalid_argument() {
     use tonic::{Code, Request};
     use udex_api::entry::BulkReadEntryOperationRequest;
 
@@ -582,7 +582,7 @@ async fn test_bulk_read_empty_operations_invalid_argument() {
 /// `lookup_context_by_key` and inspect the pairs.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_create_entry_idempotent_for_same_pairs_different_dek() {
+async fn test_entry_service_create_entry_idempotent() {
     use tonic::Request;
     use udex_api::entry::{ContextInput, CreateEntryRequest, KeyValuePair, Value};
 
@@ -662,7 +662,7 @@ async fn test_create_entry_idempotent_for_same_pairs_different_dek() {
 /// Tests error handling for invalid operations
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_error_handling() {
+async fn test_entry_service_error_handling() {
     use tonic::Request;
     use udex_api::entry::{CreateEntryRequest, DeleteEntryRequest, LookupContextByKeyRequest};
 
@@ -733,7 +733,7 @@ fn loc_context(pair_value: &str) -> (udex_api::entry::ContextInput, String) {
 /// the entry and returns created=true with a valid UUID key.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_lookup_or_create_creates_new_entry() {
+async fn test_entry_service_lookup_or_create_creates_new_entry() {
     use tonic::Request;
     use udex_api::entry::LookupKeyByContextOrCreateRequest;
 
@@ -766,7 +766,7 @@ async fn test_lookup_or_create_creates_new_entry() {
 /// the existing key unchanged and created=false.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_lookup_or_create_returns_existing_entry() {
+async fn test_entry_service_lookup_or_create_returns_existing_entry() {
     use tonic::Request;
     use udex_api::entry::LookupKeyByContextOrCreateRequest;
 
@@ -809,7 +809,7 @@ async fn test_lookup_or_create_returns_existing_entry() {
 /// Empty index_name returns INVALID_ARGUMENT.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_lookup_or_create_validation_errors() {
+async fn test_entry_service_lookup_or_create_validation_errors() {
     use tonic::{Code, Request};
     use udex_api::entry::LookupKeyByContextOrCreateRequest;
 
@@ -870,7 +870,7 @@ async fn test_lookup_or_create_validation_errors() {
 /// database access — even when the entry does not exist.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_lookup_or_create_hash_mismatch_invalid_argument() {
+async fn test_entry_service_lookup_or_create_hash_mismatch() {
     use tonic::{Code, Request};
     use udex_api::entry::LookupKeyByContextOrCreateRequest;
 
@@ -905,7 +905,7 @@ async fn test_lookup_or_create_hash_mismatch_invalid_argument() {
 /// and that the LookupOrCreate result variant is populated in the bulk response.
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_bulk_write_lookup_or_create() {
+async fn test_entry_service_bulk_write_lookup_or_create() {
     use tonic::Request;
     use udex_api::entry::{
         bulk_write_entry_operation::Operation,

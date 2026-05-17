@@ -14,16 +14,14 @@ use std::sync::OnceLock;
 
 use assert_cmd::Command;
 use maybe_once::tokio::{Data, MaybeOnceAsync};
-use ory_hydra_client::apis::{configuration::Configuration, o_auth2_api};
-use ory_hydra_client::models::o_auth2_client::OAuth2Client as HydraClient;
 use predicates::prelude::*;
 use rstest::*;
-use secrets_rs::{sources::file::FileSource, Secret, SourceRegistry};
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzRequest};
 use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
+use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, register_hydra_client};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -44,16 +42,6 @@ const SERVER_KEY: &str = concat!(
 );
 
 // ── Env helpers ───────────────────────────────────────────────────────────────
-
-fn hydra_public_url() -> String {
-    dotenvy::dotenv_override().ok();
-    std::env::var("HYDRA_PUBLIC_URL").unwrap_or_else(|_| "http://localhost:4444".to_string())
-}
-
-fn hydra_admin_url() -> String {
-    dotenvy::dotenv_override().ok();
-    std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string())
-}
 
 fn token_url() -> String {
     format!("{}/oauth2/token", hydra_public_url())
@@ -121,7 +109,15 @@ async fn init_fixture() -> Fixture {
 
     wait_for_server(BIND_ADDR, &ca_pem).await;
 
-    register_hydra_client(&admin_url, AUDIENCE).await;
+    let scopes = format!(
+        "udex:index:v1:list \
+         udex:index:v1:{INDEX_NAME}:read \
+         udex:entry:v1:{INDEX_NAME}:create \
+         udex:entry:v1:{INDEX_NAME}:read \
+         udex:entry:v1:{INDEX_NAME}:write \
+         udex:entry:v1:{INDEX_NAME}:delete"
+    );
+    register_hydra_client(&admin_url, CLIENT_ID, CLIENT_SECRET, AUDIENCE, &scopes).await;
 }
 
 async fn wait_for_server(addr: &str, ca_pem: &[u8]) {
@@ -151,61 +147,6 @@ async fn wait_for_server(addr: &str, ca_pem: &[u8]) {
     panic!("server at {addr} did not become ready within 3 seconds");
 }
 
-async fn register_hydra_client(admin_url: &str, audience: &str) {
-    let http_client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .expect("build Hydra admin HTTP client");
-    let config = Configuration {
-        base_path: admin_url.to_string(),
-        client: http_client,
-        ..Configuration::default()
-    };
-
-    let scopes = format!(
-        "udex:index:v1:list \
-         udex:index:v1:{INDEX_NAME}:read \
-         udex:entry:v1:{INDEX_NAME}:create \
-         udex:entry:v1:{INDEX_NAME}:read \
-         udex:entry:v1:{INDEX_NAME}:write \
-         udex:entry:v1:{INDEX_NAME}:delete"
-    );
-
-    let mut body = HydraClient::new();
-    body.access_token_strategy = Some("jwt".to_string());
-    body.audience = Some(vec![audience.to_string()]);
-    body.client_id = Some(CLIENT_ID.to_string());
-    body.client_name = Some(CLIENT_ID.to_string());
-    body.client_secret = Some(CLIENT_SECRET.to_string());
-    body.grant_types = Some(vec!["client_credentials".to_string()]);
-    body.scope = Some(scopes);
-    body.token_endpoint_auth_method = Some("client_secret_post".to_string());
-
-    match o_auth2_api::create_o_auth2_client(&config, body.clone()).await {
-        Ok(_) => {}
-        Err(e)
-            if matches!(
-                &e,
-                ory_hydra_client::apis::Error::ResponseError(r) if r.status.as_u16() == 409
-            ) =>
-        {
-            o_auth2_api::set_o_auth2_client(&config, CLIENT_ID, body)
-                .await
-                .expect("Hydra set_client failed");
-        }
-        Err(e) => panic!("Hydra create_client failed: {e}"),
-    }
-}
-
-fn bind_file_secret(path: &str) -> Secret<String> {
-    let mut s = Secret::new(&format!("urn:secrets-rs:file:{path}")).expect("valid file URN");
-    let mut reg = SourceRegistry::new();
-    reg.register("file", FileSource::new())
-        .expect("register file source");
-    s.bind(&reg).expect("bind file secret");
-    s
-}
-
 pub async fn fixture(serial: bool) -> Data<'static, Fixture> {
     static DATA: OnceLock<MaybeOnceAsync<Fixture>> = OnceLock::new();
     DATA.get_or_init(|| MaybeOnceAsync::new(|| Box::pin(init_fixture())))
@@ -221,7 +162,7 @@ fn udex() -> Command {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_token_fetch_table_output() {
+async fn test_cli_oauth2_token_fetch_table_output() {
     let _ = fixture(false).await;
 
     udex()
@@ -236,7 +177,7 @@ async fn test_token_fetch_table_output() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_token_fetch_json_output() {
+async fn test_cli_oauth2_token_fetch_json_output() {
     let _ = fixture(false).await;
 
     let output = udex()
@@ -264,7 +205,7 @@ async fn test_token_fetch_json_output() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_token_fetch_yaml_output() {
+async fn test_cli_oauth2_token_fetch_yaml_output() {
     let _ = fixture(false).await;
 
     udex()
@@ -280,7 +221,7 @@ async fn test_token_fetch_yaml_output() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_token_fetch_missing_client_id() {
+async fn test_cli_oauth2_token_fetch_missing_client_id() {
     let _ = fixture(false).await;
 
     udex()
@@ -294,7 +235,7 @@ async fn test_token_fetch_missing_client_id() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_token_fetch_missing_client_secret() {
+async fn test_cli_oauth2_token_fetch_missing_client_secret() {
     let _ = fixture(false).await;
 
     udex()
@@ -308,7 +249,7 @@ async fn test_token_fetch_missing_client_secret() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_token_fetch_wrong_credentials() {
+async fn test_cli_oauth2_token_fetch_wrong_credentials() {
     let _ = fixture(false).await;
 
     udex()
@@ -324,7 +265,7 @@ async fn test_token_fetch_wrong_credentials() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_token_fetch_and_use_for_index_list() {
+async fn test_cli_oauth2_token_fetch_and_use_for_index_list() {
     let _ = fixture(false).await;
 
     // Fetch a token with the list scope as JSON so we can extract the raw JWT.

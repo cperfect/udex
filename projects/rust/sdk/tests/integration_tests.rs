@@ -17,7 +17,6 @@ use std::sync::OnceLock;
 use jsonwebtoken::{encode, EncodingKey, Header};
 use maybe_once::tokio::{Data, MaybeOnceAsync};
 use rstest::*;
-use secrets_rs::{sources::file::FileSource, Secret, SourceRegistry};
 use time::OffsetDateTime;
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
@@ -25,6 +24,7 @@ use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzReq
 use udex_api::index::{CreateIndexRequest, HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
 use udex_sdk::{ClientOptions, ContextInput, KeyValuePair, UdexClient, Value};
+use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, register_hydra_client};
 
 // ── Port constants ────────────────────────────────────────────────────────────
 // Different from the server crate's own tests to avoid port conflicts when both
@@ -48,16 +48,6 @@ fn server_cert_path(file: &str) -> String {
 
 fn jwt_key_path(file: &str) -> String {
     format!("{JWT_DIR}/{file}")
-}
-
-/// Binds a file-sourced `Secret<String>` from an absolute path.
-fn bind_file_secret(abs_path: &str) -> Secret<String> {
-    let mut s = Secret::new(&format!("urn:secrets-rs:file:{abs_path}")).expect("valid file URN");
-    let mut reg = SourceRegistry::new();
-    reg.register("file", FileSource::new())
-        .expect("register file source");
-    s.bind(&reg).expect("bind file secret");
-    s
 }
 
 // ── Server readiness ──────────────────────────────────────────────────────────
@@ -190,16 +180,6 @@ type HydraFixture = (
     String, // index name
 );
 
-fn hydra_public_url() -> String {
-    dotenvy::dotenv_override().ok();
-    std::env::var("HYDRA_PUBLIC_URL").unwrap_or_else(|_| "http://localhost:4444".to_string())
-}
-
-fn hydra_admin_url() -> String {
-    dotenvy::dotenv_override().ok();
-    std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string())
-}
-
 async fn init_hydra_fixture() -> HydraFixture {
     udex_server::logging::init_test_tracing();
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
@@ -263,13 +243,20 @@ async fn init_hydra_fixture() -> HydraFixture {
 
     wait_for_server(SDK_HYDRA_BIND_ADDR, &ca_pem).await;
 
-    // Register a Hydra client that has all the scopes needed by the test index.
+    // Register a Hydra client with all scopes needed by the test index.
     register_hydra_client(
         &admin_url,
         &client_id,
         &client_secret,
         &audience,
-        &index_name,
+        &format!(
+            "udex:index:v1:list \
+             udex:index:v1:{index_name}:read \
+             udex:entry:v1:{index_name}:create \
+             udex:entry:v1:{index_name}:read \
+             udex:entry:v1:{index_name}:write \
+             udex:entry:v1:{index_name}:delete"
+        ),
     )
     .await;
 
@@ -363,57 +350,6 @@ fn context_input(pairs: &[(&str, &str)]) -> ContextInput {
                 dek: None,
             })
             .collect(),
-    }
-}
-
-/// Registers (or replaces) a Hydra client with all scopes for `index_name`.
-async fn register_hydra_client(
-    admin_url: &str,
-    client_id: &str,
-    client_secret: &str,
-    audience: &str,
-    index_name: &str,
-) {
-    use ory_hydra_client::apis::{configuration::Configuration, o_auth2_api};
-    use ory_hydra_client::models::o_auth2_client::OAuth2Client as HydraClient;
-
-    let config = Configuration {
-        base_path: admin_url.to_string(),
-        ..Configuration::default()
-    };
-
-    let scopes = format!(
-        "udex:index:v1:list \
-         udex:index:v1:{index_name}:read \
-         udex:entry:v1:{index_name}:create \
-         udex:entry:v1:{index_name}:read \
-         udex:entry:v1:{index_name}:write \
-         udex:entry:v1:{index_name}:delete"
-    );
-
-    let mut body = HydraClient::new();
-    body.access_token_strategy = Some("jwt".to_string());
-    body.audience = Some(vec![audience.to_string()]);
-    body.client_id = Some(client_id.to_string());
-    body.client_name = Some(client_id.to_string());
-    body.client_secret = Some(client_secret.to_string());
-    body.grant_types = Some(vec!["client_credentials".to_string()]);
-    body.scope = Some(scopes);
-    body.token_endpoint_auth_method = Some("client_secret_post".to_string());
-
-    match o_auth2_api::create_o_auth2_client(&config, body.clone()).await {
-        Ok(_) => {}
-        Err(e)
-            if matches!(
-                &e,
-                ory_hydra_client::apis::Error::ResponseError(r) if r.status.as_u16() == 409
-            ) =>
-        {
-            o_auth2_api::set_o_auth2_client(&config, client_id, body)
-                .await
-                .expect("Hydra set_client failed");
-        }
-        Err(e) => panic!("Hydra create_client failed: {e}"),
     }
 }
 
@@ -858,7 +794,7 @@ async fn test_sdk_envelope_encrypted_entry() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_hydra_sdk_list_and_describe_index() {
+async fn test_sdk_oauth2_list_and_describe_index() {
     let d = data_hydra(false).await;
     let client = &d.0;
     let index_name = &d.1;
@@ -878,7 +814,7 @@ async fn test_hydra_sdk_list_and_describe_index() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_hydra_sdk_create_and_lookup_entry() {
+async fn test_sdk_oauth2_create_and_lookup_entry() {
     let d = data_hydra(false).await;
     let client = &d.0;
     let index_name = &d.1;
@@ -906,7 +842,7 @@ async fn test_hydra_sdk_create_and_lookup_entry() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_hydra_sdk_create_entry_idempotent() {
+async fn test_sdk_oauth2_create_entry_idempotent() {
     let d = data_hydra(false).await;
     let client = &d.0;
     let index_name = &d.1;
@@ -927,7 +863,7 @@ async fn test_hydra_sdk_create_entry_idempotent() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_hydra_sdk_delete_entry() {
+async fn test_sdk_oauth2_delete_entry() {
     let d = data_hydra(false).await;
     let client = &d.0;
     let index_name = &d.1;
@@ -955,7 +891,7 @@ async fn test_hydra_sdk_delete_entry() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_hydra_sdk_lookup_nonexistent_returns_none() {
+async fn test_sdk_oauth2_lookup_nonexistent_returns_none() {
     let d = data_hydra(false).await;
     let client = &d.0;
     let index_name = &d.1;
@@ -969,7 +905,7 @@ async fn test_hydra_sdk_lookup_nonexistent_returns_none() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_hydra_sdk_bulk_write_and_read() {
+async fn test_sdk_oauth2_bulk_write_and_read() {
     use udex_api::entry::{
         bulk_read_entry_operation_result, bulk_write_entry_operation_result, CreateEntryRequest,
         LookupContextByKeyRequest,
@@ -1048,7 +984,7 @@ async fn test_hydra_sdk_bulk_write_and_read() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_hydra_sdk_invalid_credentials_return_auth_error() {
+async fn test_sdk_oauth2_invalid_credentials_return_auth_error() {
     // Ensure the Hydra-backed server is running.
     let _d = data_hydra(false).await;
 

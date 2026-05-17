@@ -3,7 +3,7 @@ verblock: "17 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Rename hydra to oauth2 in test names and apply consistent test_ prefix"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-02: Rename hydra to oauth2 in test names and apply consistent test_ prefix
@@ -43,11 +43,11 @@ For each file below, replace local copies of `bind_file_secret`, `hydra_*_url`, 
 
 ## Acceptance Criteria
 
-- [ ] No test function name contains the word `hydra` (utility functions such as `hydra_admin_url` are exempt)
-- [ ] Every integration test function is prefixed with one of the canonical layer prefixes
-- [ ] Fixture helper functions (`bind_file_secret`, `hydra_*_url`, `register_hydra_client`) are no longer duplicated in multiple test files
-- [ ] `cargo test --all-targets` passes (all renamed tests still run and pass)
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets` pass
+- [x] No test function name contains the word `hydra` (utility functions such as `hydra_admin_url` are exempt)
+- [x] Every integration test function is prefixed with one of the canonical layer prefixes
+- [x] Fixture helper functions (`bind_file_secret`, `hydra_*_url`, `register_hydra_client`) are no longer duplicated in multiple test files
+- [x] `cargo test --all-targets` passes (all renamed tests still run and pass)
+- [x] `cargo fmt --check`, `cargo clippy --all-targets` pass
 
 ## Dependencies
 

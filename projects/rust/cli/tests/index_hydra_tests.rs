@@ -16,16 +16,14 @@ use std::sync::OnceLock;
 
 use assert_cmd::Command;
 use maybe_once::tokio::{Data, MaybeOnceAsync};
-use ory_hydra_client::apis::{configuration::Configuration, o_auth2_api};
-use ory_hydra_client::models::o_auth2_client::OAuth2Client as HydraClient;
 use rstest::*;
-use secrets_rs::{sources::file::FileSource, Secret, SourceRegistry};
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzRequest};
 use udex_api::index::{HashAlgorithm, Index, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
 use udex_datastore::{Datastore, Entry};
+use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, register_hydra_client};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -49,16 +47,6 @@ const SERVER_KEY: &str = concat!(
 
 // ── Env helpers ───────────────────────────────────────────────────────────────
 
-fn hydra_admin_url() -> String {
-    dotenvy::dotenv_override().ok();
-    std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string())
-}
-
-fn hydra_public_url() -> String {
-    dotenvy::dotenv_override().ok();
-    std::env::var("HYDRA_PUBLIC_URL").unwrap_or_else(|_| "http://localhost:4444".to_string())
-}
-
 fn hydra_issuer() -> String {
     let public = hydra_public_url();
     std::env::var("HYDRA_ISSUER").unwrap_or_else(|_| format!("{}/", public.trim_end_matches('/')))
@@ -71,15 +59,6 @@ fn token_url() -> String {
 // ── Fixture ───────────────────────────────────────────────────────────────────
 
 type Fixture = ();
-
-fn bind_file_secret(path: &str) -> Secret<String> {
-    let mut s = Secret::new(&format!("urn:secrets-rs:file:{path}")).expect("valid file URN");
-    let mut reg = SourceRegistry::new();
-    reg.register("file", FileSource::new())
-        .expect("register file source");
-    s.bind(&reg).expect("bind file secret");
-    s
-}
 
 fn index_update(description: &str) -> IndexUpdate {
     IndexUpdate {
@@ -179,7 +158,19 @@ async fn init_fixture() -> Fixture {
     let ca_pem = std::fs::read(CA_CERT).expect("read CA cert");
     wait_for_server(BIND_ADDR, &ca_pem).await;
 
-    register_hydra_client(&hydra_admin_url()).await;
+    let scopes = format!(
+        "udex:index:v1:{EMPTY_INDEX_NAME}:delete \
+         udex:index:v1:{NON_EMPTY_INDEX_NAME}:delete \
+         udex:index:v1:{NOT_FOUND_INDEX_NAME}:delete"
+    );
+    register_hydra_client(
+        &hydra_admin_url(),
+        CLIENT_ID,
+        CLIENT_SECRET,
+        AUDIENCE,
+        &scopes,
+    )
+    .await;
 }
 
 async fn wait_for_server(addr: &str, ca_pem: &[u8]) {
@@ -207,51 +198,6 @@ async fn wait_for_server(addr: &str, ca_pem: &[u8]) {
         }
     }
     panic!("server at {addr} did not become ready within 3 seconds");
-}
-
-async fn register_hydra_client(admin_url: &str) {
-    let http_client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .expect("build Hydra admin HTTP client");
-    let config = Configuration {
-        base_path: admin_url.to_string(),
-        client: http_client,
-        ..Configuration::default()
-    };
-
-    let mut body = HydraClient::new();
-    body.access_token_strategy = Some("jwt".to_string());
-    body.audience = Some(vec![AUDIENCE.to_string()]);
-    body.client_id = Some(CLIENT_ID.to_string());
-    body.client_name = Some(CLIENT_ID.to_string());
-    body.client_secret = Some(CLIENT_SECRET.to_string());
-    body.grant_types = Some(vec!["client_credentials".to_string()]);
-    // Hydra requires exact scope strings (no glob matching at registration/issuance time).
-    // The server-side glob matching is what allows one token claim to satisfy many permissions.
-    // Here we register the three specific scopes that the tests actually request.
-    let scopes = format!(
-        "udex:index:v1:{EMPTY_INDEX_NAME}:delete \
-         udex:index:v1:{NON_EMPTY_INDEX_NAME}:delete \
-         udex:index:v1:{NOT_FOUND_INDEX_NAME}:delete"
-    );
-    body.scope = Some(scopes);
-    body.token_endpoint_auth_method = Some("client_secret_post".to_string());
-
-    match o_auth2_api::create_o_auth2_client(&config, body.clone()).await {
-        Ok(_) => {}
-        Err(e)
-            if matches!(
-                &e,
-                ory_hydra_client::apis::Error::ResponseError(r) if r.status.as_u16() == 409
-            ) =>
-        {
-            o_auth2_api::set_o_auth2_client(&config, CLIENT_ID, body)
-                .await
-                .expect("Hydra set_client failed");
-        }
-        Err(e) => panic!("Hydra create_client failed: {e}"),
-    }
 }
 
 pub async fn fixture(serial: bool) -> Data<'static, Fixture> {
@@ -305,7 +251,7 @@ async fn fetch_token(scope: &str) -> String {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_hydra_index_delete_empty() {
+async fn test_cli_oauth2_index_delete_empty() {
     let _ = fixture(false).await;
     let token = fetch_token(&format!("udex:index:v1:{EMPTY_INDEX_NAME}:delete")).await;
 
@@ -342,7 +288,7 @@ async fn test_hydra_index_delete_empty() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_hydra_index_delete_non_empty() {
+async fn test_cli_oauth2_index_delete_non_empty() {
     let _ = fixture(false).await;
     let token = fetch_token(&format!("udex:index:v1:{NON_EMPTY_INDEX_NAME}:delete")).await;
 
@@ -374,7 +320,7 @@ async fn test_hydra_index_delete_non_empty() {
 
 #[rstest]
 #[tokio_shared_rt::test]
-async fn test_hydra_index_delete_not_found() {
+async fn test_cli_oauth2_index_delete_not_found() {
     let _ = fixture(false).await;
     let token = fetch_token(&format!("udex:index:v1:{NOT_FOUND_INDEX_NAME}:delete")).await;
 
