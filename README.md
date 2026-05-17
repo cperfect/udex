@@ -168,7 +168,7 @@ Setting `apply_migrations = true` is convenient for local development and CI env
 
 ## Development / Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) to get started. All key documents are indexed in the [Documentation](#documentation) section above.
+See [CONTRIBUTING.md](CONTRIBUTING.md) to get started. All key documents are indexed in the [Find Out More](#find-out-more) section above.
 
 ## Info
 
