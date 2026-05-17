@@ -3,7 +3,7 @@ verblock: "17 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-03
 title: "Slim down entry_service and index_service integration tests"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: Slim down entry_service and index_service integration tests
@@ -42,37 +42,39 @@ Remove tests whose scenarios are fully covered by the SDK suite and keep only th
 - `test_update_index_valid_input`
 - `test_list_indices`
 
-### `server/tests/entry_service_integration_tests.rs` — keep ~5 tests for isolation debugging
+### `server/tests/entry_service_integration_tests.rs` — 8 tests retained
 
-Remove all tests that are covered by the SDK suite. Retain a small set that is representative enough to isolate entry-service bugs without the full SDK stack:
+Remove tests covered by the SDK suite. Three tests with unique service-layer coverage were restored after coverage review:
 
-**Keep:**
-- `test_entry_service_init` (was `test_entry_server_init`) — verifies service-layer init path
-- `test_entry_service_create` (was `test_create_entry`) — basic create in isolation
-- `test_entry_service_lookup_context_by_key` (was `test_lookup_context_by_key`) — basic lookup path
-- `test_entry_service_bulk_write_empty_invalid` (was `test_bulk_write_empty_operations_invalid_argument`) — validation
-- `test_entry_service_bulk_read_empty_invalid` (was `test_bulk_read_empty_operations_invalid_argument`) — validation
+**Keep (core isolation set):**
+- `test_entry_service_server_init` — verifies service-layer init path
+- `test_entry_service_create_entry` — basic create in isolation
+- `test_entry_service_lookup_context_by_key` — basic lookup path
+- `test_entry_service_bulk_write_empty_invalid_argument` — validation
+- `test_entry_service_bulk_read_empty_invalid_argument` — validation
 
-**Remove** (all covered by `test_sdk_*`):
+**Restored (unique coverage not reachable via SDK):**
+- `test_entry_service_error_handling` — invalid UUID format rejection; SDK always sends well-formed UUIDs
+- `test_entry_service_lookup_or_create_validation_errors` — missing context / empty hash / empty index_name rejections; SDK always sends valid inputs
+- `test_entry_service_lookup_or_create_hash_mismatch` — server-side hash mismatch detection; SDK always computes the correct hash
+
+**Remove** (covered by `test_sdk_*`):
 - `test_delete_entry`
 - `test_lookup_key_by_context`
 - `test_bulk_write_entry_operation`
 - `test_bulk_read_entry_operation`
 - `test_create_entry_idempotent_for_same_pairs_different_dek`
-- `test_error_handling`
 - `test_lookup_or_create_creates_new_entry`
 - `test_lookup_or_create_returns_existing_entry`
-- `test_lookup_or_create_validation_errors`
-- `test_lookup_or_create_hash_mismatch_invalid_argument`
 - `test_bulk_write_lookup_or_create`
 
 ## Acceptance Criteria
 
-- [ ] `index_service_integration_tests.rs` contains only validation tests (no happy-path CRUD)
-- [ ] `entry_service_integration_tests.rs` retains exactly 5 tests
-- [ ] All remaining tests are renamed to the `test_index_service_*` / `test_entry_service_*` convention
-- [ ] `cargo test --all-targets` passes (all retained tests run and pass)
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets` pass
+- [x] `index_service_integration_tests.rs` contains only validation tests (no happy-path CRUD)
+- [x] `entry_service_integration_tests.rs` retains 8 tests (5 core + 3 restored for unique service-layer coverage)
+- [x] All remaining tests are renamed to the `test_index_service_*` / `test_entry_service_*` convention
+- [x] `cargo test --all-targets` passes (all retained tests run and pass)
+- [x] `cargo fmt --check`, `cargo clippy --all-targets` pass
 
 ## Dependencies
 
