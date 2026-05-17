@@ -25,3 +25,6 @@ ehthumbs.db
 Thumbs.db
 
 THOUGHTS.md
+
+# AGENTS.md regeneration safety net (intent agents sync writes this; transient).
+/AGENTS.md.bak
