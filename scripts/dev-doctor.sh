@@ -117,6 +117,38 @@ else
     "Install Docker: https://docs.docker.com/get-docker/"
 fi
 
+# Claude Code (optional; when present, intent is also required)
+REQUIRED_CLAUDE_MAJOR="2"
+CLAUDE_PRESENT=false
+if command -v claude &>/dev/null; then
+  CLAUDE_VER=$(claude --version 2>/dev/null | awk '{print $1}')
+  CLAUDE_MAJOR="${CLAUDE_VER%%.*}"
+  if [[ "${CLAUDE_MAJOR}" -eq "${REQUIRED_CLAUDE_MAJOR}" ]]; then
+    pass "claude $CLAUDE_VER (need major $REQUIRED_CLAUDE_MAJOR)"
+  else
+    fail "claude $CLAUDE_VER (need major $REQUIRED_CLAUDE_MAJOR)" \
+      "Install Claude Code: https://claude.ai/code"
+  fi
+  CLAUDE_PRESENT=true
+fi
+
+# intent (required when Claude Code is present)
+if [[ "${CLAUDE_PRESENT}" == true ]]; then
+  REQUIRED_INTENT="2.11.6"
+  if command -v intent &>/dev/null; then
+    INTENT_VER=$(intent --version 2>/dev/null | awk '{print $3}')
+    if [[ "$INTENT_VER" == "$REQUIRED_INTENT" ]]; then
+      pass "intent $INTENT_VER (need $REQUIRED_INTENT)"
+    else
+      fail "intent $INTENT_VER (need $REQUIRED_INTENT)" \
+        "Install intent $REQUIRED_INTENT: https://github.com/matthewsinclair/intent"
+    fi
+  else
+    fail "intent not found (required when Claude Code is present)" \
+      "Install intent $REQUIRED_INTENT: https://github.com/matthewsinclair/intent"
+  fi
+fi
+
 # docker compose
 REQUIRED_COMPOSE_MAJOR="5"
 if docker compose version &>/dev/null 2>&1; then

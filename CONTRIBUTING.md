@@ -15,6 +15,7 @@ The recommended way to get a consistent environment is the [VS Code dev containe
 - **Rust** (1.95.0) — install via [rustup](https://rustup.rs/)
 - **Docker** — required to run the local dev services (PostgreSQL + Hydra)
 - **protoc** (Protocol Buffers compiler) — required to build the `api` crate from `.proto` definitions
+- **Claude Code** (≥2.x) + **Intent** (2.11.6) — required when using Claude Code for AI-assisted development; install Intent from [github.com/matthewsinclair/intent](https://github.com/matthewsinclair/intent)
 
   ```bash
   # macOS

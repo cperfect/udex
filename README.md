@@ -172,7 +172,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to get started. All key documents are ind
 
 ## Info
 
-This project is developed using [Claude Code](https://claude.ai/code) (Anthropic) with [Intent v2.11.0](https://github.com/matthewsinclair/intent) for steel thread and work package management. Plugins: [`rust-analyzer-lsp`](https://github.com/anthropics/claude-code-plugins).
+This project is developed using [Claude Code](https://claude.ai/code) (Anthropic) with [Intent v2.11.6](https://github.com/matthewsinclair/intent) for steel thread and work package management. Plugins: [`rust-analyzer-lsp`](https://github.com/anthropics/claude-code-plugins).
 
 ## Find Out More
 
