@@ -1,9 +1,8 @@
-<!-- treeindex v1 fingerprint:6eb51903 generated:2026-05-06T01:12:41Z -->
+<!-- treeindex v1 fingerprint:aae220ae generated:2026-05-17T09:02:37Z -->
 
 # tests/
 
-Integration tests for the udex-server datastore implementations. Tests are organized by datastore type and use rstest with tokio-shared-rt to ensure reliable test isolation and state management across async test suites.
+Integration tests for the UDEX datastore implementation. Covers PostgreSQL datastore functionality including index lifecycle, entry read/write operations, and context management under ST0009 (1:1 entry-context semantics).
 
 ## Files
-
-- `postgres_integration_tests.rs` -- PostgreSQL datastore integration tests covering index creation, context operations, and entry read/write workflows
+- `postgres_integration_tests.rs` -- PostgreSQL integration tests for datastore operations; includes fixtures for indexes, contexts, and entry read/write operations

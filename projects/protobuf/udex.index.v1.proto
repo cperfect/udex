@@ -15,19 +15,24 @@ enum HashAlgorithm {
 
 // IndexService provides operations for managing indices
 service IndexService {
-  // Describe returns information about the index
+  // Describe returns information about the index.
+  // Required permission(s): udex:index:v1:{name}:read
   rpc Describe(DescribeRequest) returns (DescribeResponse);
 
-  // CreateIndex creates a new index
+  // CreateIndex creates a new index.
+  // Required permission(s): udex:index:v1:create
   rpc CreateIndex(CreateIndexRequest) returns (CreateIndexResponse);
 
-  // UpdateIndex updates an existing index's mutable fields
+  // UpdateIndex updates an existing index's mutable fields.
+  // Required permission(s): udex:index:v1:{name}:write
   rpc UpdateIndex(UpdateIndexRequest) returns (UpdateIndexResponse);
 
-  // ListIndices returns a list of all indices
+  // ListIndices returns a list of all indices.
+  // Required permission(s): udex:index:v1:list
   rpc ListIndices(ListIndicesRequest) returns (ListIndicesResponse);
 
   // DeleteIndex deletes an index. Fails if the index still has entries.
+  // Required permission(s): udex:index:v1:{name}:delete
   rpc DeleteIndex(DeleteIndexRequest) returns (DeleteIndexResponse);
 }
 

@@ -1,16 +1,16 @@
-<!-- treeindex v1 fingerprint:b67875d5 generated:2026-05-06T01:14:13Z -->
+<!-- treeindex v1 fingerprint:588d0dcf generated:2026-05-17T09:04:28Z -->
 
 # server/
 
-The udex-server crate providing the gRPC server implementation with service handlers, middleware, authorization enforcement, TLS support, and configuration management. Houses the library code, integration tests, and performance benchmarks.
+The gRPC server crate for Udex, implementing IndexService and EntryService handlers, JWT validation and authorization middleware, TLS transport, structured logging, and configuration validation. Contains the main server startup logic, service implementations, authentication interceptors, and configuration management. Includes integration tests, TLS certificates, and JWT fixtures for local testing.
 
 ## Dirs
 
-- `benches/` -- Criterion performance benchmarks for gRPC service request latency and throughput
-- `src/` -- Core gRPC server implementation with service handlers, JWT authz, config, and logging
-- `tests/` -- Integration tests with OAuth2 fixtures, JWT key material, and TLS certificates
+- `benches/` -- Criterion benchmarks for Entry service operations and related functionality
+- `src/` -- Core gRPC server implementation with service handlers, middleware, and configuration
+- `tests/` -- Integration tests and test fixtures for server, services, TLS, and JWT auth
 
 ## Files
 
-- `Cargo.toml` -- Package definition with dependencies for gRPC, TLS, JWT, and structured logging
-- `README.md` -- Crate overview, module responsibilities, authorization architecture, and server configuration
+- `Cargo.toml` -- Package metadata, dependencies (tonic, tokio, sqlx, etc.), and features
+- `README.md` -- Crate documentation, module layout, server setup, and authorization details

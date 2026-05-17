@@ -1,8 +1,8 @@
-<!-- treeindex v1 fingerprint:293ac5f9 generated:2026-05-06T01:13:47Z -->
+<!-- treeindex v1 fingerprint:d4b2a24f generated:2026-05-17T09:03:58Z -->
 
 # src/
 
-Core API types, authorization, and utilities for the Udex service. Contains protobuf-generated gRPC definitions, authorization middleware, and helper functions for context hashing and timestamp conversion.
+Root module for the Udex API library. Exports gRPC service definitions, client/server stubs, and utility functions for timestamp conversion and context hashing. Organized into authorization enforcement, generated protobuf bindings, and core utilities.
 
 ## Dirs
 
@@ -11,5 +11,5 @@ Core API types, authorization, and utilities for the Udex service. Contains prot
 
 ## Files
 
-- `lib.rs` -- Library root with module exports, Error enum, and timestamp conversion utilities
-- `hash.rs` -- Context hashing using xxHash (xxh3-64) with deterministic pair sorting
+- `lib.rs` -- Main library exports, gRPC re-exports, and timestamp conversion utilities
+- `hash.rs` -- xxHash-based context hashing with deterministic pair ordering

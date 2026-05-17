@@ -12,23 +12,32 @@ service EntryService {
   // CreateEntry creates a new entry for a context. Idempotent: if an entry
   // already exists for the given context within the index, the existing key
   // is returned unchanged (no duplicate is created).
+  // Required permission(s): udex:entry:v1:{index_name}:create
   rpc CreateEntry(CreateEntryRequest) returns (CreateEntryResponse);
 
   // DeleteEntry removes an entry by key.
+  // Required permission(s): udex:entry:v1:{index_name}:delete
   rpc DeleteEntry(DeleteEntryRequest) returns (DeleteEntryResponse);
 
-  // LookupContextByKey retrieves the context for a given key
+  // LookupContextByKey retrieves the context for a given key.
+  // Required permission(s): udex:entry:v1:{index_name}:read
   rpc LookupContextByKey(LookupContextByKeyRequest) returns (LookupContextByKeyResponse);
 
   // LookupKeyByContext retrieves the single key for a given context, if one exists.
   // Returns an empty key field when no entry matches the context hash.
+  // Required permission(s): udex:entry:v1:{index_name}:read
   rpc LookupKeyByContext(LookupKeyByContextRequest) returns (LookupKeyByContextResponse);
-  
-  // BulkWriteEntryOperation performs multiple write operations in a single transaction
-  // If any operation fails, all operations are rolled back
+
+  // BulkWriteEntryOperation performs multiple write operations in a single transaction.
+  // If any operation fails, all operations are rolled back.
+  // Required permission(s): union of permissions for each contained operation type —
+  //   CreateEntry ops    → udex:entry:v1:{index_name}:create
+  //   DeleteEntry ops    → udex:entry:v1:{index_name}:delete
+  //   LookupOrCreate ops → udex:entry:v1:{index_name}:read + udex:entry:v1:{index_name}:write
   rpc BulkWriteEntryOperation(BulkWriteEntryOperationRequest) returns (BulkWriteEntryOperationResponse);
-  
-  // BulkReadEntryOperation performs multiple read operations
+
+  // BulkReadEntryOperation performs multiple read operations.
+  // Required permission(s): udex:entry:v1:{index_name}:read
   rpc BulkReadEntryOperation(BulkReadEntryOperationRequest) returns (BulkReadEntryOperationResponse);
 
   // LookupKeyByContextOrCreate looks up the key for a context; if no entry exists,
@@ -36,8 +45,9 @@ service EntryService {
   // The client must supply a pre-computed context_hash alongside the full context pairs.
   // The server recomputes the hash from the pairs and returns INVALID_ARGUMENT if they
   // do not match — even before checking whether an entry exists.
-  // This operation is classified as a write: it requires write permission and may only
-  // appear inside BulkWriteEntryOperation, not BulkReadEntryOperation.
+  // This operation is classified as a write: it may only appear inside
+  // BulkWriteEntryOperation, not BulkReadEntryOperation.
+  // Required permission(s): udex:entry:v1:{index_name}:read + udex:entry:v1:{index_name}:write
   rpc LookupKeyByContextOrCreate(LookupKeyByContextOrCreateRequest) returns (LookupKeyByContextOrCreateResponse);
 }
 

@@ -1,0 +1,13 @@
+<!-- treeindex v1 fingerprint:6529e314 generated:2026-05-17T09:02:28Z -->
+
+# examples/
+
+Runnable examples demonstrating Udex SDK usage patterns: connecting with OAuth2 client-credentials authentication, creating and querying entries, batch operations, and client-side envelope encryption. Each example is self-contained and configurable via environment variables for endpoint, credentials, and index selection.
+
+## Files
+
+- `create_entry.rs` -- Single entry creation with OAuth2 auth and CLI KEY=VALUE context pairs
+- `bulk_write.rs` -- Batch-create multiple entries from newline-delimited JSON stdin input
+- `get_entry.rs` -- Lookup entries by UUID key or by context KEY=VALUE pairs
+- `envelope_write.rs` -- Client-side AES-256-GCM envelope encryption of context values
+- `delete_index.rs` -- Delete an index (requires it to have no entries)

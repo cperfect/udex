@@ -74,4 +74,6 @@ bash scripts/gen-keys-and-certs.sh
 # Install Claude Code subagent 
 intent claude subagents install intent
 # Install CLaude Code skills
+intent claude skills install in-session
+intent claude skills install in-standards
 intent claude skills install in-essentials

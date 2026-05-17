@@ -1,9 +1,9 @@
-<!-- treeindex v1 fingerprint:c0e1d5ec generated:2026-05-06T01:13:07Z -->
+<!-- treeindex v1 fingerprint:bc7e86e4 generated:2026-05-17T09:03:08Z -->
 
 # benches/
 
-Criterion benchmarks for the `udex-server` workspace, isolating query execution and connection-pool performance independent of gRPC and authentication overhead. Benchmarks measure datastore baseline performance and can be compared against server-layer benchmarks to quantify framework overhead.
+Criterion benchmarks for server performance testing. Includes direct datastore layer benchmarks and end-to-end service benchmarks to measure overhead at each layer.
 
 ## Files
 
-- `postgres_datastore.rs` -- Criterion benchmarks for `PostgresDatastore` direct DB operations with configurable seed datasets and batch sizes
+- `postgres_datastore.rs` -- PostgreSQL datastore layer benchmarks; isolates query execution and connection-pool overhead by bypassing gRPC

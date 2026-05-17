@@ -375,6 +375,7 @@ pub mod entry_service_client {
         /// CreateEntry creates a new entry for a context. Idempotent: if an entry
         /// already exists for the given context within the index, the existing key
         /// is returned unchanged (no duplicate is created).
+        /// Required permission(s): udex:entry:v1:{index_name}:create
         pub async fn create_entry(
             &mut self,
             request: impl tonic::IntoRequest<super::CreateEntryRequest>,
@@ -400,6 +401,7 @@ pub mod entry_service_client {
             self.inner.unary(req, path, codec).await
         }
         /// DeleteEntry removes an entry by key.
+        /// Required permission(s): udex:entry:v1:{index_name}:delete
         pub async fn delete_entry(
             &mut self,
             request: impl tonic::IntoRequest<super::DeleteEntryRequest>,
@@ -424,7 +426,8 @@ pub mod entry_service_client {
                 .insert(GrpcMethod::new("udex.entry.v1.EntryService", "DeleteEntry"));
             self.inner.unary(req, path, codec).await
         }
-        /// LookupContextByKey retrieves the context for a given key
+        /// LookupContextByKey retrieves the context for a given key.
+        /// Required permission(s): udex:entry:v1:{index_name}:read
         pub async fn lookup_context_by_key(
             &mut self,
             request: impl tonic::IntoRequest<super::LookupContextByKeyRequest>,
@@ -453,6 +456,7 @@ pub mod entry_service_client {
         }
         /// LookupKeyByContext retrieves the single key for a given context, if one exists.
         /// Returns an empty key field when no entry matches the context hash.
+        /// Required permission(s): udex:entry:v1:{index_name}:read
         pub async fn lookup_key_by_context(
             &mut self,
             request: impl tonic::IntoRequest<super::LookupKeyByContextRequest>,
@@ -479,8 +483,12 @@ pub mod entry_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
-        /// BulkWriteEntryOperation performs multiple write operations in a single transaction
-        /// If any operation fails, all operations are rolled back
+        /// BulkWriteEntryOperation performs multiple write operations in a single transaction.
+        /// If any operation fails, all operations are rolled back.
+        /// Required permission(s): union of permissions for each contained operation type —
+        ///   CreateEntry ops    → udex:entry:v1:{index_name}:create
+        ///   DeleteEntry ops    → udex:entry:v1:{index_name}:delete
+        ///   LookupOrCreate ops → udex:entry:v1:{index_name}:read + udex:entry:v1:{index_name}:write
         pub async fn bulk_write_entry_operation(
             &mut self,
             request: impl tonic::IntoRequest<super::BulkWriteEntryOperationRequest>,
@@ -510,7 +518,8 @@ pub mod entry_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
-        /// BulkReadEntryOperation performs multiple read operations
+        /// BulkReadEntryOperation performs multiple read operations.
+        /// Required permission(s): udex:entry:v1:{index_name}:read
         pub async fn bulk_read_entry_operation(
             &mut self,
             request: impl tonic::IntoRequest<super::BulkReadEntryOperationRequest>,
@@ -545,8 +554,9 @@ pub mod entry_service_client {
         /// The client must supply a pre-computed context_hash alongside the full context pairs.
         /// The server recomputes the hash from the pairs and returns INVALID_ARGUMENT if they
         /// do not match — even before checking whether an entry exists.
-        /// This operation is classified as a write: it requires write permission and may only
-        /// appear inside BulkWriteEntryOperation, not BulkReadEntryOperation.
+        /// This operation is classified as a write: it may only appear inside
+        /// BulkWriteEntryOperation, not BulkReadEntryOperation.
+        /// Required permission(s): udex:entry:v1:{index_name}:read + udex:entry:v1:{index_name}:write
         pub async fn lookup_key_by_context_or_create(
             &mut self,
             request: impl tonic::IntoRequest<super::LookupKeyByContextOrCreateRequest>,
@@ -594,6 +604,7 @@ pub mod entry_service_server {
         /// CreateEntry creates a new entry for a context. Idempotent: if an entry
         /// already exists for the given context within the index, the existing key
         /// is returned unchanged (no duplicate is created).
+        /// Required permission(s): udex:entry:v1:{index_name}:create
         async fn create_entry(
             &self,
             request: tonic::Request<super::CreateEntryRequest>,
@@ -602,6 +613,7 @@ pub mod entry_service_server {
             tonic::Status,
         >;
         /// DeleteEntry removes an entry by key.
+        /// Required permission(s): udex:entry:v1:{index_name}:delete
         async fn delete_entry(
             &self,
             request: tonic::Request<super::DeleteEntryRequest>,
@@ -609,7 +621,8 @@ pub mod entry_service_server {
             tonic::Response<super::DeleteEntryResponse>,
             tonic::Status,
         >;
-        /// LookupContextByKey retrieves the context for a given key
+        /// LookupContextByKey retrieves the context for a given key.
+        /// Required permission(s): udex:entry:v1:{index_name}:read
         async fn lookup_context_by_key(
             &self,
             request: tonic::Request<super::LookupContextByKeyRequest>,
@@ -619,6 +632,7 @@ pub mod entry_service_server {
         >;
         /// LookupKeyByContext retrieves the single key for a given context, if one exists.
         /// Returns an empty key field when no entry matches the context hash.
+        /// Required permission(s): udex:entry:v1:{index_name}:read
         async fn lookup_key_by_context(
             &self,
             request: tonic::Request<super::LookupKeyByContextRequest>,
@@ -626,8 +640,12 @@ pub mod entry_service_server {
             tonic::Response<super::LookupKeyByContextResponse>,
             tonic::Status,
         >;
-        /// BulkWriteEntryOperation performs multiple write operations in a single transaction
-        /// If any operation fails, all operations are rolled back
+        /// BulkWriteEntryOperation performs multiple write operations in a single transaction.
+        /// If any operation fails, all operations are rolled back.
+        /// Required permission(s): union of permissions for each contained operation type —
+        ///   CreateEntry ops    → udex:entry:v1:{index_name}:create
+        ///   DeleteEntry ops    → udex:entry:v1:{index_name}:delete
+        ///   LookupOrCreate ops → udex:entry:v1:{index_name}:read + udex:entry:v1:{index_name}:write
         async fn bulk_write_entry_operation(
             &self,
             request: tonic::Request<super::BulkWriteEntryOperationRequest>,
@@ -635,7 +653,8 @@ pub mod entry_service_server {
             tonic::Response<super::BulkWriteEntryOperationResponse>,
             tonic::Status,
         >;
-        /// BulkReadEntryOperation performs multiple read operations
+        /// BulkReadEntryOperation performs multiple read operations.
+        /// Required permission(s): udex:entry:v1:{index_name}:read
         async fn bulk_read_entry_operation(
             &self,
             request: tonic::Request<super::BulkReadEntryOperationRequest>,
@@ -648,8 +667,9 @@ pub mod entry_service_server {
         /// The client must supply a pre-computed context_hash alongside the full context pairs.
         /// The server recomputes the hash from the pairs and returns INVALID_ARGUMENT if they
         /// do not match — even before checking whether an entry exists.
-        /// This operation is classified as a write: it requires write permission and may only
-        /// appear inside BulkWriteEntryOperation, not BulkReadEntryOperation.
+        /// This operation is classified as a write: it may only appear inside
+        /// BulkWriteEntryOperation, not BulkReadEntryOperation.
+        /// Required permission(s): udex:entry:v1:{index_name}:read + udex:entry:v1:{index_name}:write
         async fn lookup_key_by_context_or_create(
             &self,
             request: tonic::Request<super::LookupKeyByContextOrCreateRequest>,

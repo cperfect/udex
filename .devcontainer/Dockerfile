@@ -10,7 +10,6 @@ ARG RUST_VERSION
 # [Optional] Uncomment this section to install additional packages.
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
   && apt-get -y install --no-install-recommends \
-  protobuf-compiler libprotobuf-dev \
   apt-transport-https curl gnupg lsb-release
 
 ## Install Trivy (security scanner)

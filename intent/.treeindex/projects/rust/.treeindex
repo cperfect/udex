@@ -1,20 +1,22 @@
-<!-- treeindex v1 fingerprint:e74c37e7 generated:2026-05-06T01:15:14Z -->
+<!-- treeindex v1 fingerprint:3ef5b712 generated:2026-05-17T09:05:06Z -->
 
 # rust/
 
-The Rust workspace for Udex containing the core server, CLI, and supporting libraries. The workspace comprises four crates: `udex-api` (protobuf types and authz), `udex-server` (gRPC handlers and middleware), `udex-datastore` (PostgreSQL implementation), and `udex-cli` (command-line interface). All dependencies are centrally managed through workspace.dependencies.
+Cargo workspace root containing seven member crates that together form the Udex universal lookup directory system. Manages shared dependencies, workspace configuration, development guidelines, and build artifacts for the complete system spanning API definitions, CLI, server, SDK, datastore, and test utilities.
 
 ## Dirs
 
 - `api/` -- Protobuf-generated gRPC types, service definitions, and authorization logic
-- `cli/` -- Command-line interface with commands for config, index/entry operations, and server control
-- `datastore/` -- Datastore trait abstraction and PostgreSQL implementation with migrations
-- `server/` -- gRPC server with handlers, JWT authorization, TLS, and configuration
-- `target/` -- Cargo build artifacts and generated documentation (auto-managed)
+- `cli/` -- Command-line interface for Udex with argument parsing and configuration management
+- `datastore/` -- PostgreSQL persistence layer with migrations, traits, and integration test fixtures
+- `sdk/` -- Rust client SDK for Udex with async APIs, TLS, and OAuth2 token management
+- `server/` -- gRPC server implementation with service handlers, middleware, and JWT validation
+- `target/` -- Rust compiler and build system artifacts directory
+- `test-utils/` -- Dev-only library providing shared test fixtures and OAuth2 utilities
 
 ## Files
 
-- `Cargo.toml` -- Workspace manifest defining member crates and centralized dependency versions
-- `CONTRIBUTING.md` -- Rust-specific development guidelines, code style, and pre-commit checklist
+- `Cargo.toml` -- Workspace manifest with member definitions, shared dependency versions, and workspace package metadata
 - `Cargo.lock` -- Locked dependency versions for reproducible builds
-- `.gitignore` -- Git ignore rules for Rust projects, IDE, and OS files
+- `CONTRIBUTING.md` -- Rust-specific development guidelines, code style rules, and pre-commit checklist
+- `.gitignore` -- Version control exclusions for Rust build artifacts, IDE files, and development artifacts

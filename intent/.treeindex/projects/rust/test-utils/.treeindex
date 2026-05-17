@@ -1,0 +1,14 @@
+<!-- treeindex v1 fingerprint:8305ca88 generated:2026-05-17T09:04:07Z -->
+
+# test-utils/
+
+Dev-only Rust library providing shared test fixtures and OAuth2 client utilities for Udex integration tests. Exports functions for secret binding, Hydra endpoint resolution, and OAuth2 client registration via ORY Hydra.
+
+## Dirs
+
+- `src/` -- Rust library implementation with public API for secret handling and Hydra client management
+
+## Files
+
+- `Cargo.toml` -- Package manifest with dev-only flag; dependencies on secrets-rs, dotenvy, and ory-hydra-client
+- `README.md` -- Usage documentation and function exports reference

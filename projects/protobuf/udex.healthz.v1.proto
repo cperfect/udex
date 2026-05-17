@@ -15,6 +15,6 @@ message HealthzResponse {
 
 // HealthzService provides operations for health checks
 service HealthzService {
-    // Healthz performs a health check on the server
-    rpc Healthz(HealthzRequest) returns (HealthzResponse);  
+  // Healthz performs a health check on the server. No authentication required.
+  rpc Healthz(HealthzRequest) returns (HealthzResponse);
 }

@@ -1,16 +1,16 @@
-<!-- treeindex v1 fingerprint:437bb458 generated:2026-05-06T01:12:19Z -->
+<!-- treeindex v1 fingerprint:1cc042f1 generated:2026-05-17T09:01:42Z -->
 
 # src/
 
-Core gRPC server implementation for Udex, comprising service handlers, middleware, configuration management, and initialization logic. Exports the primary `start()` and `serve()` entry points, along with `EntryService`, `IndexService`, and `HealthzService` implementations.
+Core gRPC server implementation for Udex, providing service handlers for entry and index operations, authentication/authorization middleware, and configuration management. This directory contains the main server logic, including service implementations, request interceptors, and initialization code.
 
 ## Files
 
-- `lib.rs` -- Library root; exports services, public error type, and HealthCheck trait
-- `server.rs` -- Server startup and wiring; initializes datastore, services, TLS, and authz interceptor
-- `authz.rs` -- JWT validation interceptor; supports static keys and JWKS discovery with algorithm inference
-- `config.rs` -- Configuration structures for server, TLS, and authz with validation
-- `logging.rs` -- Tracing initialization for JSON (production) and human-readable (test) output
-- `entry.rs` -- Entry service implementation; handles CRUD and bulk entry operations with context hashing
-- `index.rs` -- Index service implementation; manages index lifecycle and initialization
-- `healthz.rs` -- Health check service; aggregates health status from entry and index services
+- `lib.rs` -- Library root; exports public APIs, defines `Error` type and `HealthCheck` trait
+- `server.rs` -- Server startup and initialization; bootstraps datastore, applies migrations, wires services and middleware, starts Tonic server
+- `authz.rs` -- JWT validation interceptor; handles JWKS/static key loading, token parsing, and claim extraction for authorization
+- `config.rs` -- Configuration structures for server, TLS, and authentication; holds validated settings read at startup
+- `entry.rs` -- Entry service implementation; handles CRUD operations, bulk operations, context hashing, and service initialization
+- `index.rs` -- Index service implementation; manages index lifecycle (create, update, delete, list) with name validation and datastore persistence
+- `healthz.rs` -- Health check service; aggregates health status from entry and index services, returns composite health response
+- `logging.rs` -- Tracing initialization; sets up JSON output for production and human-readable output for tests, respects `RUST_LOG` env var

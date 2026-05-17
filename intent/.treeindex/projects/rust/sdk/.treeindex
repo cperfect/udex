@@ -1,0 +1,16 @@
+<!-- treeindex v1 fingerprint:96de0182 generated:2026-05-17T09:04:37Z -->
+
+# sdk/
+
+Rust client SDK for Udex providing idiomatic async APIs over gRPC with built-in TLS channel construction, transparent OAuth2 client-credentials token management, and strongly-typed operation wrappers for all entry and index operations.
+
+## Dirs
+
+- `examples/` -- Runnable examples demonstrating OAuth2 auth, single/batch entry creation, lookups, and client-side envelope encryption
+- `src/` -- Core SDK implementation with TLS setup, token management, and entry/index operation wrappers
+- `tests/` -- Integration tests covering JWT and OAuth2 flows with embedded server fixtures
+
+## Files
+
+- `README.md` -- Getting started guide with connection patterns, auth configuration, and token refresh examples
+- `Cargo.toml` -- Package manifest with workspace settings and tonic/reqwest/thiserror dependencies
