@@ -15,6 +15,9 @@ The recommended way to get a consistent environment is the [VS Code dev containe
 - **Rust** (1.95.0) — install via [rustup](https://rustup.rs/)
 - **Docker** — required to run the local dev services (PostgreSQL + Hydra)
 - **protoc** (Protocol Buffers compiler) — required to build the `api` crate from `.proto` definitions
+- **k3d** (≥5.x) _(optional)_ — local Kubernetes clusters via Docker; install from [k3d.io](https://k3d.io/stable/#installation)
+  - **kubectl** (≥1.x) — Kubernetes CLI; required when k3d is present; install from [kubernetes.io](https://kubernetes.io/docs/tasks/tools/)
+  - **Helm** (≥4.x) — Kubernetes package manager; required when k3d is present; install from [helm.sh](https://helm.sh/docs/intro/install/)
 - **Claude Code** (≥2.x) + **Intent** (2.11.6) — required when using Claude Code for AI-assisted development; install Intent from [github.com/matthewsinclair/intent](https://github.com/matthewsinclair/intent)
 
   ```bash

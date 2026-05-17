@@ -70,6 +70,9 @@ ln -s ../.env .devcontainer/.env
 
 bash scripts/gen-keys-and-certs.sh
 
+# claude 
+curl -fsSL https://claude.ai/install.sh | bash
+
 # see comment above
 # Install Claude Code subagent 
 intent claude subagents install intent
@@ -77,3 +80,20 @@ intent claude subagents install intent
 intent claude skills install in-session
 intent claude skills install in-standards
 intent claude skills install in-essentials
+
+
+# kubectl
+curl -LO "https://dl.k8s.io/v1.36.1/bin/linux/amd64/kubectl"
+chmod +x kubectl
+sudo mv kubectl /usr/local/bin/kubectl
+
+# k3d
+curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.8.3 bash
+
+# helm
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
+chmod 700 get_helm.sh
+./get_helm.sh -v v4.0.0
+rm get_helm.sh
+
+

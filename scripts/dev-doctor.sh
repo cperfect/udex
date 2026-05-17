@@ -166,6 +166,54 @@ else
     "Install Docker Compose v2: https://docs.docker.com/compose/install/"
 fi
 
+# k3d (optional; when present, kubectl and helm are also required)
+REQUIRED_K3D_MAJOR="5"
+K3D_PRESENT=false
+if command -v k3d &>/dev/null; then
+  K3D_VER=$(k3d version 2>/dev/null | head -1 | awk '{print $3}' | tr -d 'v')
+  K3D_MAJOR="${K3D_VER%%.*}"
+  if [[ "${K3D_MAJOR}" -eq "${REQUIRED_K3D_MAJOR}" ]]; then
+    pass "k3d $K3D_VER (need major $REQUIRED_K3D_MAJOR)"
+  else
+    fail "k3d $K3D_VER (need major $REQUIRED_K3D_MAJOR)" \
+      "Install k3d: https://k3d.io/stable/#installation"
+  fi
+  K3D_PRESENT=true
+fi
+
+# kubectl and helm (required when k3d is present)
+if [[ "${K3D_PRESENT}" == true ]]; then
+  REQUIRED_KUBECTL_MAJOR="1"
+  if command -v kubectl &>/dev/null; then
+    KUBECTL_VER=$(kubectl version --client --output=json 2>/dev/null | jq -r '.clientVersion.gitVersion' | tr -d 'v')
+    KUBECTL_MAJOR="${KUBECTL_VER%%.*}"
+    if [[ "${KUBECTL_MAJOR}" -eq "${REQUIRED_KUBECTL_MAJOR}" ]]; then
+      pass "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)"
+    else
+      fail "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)" \
+        "Install kubectl: https://kubernetes.io/docs/tasks/tools/"
+    fi
+  else
+    fail "kubectl not found (required when k3d is present)" \
+      "Install kubectl: https://kubernetes.io/docs/tasks/tools/"
+  fi
+
+  REQUIRED_HELM_MAJOR="4"
+  if command -v helm &>/dev/null; then
+    HELM_VER=$(helm version --short 2>/dev/null | cut -d'+' -f1 | tr -d 'v')
+    HELM_MAJOR="${HELM_VER%%.*}"
+    if [[ "${HELM_MAJOR}" -eq "${REQUIRED_HELM_MAJOR}" ]]; then
+      pass "helm $HELM_VER (need major $REQUIRED_HELM_MAJOR)"
+    else
+      fail "helm $HELM_VER (need major $REQUIRED_HELM_MAJOR)" \
+        "Install Helm: https://helm.sh/docs/intro/install/"
+    fi
+  else
+    fail "helm not found (required when k3d is present)" \
+      "Install Helm: https://helm.sh/docs/intro/install/"
+  fi
+fi
+
 # openssl (required by scripts/gen-env.sh)
 REQUIRED_OPENSSL_MAJOR="3"
 if command -v openssl &>/dev/null; then
