@@ -109,7 +109,8 @@ Tests **MUST** be automated and reliable. Flakey tests are broken tests — fix 
 │       ├── server/        # udex-server — gRPC handlers, authn, config, logging
 │       ├── datastore/     # udex-datastore — Datastore/Migrator traits + PostgreSQL impl
 │       ├── sdk/           # udex-sdk — client SDK
-│       └── cli/           # udex-cli — CLI binary
+│       ├── cli/           # udex-cli — CLI binary
+│       └── test-utils/    # udex-test-utils — shared integration test fixtures (dev-only)
 ├── docs/                  # Project-level documentation
 │   ├── ARCHITECTURE.md    # Data model, operations, security model, design principles
 │   ├── FAQ.md             # Design rationale and common questions

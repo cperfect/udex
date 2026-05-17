@@ -44,6 +44,7 @@ For common questions, see the [FAQs](docs/FAQ.md).
 | [projects/rust/datastore/](projects/rust/datastore/README.md) | `udex-datastore` — PostgreSQL implementation |
 | [projects/rust/sdk/](projects/rust/sdk/README.md) | `udex-sdk` — Rust client SDK |
 | [projects/rust/cli/](projects/rust/cli/README.md) | `udex-cli` — command-line interface |
+| [projects/rust/test-utils/](projects/rust/test-utils/README.md) | `udex-test-utils` — shared integration test fixtures (dev-only) |
 
 ## Core Concepts
 
