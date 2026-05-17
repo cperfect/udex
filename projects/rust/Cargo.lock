@@ -4138,7 +4138,6 @@ dependencies = [
  "dotenvy",
  "ory-hydra-client",
  "secrets-rs",
- "tokio",
 ]
 
 [[package]]

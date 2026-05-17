@@ -10,5 +10,4 @@ publish = false
 [dependencies]
 secrets-rs = { workspace = true }
 dotenvy = { workspace = true }
-tokio = { workspace = true }
 ory-hydra-client = { version = "26.2", default-features = false, features = ["rustls-tls"] }
