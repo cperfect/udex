@@ -73,7 +73,7 @@ pub async fn data(serial: bool) -> Data<'static, MaybeOnceType> {
 /// Tests that the entry server can be initialized successfully.
 #[rstest]
 #[tokio_shared_rt::test] //We use tokio shared runtime to ensure the static variables are still valid between tests -https://docs.rs/tokio-shared-rt/latest/tokio_shared_rt/
-async fn test_entry_service_server_init() {
+async fn test_entry_service_init() {
     let data = data(false).await;
     let entry_server = &data.0;
     //check entry server health
