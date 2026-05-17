@@ -11,7 +11,7 @@ Udex
 
 ## Overview
 
-Udex is a universal index that maps arbitrary unique keys against contexts. It is lightweight, fast, and efficient for high transaction volumes across organisational and regulatory boundaries.  entity identifiers across boundaries.
+Udex is a universal index that maps arbitrary unique keys against contexts. It is lightweight, fast, and efficient for high transaction volumes and for managing unique entity identifiers across organisational and regulatory boundaries.
 
 It has been built with the following integration and data management use cases in mind:
 
