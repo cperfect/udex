@@ -268,7 +268,8 @@ pub mod index_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
-        /// Describe returns information about the index
+        /// Describe returns information about the index.
+        /// Required permission(s): udex:index:v1:{name}:read
         pub async fn describe(
             &mut self,
             request: impl tonic::IntoRequest<super::DescribeRequest>,
@@ -293,7 +294,8 @@ pub mod index_service_client {
                 .insert(GrpcMethod::new("udex.index.v1.IndexService", "Describe"));
             self.inner.unary(req, path, codec).await
         }
-        /// CreateIndex creates a new index
+        /// CreateIndex creates a new index.
+        /// Required permission(s): udex:index:v1:create
         pub async fn create_index(
             &mut self,
             request: impl tonic::IntoRequest<super::CreateIndexRequest>,
@@ -318,7 +320,8 @@ pub mod index_service_client {
                 .insert(GrpcMethod::new("udex.index.v1.IndexService", "CreateIndex"));
             self.inner.unary(req, path, codec).await
         }
-        /// UpdateIndex updates an existing index's mutable fields
+        /// UpdateIndex updates an existing index's mutable fields.
+        /// Required permission(s): udex:index:v1:{name}:write
         pub async fn update_index(
             &mut self,
             request: impl tonic::IntoRequest<super::UpdateIndexRequest>,
@@ -343,7 +346,8 @@ pub mod index_service_client {
                 .insert(GrpcMethod::new("udex.index.v1.IndexService", "UpdateIndex"));
             self.inner.unary(req, path, codec).await
         }
-        /// ListIndices returns a list of all indices
+        /// ListIndices returns a list of all indices.
+        /// Required permission(s): udex:index:v1:list
         pub async fn list_indices(
             &mut self,
             request: impl tonic::IntoRequest<super::ListIndicesRequest>,
@@ -369,6 +373,7 @@ pub mod index_service_client {
             self.inner.unary(req, path, codec).await
         }
         /// DeleteIndex deletes an index. Fails if the index still has entries.
+        /// Required permission(s): udex:index:v1:{name}:delete
         pub async fn delete_index(
             &mut self,
             request: impl tonic::IntoRequest<super::DeleteIndexRequest>,
@@ -408,7 +413,8 @@ pub mod index_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with IndexServiceServer.
     #[async_trait]
     pub trait IndexService: std::marker::Send + std::marker::Sync + 'static {
-        /// Describe returns information about the index
+        /// Describe returns information about the index.
+        /// Required permission(s): udex:index:v1:{name}:read
         async fn describe(
             &self,
             request: tonic::Request<super::DescribeRequest>,
@@ -416,7 +422,8 @@ pub mod index_service_server {
             tonic::Response<super::DescribeResponse>,
             tonic::Status,
         >;
-        /// CreateIndex creates a new index
+        /// CreateIndex creates a new index.
+        /// Required permission(s): udex:index:v1:create
         async fn create_index(
             &self,
             request: tonic::Request<super::CreateIndexRequest>,
@@ -424,7 +431,8 @@ pub mod index_service_server {
             tonic::Response<super::CreateIndexResponse>,
             tonic::Status,
         >;
-        /// UpdateIndex updates an existing index's mutable fields
+        /// UpdateIndex updates an existing index's mutable fields.
+        /// Required permission(s): udex:index:v1:{name}:write
         async fn update_index(
             &self,
             request: tonic::Request<super::UpdateIndexRequest>,
@@ -432,7 +440,8 @@ pub mod index_service_server {
             tonic::Response<super::UpdateIndexResponse>,
             tonic::Status,
         >;
-        /// ListIndices returns a list of all indices
+        /// ListIndices returns a list of all indices.
+        /// Required permission(s): udex:index:v1:list
         async fn list_indices(
             &self,
             request: tonic::Request<super::ListIndicesRequest>,
@@ -441,6 +450,7 @@ pub mod index_service_server {
             tonic::Status,
         >;
         /// DeleteIndex deletes an index. Fails if the index still has entries.
+        /// Required permission(s): udex:index:v1:{name}:delete
         async fn delete_index(
             &self,
             request: tonic::Request<super::DeleteIndexRequest>,

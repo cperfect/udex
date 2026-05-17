@@ -107,7 +107,7 @@ pub mod healthz_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
-        /// Healthz performs a health check on the server
+        /// Healthz performs a health check on the server. No authentication required.
         pub async fn healthz(
             &mut self,
             request: impl tonic::IntoRequest<super::HealthzRequest>,
@@ -147,7 +147,7 @@ pub mod healthz_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with HealthzServiceServer.
     #[async_trait]
     pub trait HealthzService: std::marker::Send + std::marker::Sync + 'static {
-        /// Healthz performs a health check on the server
+        /// Healthz performs a health check on the server. No authentication required.
         async fn healthz(
             &self,
             request: tonic::Request<super::HealthzRequest>,
