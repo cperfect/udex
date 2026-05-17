@@ -4030,6 +4030,7 @@ dependencies = [
  "udex-datastore",
  "udex-sdk",
  "udex-server",
+ "udex-test-utils",
  "uuid",
 ]
 
@@ -4087,6 +4088,7 @@ dependencies = [
  "udex-api",
  "udex-datastore",
  "udex-server",
+ "udex-test-utils",
 ]
 
 [[package]]
@@ -4124,8 +4126,19 @@ dependencies = [
  "tracing-test",
  "udex-api",
  "udex-datastore",
+ "udex-test-utils",
  "uuid",
  "validator",
+]
+
+[[package]]
+name = "udex-test-utils"
+version = "0.1.0"
+dependencies = [
+ "dotenvy",
+ "ory-hydra-client",
+ "secrets-rs",
+ "tokio",
 ]
 
 [[package]]

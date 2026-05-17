@@ -39,6 +39,7 @@ name = "entry_service"
 harness = false
 
 [dev-dependencies]
+udex-test-utils = { path = "../test-utils" }
 udex-datastore = { path = "../datastore", features = ["integration_test"]}
 tokio = { workspace = true }
 tracing-test = { workspace = true }

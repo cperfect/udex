@@ -28,7 +28,7 @@ The workspace has five crates. New code goes in the crate that owns its layer �
 | ------- | ------ | ----- |
 | gRPC server startup & TLS | `udex_server::server` | Wires interceptors, TLS config, and service registration |
 | JWT validation & authz interceptor | `udex_server::authz` | `AuthzInterceptor` — validates JWT and checks permissions on every request; supports static PEM key or JWKS URL; private to crate |
-| OAuth2 test helpers (Hydra) | `tests::auth_server` (server crate) | Test-only; Hydra client creation + client_credentials token exchange; not compiled into the server binary |
+| OAuth2 test helpers (Hydra) | `udex-test-utils` | Moved to dedicated crate in ST0017; see `udex-test-utils` section below |
 | Server & authz configuration | `udex_server::config` | `AuthzConfig` — loads and validates runtime config; no mutation after init |
 | Entry gRPC service handler | `udex_server::entry` | `EntryService` — thin handler; delegates to datastore |
 | Index gRPC service handler | `udex_server::index` | `IndexService` — thin handler; delegates to datastore |
@@ -69,6 +69,17 @@ The workspace has five crates. New code goes in the crate that owns its layer �
 | `token inspect` | `udex_cli::commands::token::inspect` | Offline JWT decode (no signature check) |
 | `token fetch` (OAuth2 client_credentials) | `udex_cli::commands::token::fetch` | Fetches a JWT from an OAuth2 token endpoint; decodes and displays header + claims |
 | `context hash` | `udex_cli::commands::context` | Offline context hash computation |
+
+### `udex-test-utils` — Shared test fixture helpers (dev-only)
+
+| Concern | Module | Notes |
+| ------- | ------ | ----- |
+| File-backed secret binding | `udex_test_utils::bind_file_secret` | Wraps `secrets-rs` file source; used across all integration test suites |
+| Hydra public URL | `udex_test_utils::hydra_public_url` | Reads `HYDRA_PUBLIC_URL` env var with localhost fallback |
+| Hydra admin URL | `udex_test_utils::hydra_admin_url` | Reads `HYDRA_ADMIN_URL` env var with localhost fallback |
+| OAuth2 client registration | `udex_test_utils::register_hydra_client` | Upserts a Hydra OAuth2 client (create or replace on 409) |
+
+This crate is a dev-only workspace member (`publish = false`). Never add it as a non-dev dependency.
 
 ## How to Use This File
 
