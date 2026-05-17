@@ -13,7 +13,7 @@ Udex
 
 Udex is a universal index that maps arbitrary unique keys against contexts. It is lightweight, fast, and efficient for high transaction volumes across organisational and regulatory boundaries.  entity identifiers across boundaries.
 
-It has been built with the following integration and data management scenarios in mind:
+It has been built with the following integration and data management use cases in mind:
 
 1. Providing stable and per-party keys for resolution across integration boundaries so that no parties share the same keys for the same entities (preventing compromise of one party leading to compromise of another) and that no external party needs to know the internal keys of the entity so that the internals are decoupled from the interfaces.
 2. Replacing a sensitive primary key with an non-sensitive one - e.g. use a UUID rather than a Credit Card number (PAN, which is PCI-DSS restricted) as keys to interact with Credit Card accounts.
@@ -24,27 +24,6 @@ It is not intended to be a generic entity database and aggregate queries are del
 For full detail on the data model, operations, components, security model, and design principles, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 For common questions, see the [FAQs](docs/FAQ.md).
-
-> This project also gives me a chance to learn rust, develop AI coding processes and tools and play with a few other technologies.
-
-## Documentation
-
-| Document | Description |
-|---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Data model, operations, security model, and design principles |
-| [docs/FAQ.md](docs/FAQ.md) | Design rationale and common questions |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Getting started, development guidelines, and testing standards |
-| [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) | Rust-specific coding standards and conventions |
-| [SECURITY.md](SECURITY.md) | Vulnerability reporting policy |
-| [.devcontainer/](.devcontainer/README.md) | VS Code dev container — tools and first-time setup |
-| [projects/compose/](projects/compose/README.md) | Docker Compose — local PostgreSQL + Hydra services |
-| [projects/protobuf/](projects/protobuf/README.md) | Protobuf API definitions — source of truth for all API types |
-| [projects/rust/api/](projects/rust/api/README.md) | `udex-api` — generated types, authz, hashing |
-| [projects/rust/server/](projects/rust/server/README.md) | `udex-server` — gRPC server |
-| [projects/rust/datastore/](projects/rust/datastore/README.md) | `udex-datastore` — PostgreSQL implementation |
-| [projects/rust/sdk/](projects/rust/sdk/README.md) | `udex-sdk` — Rust client SDK |
-| [projects/rust/cli/](projects/rust/cli/README.md) | `udex-cli` — command-line interface |
-| [projects/rust/test-utils/](projects/rust/test-utils/README.md) | `udex-test-utils` — shared integration test fixtures (dev-only) |
 
 ## Core Concepts
 
@@ -109,7 +88,7 @@ The API is three gRPC services (defined in [`projects/protobuf/`](projects/proto
 All requests require a JWT (ES256) issued via **OAuth2 Client Credentials** flow. Permissions are scoped per index per operation — a token for one index cannot access another. The [Rust SDK](projects/rust/sdk/) and [`udex` CLI](projects/rust/cli/) are the primary clients.
 
 ### Client Usage
-There are a number of client roles:
+There are a number of client roles can play when using Udex:
 * Key Holder - uses keys to access data.
 * Context Holder - has the context, but doesn't want to hand out its own keys.
 * Indexer - performs indexing operations between Key Holders and Context Holders.
@@ -117,7 +96,7 @@ There are a number of client roles:
 
 Combinations of the first three roles are possible: A single logical client could play both Key Holder and Context Holder roles, though generally not for the same index, and also act as an Indexer, or a client could be both the Context Holder and Indexer etc.
 
-The Key Holder must obviously retain the key, however the Indexer has a choice - it can resolve the hash from the context (as long as it knows which hash function to apply - and it should always use the SDK for this to ensure hash stability) or it can retain the hash for re-use.
+The Key Holder must obviously retain the key, however the Indexer has a choice - it can resolve the hash from the context (as long as it knows which hash function to apply - and it should always use the SDK for this to ensure hash stability) or it can retain the hash for re-use. The choice depends on the capabilities of the Indexer and the stability of the context data.
 
 Admin is expected to be CI/CD or Operational role and generally would not be a Key Holder or Context Holder.
 
@@ -194,3 +173,22 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to get started. All key documents are ind
 ## Info
 
 This project is developed using [Claude Code](https://claude.ai/code) (Anthropic) with [Intent v2.8.0](https://github.com/matthewsinclair/intent) for steel thread and work package management. Plugins: [`rust-analyzer-lsp`](https://github.com/anthropics/claude-code-plugins). Skills: [`in-essentials`](https://github.com/matthewsinclair/intent).
+
+## Find Out More
+
+| Document | Description |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Data model, operations, security model, and design principles |
+| [docs/FAQ.md](docs/FAQ.md) | Design rationale and common questions |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Getting started, development guidelines, and testing standards |
+| [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) | Rust-specific coding standards and conventions |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting policy |
+| [.devcontainer/](.devcontainer/README.md) | VS Code dev container — tools and first-time setup |
+| [projects/compose/](projects/compose/README.md) | Docker Compose — local PostgreSQL + Hydra services |
+| [projects/protobuf/](projects/protobuf/README.md) | Protobuf API definitions — source of truth for all API types |
+| [projects/rust/api/](projects/rust/api/README.md) | `udex-api` — generated types, authz, hashing |
+| [projects/rust/server/](projects/rust/server/README.md) | `udex-server` — gRPC server |
+| [projects/rust/datastore/](projects/rust/datastore/README.md) | `udex-datastore` — PostgreSQL implementation |
+| [projects/rust/sdk/](projects/rust/sdk/README.md) | `udex-sdk` — Rust client SDK |
+| [projects/rust/cli/](projects/rust/cli/README.md) | `udex-cli` — command-line interface |
+| [projects/rust/test-utils/](projects/rust/test-utils/README.md) | `udex-test-utils` — shared integration test fixtures (dev-only) |
