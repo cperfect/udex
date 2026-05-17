@@ -1,0 +1,15 @@
+<!-- treeindex v1 fingerprint:0babc9f6 generated:2026-05-17T09:02:18Z -->
+
+# src/
+
+High-level idiomatic Rust SDK for Udex gRPC service. Wraps protobuf stubs with TLS channel setup, transparent OAuth2 token management, and strongly-typed operation wrappers.
+
+## Files
+
+- `lib.rs` -- library root and public API surface; re-exports main types (UdexClient, ClientOptions, error types, proto types)
+- `error.rs` -- error type hierarchy (Error enum with Transport, Auth, Rpc, InvalidArgument, InvalidResponse) and gRPC status codes
+- `client.rs` -- ClientOptions builder, UdexClient connection logic, TLS config, and auth interceptor setup
+- `auth.rs` -- TokenManager for transparent OAuth2 client-credentials token fetching and caching with expiry refresh
+- `entry.rs` -- UdexClient methods for entry operations (create, delete, lookup, bulk read/write)
+- `index.rs` -- UdexClient methods for index operations (describe, create, update, delete, list)
+- `json.rs` -- JSON-to-SDK conversion utilities and type mapping tables for ContextInput construction

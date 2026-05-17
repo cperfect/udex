@@ -1,12 +1,15 @@
-<!-- treeindex v1 fingerprint:77f8e97c generated:2026-05-06T01:13:23Z -->
+<!-- treeindex v1 fingerprint:ae170c3d generated:2026-05-17T09:03:23Z -->
 
 # tests/
 
-Integration tests for the `udex` CLI binary using `assert_cmd` for subprocess spawning. Tests cover argument parsing, help discovery, config initialization, and the serve command with both offline and live server scenarios.
+Integration tests for the `udex` CLI binary, covering argument parsing, config loading, and live server operations. Tests are organized by scope: offline tests for CLI help and config validation, and live tests requiring `DATABASE_URL` for real PostgreSQL and optional Hydra OAuth2 integration. Each test file is self-contained with its own setup and fixtures.
 
 ## Files
 
-- `serve_live_tests.rs` -- End-to-end server integration: TLS config loading, gRPC health checks, PostgreSQL connectivity
-- `serve_tests.rs` -- Config validation and error handling for `udex serve` without live database
-- `config_tests.rs` -- `udex config` subcommand tests: init, templating, secrets resolution
-- `cli_tests.rs` -- Help text, subcommand discovery, unknown command rejection
+- `cli_tests.rs` -- Help text and argument parsing; validates subcommands and exit codes
+- `config_tests.rs` -- Offline TOML config parsing and `udex config init` tests
+- `serve_tests.rs` -- Config loading and early error paths for `udex serve`
+- `serve_live_tests.rs` -- Full server integration with TLS and PostgreSQL backend
+- `entry_live_tests.rs` -- Live `udex entry lookup-or-create` tests with in-process server
+- `token_oauth2_tests.rs` -- Hydra OAuth2 integration tests for `udex token` subcommands
+- `index_oauth2_tests.rs` -- Hydra OAuth2 integration tests for `udex index delete`

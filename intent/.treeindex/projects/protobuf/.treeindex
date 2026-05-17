@@ -1,11 +1,12 @@
-<!-- treeindex v1 fingerprint:0cdc3fdf generated:2026-05-06T01:15:23Z -->
+<!-- treeindex v1 fingerprint:d09deb47 generated:2026-05-17T09:05:17Z -->
 
 # protobuf/
 
-Protobuf definitions for the Udex service API. Defines three main services: IndexService (index configuration), EntryService (key-context mappings), and HealthzService (health checks). These are the wire contracts between client and server.
+Source of truth for all Udex API types and service contracts. All server implementations, client SDKs, and CLI tooling are generated from these files. Proto definitions are compiled by `projects/rust/api/build.rs` using `tonic-build` and written to `api/src/generated/`.
 
 ## Files
 
-- `udex.index.v1.proto` -- Index service for creating and managing indices with configurable constraints and hash algorithms
-- `udex.entry.v1.proto` -- Entry service for creating/deleting key-context mappings and bulk read/write operations
-- `udex.healthz.v1.proto` -- Health check service for server status monitoring
+- `README.md` -- API overview, service descriptions, design points, and code generation workflow
+- `udex.index.v1.proto` -- IndexService: index namespace lifecycle (create, describe, update, list, delete)
+- `udex.entry.v1.proto` -- EntryService: context-to-key entry operations and bulk transactional writes
+- `udex.healthz.v1.proto` -- HealthzService: server health check with status messages

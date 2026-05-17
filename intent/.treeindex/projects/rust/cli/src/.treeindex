@@ -1,13 +1,11 @@
-<!-- treeindex v1 fingerprint:730d7ac6 generated:2026-05-06T01:13:38Z -->
+<!-- treeindex v1 fingerprint:732dc452 generated:2026-05-17T09:03:49Z -->
 
 # src/
 
-CLI application source code for the Udex universal lookup directory. Contains the command-line interface, argument parsing, gRPC client utilities, and configuration loading for the `udex` binary.
+CLI and configuration layer for the Udex gRPC server. Provides the entry point, command-line interface types, and configuration structures for the server and datastore. Handles Tokio runtime setup, TLS initialization, command dispatch, and error-to-exit-code mapping.
 
 ## Files
 
-- `main.rs` -- CLI entry point, error handling, and gRPC-to-exit-code mapping
-- `cli.rs` -- Clap command-line interface definition with subcommands and output formats
-- `commands.rs` -- Command implementations (Config, Index, Entry, Token, Context, Serve)
-- `client.rs` -- gRPC channel and TLS configuration, bearer token injection interceptor
-- `config.rs` -- Udex configuration types for server, datastore, and secrets binding
+- `main.rs` -- Entry point: CLI parsing, runtime setup, TLS provider initialization, command dispatch, error mapping
+- `cli.rs` -- Clap command-line interface definitions: Cli struct, Commands and subcommand enums
+- `config.rs` -- Server and datastore configuration with TLS, authorization, and secrets_rs integration

@@ -1,17 +1,18 @@
-<!-- treeindex v1 fingerprint:4d5d0e6a generated:2026-05-06T01:14:04Z -->
+<!-- treeindex v1 fingerprint:49401958 generated:2026-05-17T09:04:16Z -->
 
 # target/
 
-Cargo build artifacts directory containing compiled binaries, intermediate build outputs, and generated documentation. Automatically managed by Cargo; includes debug and release build targets.
+Rust compiler and build system artifacts directory managed by Cargo. Contains compiled binaries, build metadata, documentation, and compiler caches organized by build profile.
 
 ## Dirs
 
-- `debug/` -- Debug-mode build artifacts and compiled crates
-- `doc/` -- Generated Rustdoc HTML documentation
-- `flycheck0/` -- Intermediate artifacts from flycheck incremental compilation
+- `debug/` -- debug build artifacts and incremental compilation cache
+- `doc/` -- rustdoc-generated HTML documentation for dependencies
+- `flycheck0/` -- rust-analyzer incremental check cache
+- `release/` -- optimized release build artifacts
 
 ## Files
 
-- `CACHEDIR.TAG` -- Cache directory marker for cache cleanup tools
-- `.rustc_info.json` -- Rustc version and configuration metadata
-- `.rustdoc_fingerprint.json` -- Fingerprint for documentation generation tracking
+- `.rustc_info.json` -- compiler fingerprint and feature detection metadata
+- `.rustdoc_fingerprint.json` -- rustdoc generation metadata and version info
+- `CACHEDIR.TAG` -- cache directory tag (per bford.info/cachedir spec)

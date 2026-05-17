@@ -1,0 +1,9 @@
+<!-- treeindex v1 fingerprint:e04c5727 generated:2026-05-17T09:02:07Z -->
+
+# tests/
+
+Integration tests for the `udex-sdk` package, covering JWT-based authentication with an embedded server and OAuth2 client credentials flow with Hydra. Tests verify the full SDK client lifecycle, token management, and server connectivity under TLS.
+
+## Files
+
+- `integration_tests.rs` -- Integration test suite with JWT and Hydra fixtures, server readiness polling, and parametrized test cases

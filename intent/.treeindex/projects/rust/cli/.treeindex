@@ -1,15 +1,15 @@
-<!-- treeindex v1 fingerprint:3f1f06f9 generated:2026-05-06T01:14:38Z -->
+<!-- treeindex v1 fingerprint:831492e5 generated:2026-05-17T09:04:55Z -->
 
 # cli/
 
-Command-line interface (udex binary) for the Udex universal lookup directory. Provides configuration management, index/entry operations, OAuth2 token fetching, context hashing, and server lifecycle control via a composable subcommand structure.
+Command-line interface for Udex. Provides the entry point, command dispatch, CLI argument parsing, and configuration management for the Udex server. Integrates Tokio runtime, TLS provider initialization, and OAuth2 token operations through Clap command definitions and configuration structures.
 
 ## Dirs
 
-- `src/` -- CLI source code: command definitions, gRPC client setup, config loading
-- `tests/` -- Integration tests for CLI subcommands and server lifecycle
+- `src/` -- CLI and configuration layer with main entry point, command definitions, and config structures
+- `tests/` -- Integration tests for CLI operations, server lifecycle, and OAuth2 token handling
 
 ## Files
 
-- `Cargo.toml` -- Package manifest; depends on api, datastore, server crates
-- `README.md` -- CLI command reference and usage examples
+- `Cargo.toml` -- Package definition and workspace dependencies
+- `README.md` -- CLI documentation including command reference and usage examples

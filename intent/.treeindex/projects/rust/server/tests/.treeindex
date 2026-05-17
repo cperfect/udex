@@ -1,19 +1,19 @@
-<!-- treeindex v1 fingerprint:4fbbeba8 generated:2026-05-06T01:12:08Z -->
+<!-- treeindex v1 fingerprint:6b6ef606 generated:2026-05-17T09:01:33Z -->
 
 # tests/
 
-Integration and unit tests for the Udex server. Tests use the `maybe_once` pattern with `rstest` for shared test fixtures and resource cleanup. Includes test helpers for OAuth2 client registration and JWT token generation.
+Integration tests and test fixtures for the server, covering entry/index services, server startup with TLS and JWT auth, and logging initialization. Tests use shared Postgres containers (via MaybeOnceAsync) and Hydra for OAuth2 testing. Supporting fixtures include TLS certificates and JWT keys.
 
 ## Dirs
 
-- `certs/` -- Self-signed TLS certificates and CA for local HTTPS testing
-- `jwt/` -- ECDSA P-256 key pairs for JWT signing and verification with good and bad keys
+- `certs/` -- Self-signed TLS certificates for local HTTPS testing; includes CA and server keys
+- `jwt/` -- ECDSA P-256 key pairs for JWT signing/verification; includes good and bad keys for testing
 
 ## Files
 
-- `server_integration_tests.rs` -- Integration tests for the server, tonic clients, and gRPC handlers; manages shared Postgres container and JWT key material
-- `entry_service_integration_tests.rs` -- Integration tests for entry service using shared Postgres fixtures
-- `index_service_integration_tests.rs` -- Integration tests for index service; verifies initialization and describe endpoints
-- `logging_init_tests.rs` -- Tests verifying global tracing subscriber installation; isolated binary to avoid interference
-- `logging_not_initialised_test.rs` -- Verification that no subscriber is set before init_tracing; sole test in its binary for isolation
-- `auth_server.rs` -- Test helper for Hydra OAuth2 client registration and client_credentials token exchange (ST0007/WP-03)
+- `server_integration_tests.rs` -- Full-stack server tests with TLS, JWT auth, and Hydra OAuth2 integration
+- `entry_service_integration_tests.rs` -- Entry service integration tests with shared Postgres and index initialization
+- `index_service_integration_tests.rs` -- Index service integration tests with test claims injection and datastore fixtures
+- `auth_server.rs` -- OAuth2 client registration and token exchange helper for Hydra (test-only, included in server tests)
+- `logging_init_tests.rs` -- Tests verifying global tracing subscriber installation and idempotency
+- `logging_not_initialised_test.rs` -- Isolated test confirming no subscriber is set before init_tracing() runs

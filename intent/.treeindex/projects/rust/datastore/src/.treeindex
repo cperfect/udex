@@ -1,12 +1,12 @@
-<!-- treeindex v1 fingerprint:b1431619 generated:2026-05-06T01:12:56Z -->
+<!-- treeindex v1 fingerprint:6d854614 generated:2026-05-17T09:02:47Z -->
 
 # src/
 
-Core datastore interface, error types, and PostgreSQL implementation for Udex. This module defines the `Datastore` and `Migrator` traits (consumed by the server), the `DatastoreConfig` validation logic, and a concrete PostgreSQL backend with transaction support.
+Core Rust library for the udex datastore, providing PostgreSQL-backed persistence with transaction support, migrations, and integration test fixtures. Implements the Datastore trait with entry management, index operations, and bulk operations.
 
 ## Files
 
-- `lib.rs` -- Core `Datastore` and `Migrator` trait definitions, `Error` enum, `Entry` struct, and SQL type conversion traits
-- `config.rs` -- `DatastoreConfig` struct with secret binding and TLS validation; `dangerous_allow_non_tls` safety flag
-- `postgres.rs` -- PostgreSQL implementation of `Datastore` and `Migrator` traits using sqlx; transaction-based operations
-- `integration_test.rs` -- Integration test fixtures, static secret source, test database lifecycle management with cleanup
+- `lib.rs` -- Public API, error types (`Error`, `BulkOperationError`), traits (`SqlType`, `Datastore`, `Migrator`), and `UuidWrapper` for SQL interop
+- `config.rs` -- Datastore configuration with secrets management, TLS enforcement validation, and migration control
+- `postgres.rs` -- PostgreSQL implementation of `Datastore` trait; handles transactions, entry CRUD, index updates, and `PairsEnvelope` serialization
+- `integration_test.rs` -- Test fixtures with database initialization, cleanup callbacks, and `MaybeOnceAsync` patterns for reliable test isolation

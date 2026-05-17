@@ -1,0 +1,7 @@
+<!-- treeindex v1 fingerprint:4b0a4e4e generated:2026-05-17T09:00:54Z -->
+
+I don't have a tool available to enumerate the directory contents. Could you either:
+1. Run `ls -la release/` and share the output, or
+2. Clarify if `.cargo-lock` is the only file in that directory
+
+This will let me generate an accurate .treeindex that reflects the actual structure.

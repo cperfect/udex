@@ -1,18 +1,18 @@
-<!-- treeindex v1 fingerprint:25e5da86 generated:2026-05-06T01:14:29Z -->
+<!-- treeindex v1 fingerprint:dbbb95de generated:2026-05-17T09:04:47Z -->
 
 # datastore/
 
-This crate provides the datastore abstraction layer for Udex, defining the `Datastore` and `Migrator` traits and implementing a PostgreSQL backend with transaction support, migrations, and connection pooling.
+This crate provides the persistence layer for Udex, exposing an SDK library with abstract datastore traits and PostgreSQL implementations. Includes database migrations, transaction support, connection pooling, and integration test fixtures for reliable schema management and backend verification.
 
 ## Dirs
 
-- `benches/` -- Criterion benchmarks for PostgreSQL datastore operations and connection-pool performance
-- `migrations/` -- SQL migration files for PostgreSQL schema initialization and evolution
-- `src/` -- Core datastore interface, error types, and PostgreSQL implementation
-- `tests/` -- Integration tests for datastore backends
+- `benches/` -- Criterion benchmarks for datastore layer performance and connection-pool overhead
+- `migrations/` -- SQL migration files for schema initialization and schema evolution
+- `src/` -- Core Rust library with traits, error types, PostgreSQL implementation, and test fixtures
+- `tests/` -- Integration tests for datastore operations, index lifecycle, and entry-context semantics
 
 ## Files
 
-- `Cargo.toml` -- Workspace crate manifest with postgres feature and dev dependencies
-- `build.rs` -- Build script to trigger recompilation on migration changes
-- `README.md` -- Usage guide, feature overview, and development setup for integration tests
+- `Cargo.toml` -- Package definition with workspace inheritance, feature flags (postgres, integration_test), and dependency pinning
+- `build.rs` -- Build script that forces recompilation when migrations directory changes
+- `README.md` -- Architecture overview, data model documentation, table definitions, and schema diagram

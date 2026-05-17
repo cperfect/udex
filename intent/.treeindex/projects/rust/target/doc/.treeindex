@@ -1,17 +1,13 @@
-<!-- treeindex v1 fingerprint:48e3de4b generated:2026-05-06T01:11:45Z -->
+<!-- treeindex v1 fingerprint:f7b39a42 generated:2026-05-17T09:01:16Z -->
 
 # doc/
 
-Generated Rustdoc HTML documentation for the secrets_rs crate, containing rendered documentation pages, navigation metadata, and styling assets. Automatically produced during the documentation build process.
-
-## Dirs
-
-- `static.files/` -- CSS stylesheets, fonts, and JavaScript bundles for the documentation UI
+Rustdoc-generated HTML and JavaScript documentation for the Rust crate ecosystem. This directory contains static assets and interactive components for browsing API documentation, including help pages, settings, and source code navigation.
 
 ## Files
 
-- `crates.js` -- Registry of documented crates
-- `src-files.js` -- Source file navigation structure  
-- `help.html` -- Rustdoc help page
-- `settings.html` -- Rustdoc settings page
+- `help.html` -- Rustdoc help and keyboard shortcuts documentation page
+- `settings.html` -- User settings and preference configuration page
+- `src-files.js` -- Source code file structure and sidebar navigation registry
+- `crates.js` -- Complete crate catalog and fragment metadata for doc pages
 - `.lock` -- Build artifact lock file

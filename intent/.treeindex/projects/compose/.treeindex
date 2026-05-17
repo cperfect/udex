@@ -1,13 +1,14 @@
-<!-- treeindex v1 fingerprint:891ca7b6 generated:2026-05-06T01:15:48Z -->
+<!-- treeindex v1 fingerprint:3d355bce generated:2026-05-17T09:05:24Z -->
 
 # compose/
 
-Docker Compose configuration for local development infrastructure, defining PostgreSQL, Hydra OAuth2 authorization server, and database migration services. Services are configured with health checks, resource limits, and volume mounts for database initialization.
+Local development environment configuration using Docker Compose. Orchestrates PostgreSQL 16 (the Udex datastore and Hydra metadata database) and Ory Hydra v26.2.0 (OAuth2 authorization server) with health checks and dependency ordering. Secrets are generated via `scripts/gen-env.sh` and written to `.env` before startup.
 
 ## Dirs
 
-- `postgres/` -- Database initialization scripts and schemas for PostgreSQL setup
+- `postgres/` -- One-shot initialization scripts run on PostgreSQL container startup; creates the hydra user and database
 
 ## Files
 
-- `docker-compose.yml` -- Service orchestration defining postgres, hydra-migrate, and hydra with networking, resource limits, and healthchecks
+- `docker-compose.yml` -- Service orchestration: postgres (datastore), hydra-migrate (schema), hydra (OAuth2 server); includes health checks and resource limits
+- `README.md` -- Setup guide, service endpoints, prerequisites, persistence model, and directory layout

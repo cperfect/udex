@@ -1,0 +1,9 @@
+<!-- treeindex v1 fingerprint:4fd99d8e generated:2026-05-17T09:00:38Z -->
+
+# src/
+
+Rust utility library for OAuth2 client management and secret handling, with primary integration for ORY Hydra. Provides functions to bind file-sourced secrets, retrieve Hydra endpoint URLs, and upsert OAuth2 clients with automatic conflict handling.
+
+## Files
+
+- `lib.rs` -- Public API for secret binding, Hydra URL resolution, and OAuth2 client registration/upsert logic
