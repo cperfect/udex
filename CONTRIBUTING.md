@@ -35,6 +35,14 @@ bash scripts/gen-keys-and-certs.sh   # creates TLS certs and JWT signing keys
 
 Both scripts are idempotent — re-running them when outputs already exist is safe. Pass `--force` to rotate existing values.
 
+Once setup is complete (or at any point to diagnose problems), run the environment doctor:
+
+```bash
+bash scripts/dev-doctor.sh
+```
+
+This checks every required tool, service, and fixture file and prints a PASS/FAIL list with a remedy for each failure.
+
 ### Build & Test
 
 ```bash

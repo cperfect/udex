@@ -1,0 +1,34 @@
+{
+  "features": {
+    "ghcr.io/devcontainers-extra/features/claude-code:1": {
+      "version": "1.0.0",
+      "resolved": "ghcr.io/devcontainers-extra/features/claude-code@sha256:cce04f0fb8313336f679c243f032338434d9386d4857c3d38e1253b1e3d62a00",
+      "integrity": "sha256:cce04f0fb8313336f679c243f032338434d9386d4857c3d38e1253b1e3d62a00"
+    },
+    "ghcr.io/devcontainers-extra/features/protoc:1": {
+      "version": "1.0.3",
+      "resolved": "ghcr.io/devcontainers-extra/features/protoc@sha256:57ec0b9c074c3c764d5b43386f5fd219586b2548d5a99da8c3307f29fc1deafc",
+      "integrity": "sha256:57ec0b9c074c3c764d5b43386f5fd219586b2548d5a99da8c3307f29fc1deafc"
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "version": "1.9.1",
+      "resolved": "ghcr.io/devcontainers/features/docker-outside-of-docker@sha256:dc89605f01ff2f24252c61f7c8ba2a58ccdbc14f2ebf87a7952d9e2b89834850",
+      "integrity": "sha256:dc89605f01ff2f24252c61f7c8ba2a58ccdbc14f2ebf87a7952d9e2b89834850"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "1.7.1",
+      "resolved": "ghcr.io/devcontainers/features/node@sha256:8c0de46939b61958041700ee89e3493f3b2e4131a06dc46b4d9423427d06e5f6",
+      "integrity": "sha256:8c0de46939b61958041700ee89e3493f3b2e4131a06dc46b4d9423427d06e5f6"
+    },
+    "ghcr.io/guiyomh/features/vim:0": {
+      "version": "0.0.1",
+      "resolved": "ghcr.io/guiyomh/features/vim@sha256:53c64a458fe88f40862ad5f94ea3f8d7fdf46c3fb42bdaa8a6a09f7d44f182f7",
+      "integrity": "sha256:53c64a458fe88f40862ad5f94ea3f8d7fdf46c3fb42bdaa8a6a09f7d44f182f7"
+    },
+    "ghcr.io/warrenbuckley/codespace-features/sqlite:1": {
+      "version": "1.0.0",
+      "resolved": "ghcr.io/warrenbuckley/codespace-features/sqlite@sha256:4fdf50a6929f918c8208efc7416b6505f5ca085d71e37c3003367ed2855bbf76",
+      "integrity": "sha256:4fdf50a6929f918c8208efc7416b6505f5ca085d71e37c3003367ed2855bbf76"
+    }
+  }
+}

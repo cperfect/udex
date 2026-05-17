@@ -20,11 +20,14 @@ Additional inline comments **SHOULD** be added for clarity when needed — e.g. 
 
 ## Developing
 
-A dev container configuration is provided for VS Code and compatible editors — this is the recommended way to get a consistent environment. The container pins the following versions:
+A dev container configuration is provided for VS Code and compatible editors — this is the recommended way to get a consistent environment. Run `bash scripts/dev-doctor.sh` from the workspace root at any time to verify that all tools, services, and fixtures are in place.
+
+The container pins the following versions:
 
 | Component | Version | Defined in |
 |-----------|---------|------------|
 | Rust | 1.95.0 | `.devcontainer/Dockerfile` (`ARG RUST_VERSION`) |
+| protoc | v34.1 | `.devcontainer/devcontainer.json` (`features.protoc.version`) |
 | Ory Hydra | v26.2.0 | `projects/compose/docker-compose.yml` |
 | PostgreSQL | 16 | `projects/compose/docker-compose.yml` |
 
