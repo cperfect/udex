@@ -3,7 +3,7 @@ verblock: "17 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-04
 title: "Update docs: architecture test strategy, contributing guides, MODULES.md"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-04: Update docs: architecture test strategy, contributing guides, MODULES.md
@@ -26,11 +26,11 @@ Document the test strategy established in ST0017 so future contributors know whe
 
 ## Acceptance Criteria
 
-- [ ] `ARCHITECTURE.md` contains a "Test Strategy" section with the canonical suite table
-- [ ] `projects/rust/CONTRIBUTING.md` no longer references the old `test_hydra_` prefix and documents the canonical naming convention
-- [ ] `intent/llm/MODULES.md` includes a `udex-test-utils` entry
-- [ ] `ST0017/impl.md` is fully populated (no template placeholders remain)
-- [ ] `cargo fmt --check`, `cargo clippy --all-targets` pass (no Rust changes, but verify nothing was inadvertently broken)
+- [x] `ARCHITECTURE.md` contains a "Test Strategy" section with the canonical suite table
+- [x] `projects/rust/CONTRIBUTING.md` no longer references the old `test_hydra_` prefix and documents the canonical naming convention
+- [x] `intent/llm/MODULES.md` includes a `udex-test-utils` entry
+- [x] `ST0017/impl.md` is fully populated (no template placeholders remain)
+- [x] `cargo fmt --check`, `cargo clippy --all-targets` pass (no Rust changes, but verify nothing was inadvertently broken)
 
 ## Dependencies
 

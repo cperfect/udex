@@ -1,10 +1,10 @@
 ---
 verblock: "17 May 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: WIP
+status: Completed
 slug: integration-test-consolidation-and-shared-test
 created: 20260517
-completed:
+completed: 20260517
 ---
 
 # ST0017: Integration test consolidation and shared test utilities

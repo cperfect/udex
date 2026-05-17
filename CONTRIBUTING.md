@@ -164,7 +164,8 @@ The API definitions in `projects/protobuf/` drive code generation for the server
 ### Testing
 1. **Tests MUST be automated**
 1. **Tests SHOULD be reliable** flakey tests are broken tests. Either fix what is being tested or fix the tests.
-1. **Overall Test Coverage SHOULD aim towards the Test Diamond** As opposed to the Test Pyramid. That is Integration Teating should have the most coverage (ideally tending to 100%), and UI and unit testing are less important.
+1. **Overall Test Coverage SHOULD aim towards the Test Diamond** As opposed to the Test Pyramid. That is Integration Testing should have the most coverage (ideally tending to 100%), and UI and unit testing are less important.
+1. **Integration tests MUST follow the naming convention** — every integration test function must be prefixed with a canonical layer indicator (`test_sdk_`, `test_server_`, `test_index_service_`, etc.). See the [Test Strategy](docs/ARCHITECTURE.md#test-strategy) section of the architecture document and [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) for the full list and guidance on where to add new tests.
 
 
 #### Docs
