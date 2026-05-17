@@ -44,10 +44,17 @@ cargo fmt --all -- --check
 cargo clippy --all-targets -- -D warnings
 ```
 
-> **Hydra integration tests** — Tests prefixed with `test_hydra_` require a live
+> **OAuth2 integration tests** — Tests prefixed with `test_*_oauth2_` require a live
 > Hydra instance. In the devcontainer `HYDRA_PUBLIC_URL` and `HYDRA_ADMIN_URL`
 > are set automatically (the devcontainer compose file points them at the `hydra`
-> service). Just run `cargo test` — no prefix needed.
+> service). Just run `cargo test` — no filter needed.
+>
+> **Integration test naming** — Every integration test function must be prefixed
+> with a layer indicator: `test_sdk_`, `test_sdk_oauth2_`, `test_server_`,
+> `test_server_oauth2_`, `test_index_service_`, `test_entry_service_`,
+> `test_datastore_`, or `test_cli_`. This makes it immediately obvious from
+> output which layer a failing test covers. Shared fixture helpers live in
+> `udex-test-utils` — check there before duplicating fixture code.
 
 ### Pre-commit Checklist
 

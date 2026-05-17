@@ -19,13 +19,13 @@ use std::sync::OnceLock;
 use assert_cmd::Command;
 use jsonwebtoken::{encode, EncodingKey, Header};
 use predicates::prelude::*;
-use secrets_rs::{sources::file::FileSource, Secret, SourceRegistry};
 use time::OffsetDateTime;
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzRequest};
 use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
+use udex_test_utils::bind_file_secret;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -78,15 +78,6 @@ fn server_token() -> &'static str {
             }
         })
         .token
-}
-
-fn bind_file_secret(path: &str) -> Secret<String> {
-    let mut s = Secret::new(&format!("urn:secrets-rs:file:{path}")).expect("valid file URN");
-    let mut reg = SourceRegistry::new();
-    reg.register("file", FileSource::new())
-        .expect("register file source");
-    s.bind(&reg).expect("bind file secret");
-    s
 }
 
 async fn wait_for_server(addr: &str, ca_pem: &[u8]) {
@@ -198,7 +189,7 @@ fn udex_with_auth(token: &str) -> Command {
 
 /// First call for a new context: exit 0, table shows created=true and a UUID key.
 #[test]
-fn test_entry_lookup_or_create_created_path_table() {
+fn test_cli_entry_lookup_or_create_created_path_table() {
     let token = server_token();
 
     udex_with_auth(token)
@@ -220,7 +211,7 @@ fn test_entry_lookup_or_create_created_path_table() {
 /// Second call with the same context: exit 0, table shows created=false,
 /// and the returned key matches the first call's key.
 #[test]
-fn test_entry_lookup_or_create_found_path_table() {
+fn test_cli_entry_lookup_or_create_found_path_table() {
     let token = server_token();
 
     // First call — creates the entry and captures the key.
@@ -270,7 +261,7 @@ fn test_entry_lookup_or_create_found_path_table() {
 
 /// JSON output format: created field is present and boolean.
 #[test]
-fn test_entry_lookup_or_create_json_output() {
+fn test_cli_entry_lookup_or_create_json_output() {
     let token = server_token();
 
     let out = udex_with_auth(token)
@@ -307,7 +298,7 @@ fn test_entry_lookup_or_create_json_output() {
 
 /// YAML output format: created field is present.
 #[test]
-fn test_entry_lookup_or_create_yaml_output() {
+fn test_cli_entry_lookup_or_create_yaml_output() {
     let token = server_token();
 
     udex_with_auth(token)

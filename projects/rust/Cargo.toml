@@ -5,6 +5,7 @@ members = [
     "server",
     "cli",
     "sdk",
+    "test-utils",
 ]
 resolver = "2"
 

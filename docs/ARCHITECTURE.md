@@ -104,6 +104,33 @@ Udex does not support encryption at rest directly, though supported datastores a
 
 Udex configuration only supports secrets by injection (e.g. environment variables) and will not support secrets directly in configuration files. The application component will only hold secrets in memory. Udex supports rolling out new secrets. See [`docs/SECRETS.md`](SECRETS.md) for the full inventory of credentials and key material used in the project.
 
+## Test Strategy
+
+Udex follows the **Test Diamond** — integration tests carry the bulk of the coverage, with unit tests used only where isolation genuinely reduces debugging time.
+
+### Suite Hierarchy
+
+| Suite | Prefix(es) | What it covers | Authority |
+|---|---|---|---|
+| SDK integration tests | `test_sdk_`, `test_sdk_oauth2_` | Full stack via TLS + OAuth2 + gRPC wire format — the closest thing to a real client | **Primary** — if the SDK tests pass, the system works end-to-end |
+| Server integration tests | `test_server_`, `test_server_oauth2_` | Full gRPC stack with auth; used when debugging issues that are hard to isolate via SDK | Supplementary |
+| Index service tests | `test_index_service_` | gRPC handler input-validation paths that cannot be triggered by the SDK (SDK always sends valid inputs) | Supplementary — validation contract only |
+| Entry service tests | `test_entry_service_` | Same as above plus a minimal isolation set for debugging the entry handler without the full SDK stack | Supplementary — isolation debugging |
+| Datastore tests | `test_datastore_` | SQL queries, transactions, and migrations tested directly against PostgreSQL | Supplementary |
+| CLI tests | `test_cli_`, `test_cli_oauth2_` | CLI command integration, including OAuth2 token flows | Supplementary |
+
+### Rationale
+
+The SDK tests exercise TLS termination, JWT validation, gRPC wire format, and the full handler chain in one shot, which is the path a real client takes. Service-layer tests (index/entry service) are kept small because their scenarios are either already covered by the SDK suite or only add value for handler-level input validation — paths that the SDK can never trigger because it always sends well-formed, correctly-hashed inputs.
+
+### Test Naming Convention
+
+Every integration test function **must** be prefixed with one of the canonical layer indicators listed in the table above. This makes it immediately obvious which layer a failing test covers and enables filtering with `cargo test test_sdk_`.
+
+### Shared Fixtures
+
+Common fixture helpers (`bind_file_secret`, `hydra_public_url`, `hydra_admin_url`, `register_hydra_client`) live in `udex-test-utils` — a dev-only workspace crate (`publish = false`). Check there before writing fixture code in a test file. See [`intent/llm/MODULES.md`](../intent/llm/MODULES.md) for the full module registry.
+
 ## Principles
 
 * **Simplicity** — Udex should do one thing well rather than multiple things in a mediocre way.

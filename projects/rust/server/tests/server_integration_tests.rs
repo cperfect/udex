@@ -4,7 +4,6 @@ mod auth_server;
 use jsonwebtoken::{encode, EncodingKey, Header};
 // we don't test all the services exhaustively here as they will be tested via the client & end-to-end tests
 use maybe_once::tokio::{Data, MaybeOnceAsync};
-use secrets_rs::{sources::file::FileSource, Secret, SourceRegistry};
 use std::net::SocketAddr;
 use std::sync::OnceLock;
 use time::OffsetDateTime;
@@ -14,6 +13,7 @@ use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzReq
 use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
 use udex_server::{config::ServerConfig, logging, server};
+use udex_test_utils::{bind_file_secret, hydra_admin_url};
 
 const SERVER_BIND_ADDR: &str = "127.0.0.1:50052"; // different from default to avoid conflicts
 const ID_PREFIX: &str = "server-integration-test";
@@ -32,16 +32,6 @@ type MaybeOnceType = (
     String,                      // 6: jwt_issuer
     String,                      // 7: jwt_audience
 );
-
-/// Binds a file-sourced `Secret<String>` using a CWD-relative path.
-fn bind_file_secret(path: &str) -> Secret<String> {
-    let mut s = Secret::new(&format!("urn:secrets-rs:file:{path}")).expect("valid file URN");
-    let mut reg = SourceRegistry::new();
-    reg.register("file", FileSource::new())
-        .expect("register file source");
-    s.bind(&reg).expect("bind file secret");
-    s
-}
 
 /// Initializer function.
 /// Starts a Postgres container shared between all tests.
@@ -142,17 +132,6 @@ pub async fn data(serial: bool) -> Data<'static, MaybeOnceType> {
 // set. Starts a second server instance that validates tokens via Hydra's JWKS
 // endpoint. Tests that depend on this fixture skip gracefully when the env vars
 // are absent.
-
-/// Load the workspace .env and return the Hydra admin URL.
-///
-/// dotenv_override() is called here (rather than relying solely on init_server_hydra)
-/// because some tests read HYDRA_ADMIN_URL directly before awaiting data_using_hydra().
-/// The shared fixture only runs once, so any test that reads Hydra env vars itself must
-/// also ensure the .env is loaded first.
-fn hydra_admin_url() -> String {
-    dotenvy::dotenv_override().ok();
-    std::env::var("HYDRA_ADMIN_URL").unwrap_or_else(|_| "http://localhost:4445".to_string())
-}
 
 type HydraFixtureType = (
     String,                         // 0: index name
@@ -323,7 +302,7 @@ fn generate_test_jwt(
 
 /// Tests that the healthz service is available over TLS and returns a 200 OK response.
 #[tokio_shared_rt::test] //We use tokio shared runtime to ensure the static variables are still valid between tests -https://docs.rs/tokio-shared-rt/latest/tokio_shared_rt/
-async fn test_healthz_service() {
+async fn test_server_healthz() {
     // Initialize rustls crypto provider
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -407,7 +386,7 @@ async fn test_healthz_service() {
 
 /// Tests that the init indexes are properly created during server startup.
 #[tokio_shared_rt::test]
-async fn test_init_indexes() {
+async fn test_server_init_indexes() {
     // Initialize rustls crypto provider
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -509,7 +488,7 @@ async fn test_init_indexes() {
 
 /// Verifies that `create_index` records the JWT `sub` claim as `created_by`.
 #[tokio_shared_rt::test]
-async fn test_create_index_records_sub_as_created_by() {
+async fn test_server_create_index_records_sub_as_created_by() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let data = data(false).await;
@@ -608,7 +587,7 @@ async fn test_create_index_records_sub_as_created_by() {
 
 /// Tests authentication and authorization for different services
 #[tokio_shared_rt::test]
-async fn test_authz() {
+async fn test_server_authz() {
     // Initialize rustls crypto provider
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -1754,7 +1733,7 @@ async fn test_authz() {
 /// Uses the server's own leaf certificate as the "CA" — it is not a CA cert and
 /// was not used to sign itself, so rustls must reject the handshake.
 #[tokio_shared_rt::test]
-async fn test_tls_wrong_ca_rejected() {
+async fn test_server_tls_wrong_ca_rejected() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let data = data(false).await;
@@ -1788,7 +1767,7 @@ async fn test_tls_wrong_ca_rejected() {
 /// Verifies that a valid, unexpired token is accepted on two sequential requests
 /// (i.e. the server has no token blacklist and does not revoke on first use).
 #[tokio_shared_rt::test]
-async fn test_token_reuse() {
+async fn test_server_token_reuse() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let data = data(false).await;
@@ -1857,7 +1836,7 @@ async fn test_token_reuse() {
 
 /// Verifies that a Hydra-issued token is accepted twice in a row.
 #[tokio_shared_rt::test]
-async fn test_hydra_token_reuse() {
+async fn test_server_oauth2_token_reuse() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let data = data_using_hydra(false).await;
@@ -1927,7 +1906,7 @@ async fn test_hydra_token_reuse() {
 /// token carries only the requested subset of scopes.
 ///
 #[tokio_shared_rt::test]
-async fn test_hydra_scope_subset() {
+async fn test_server_oauth2_scope_subset() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let data = data_using_hydra(false).await;
@@ -2026,7 +2005,7 @@ async fn test_hydra_scope_subset() {
 /// contains no `udex:*` scope values.
 ///
 #[tokio_shared_rt::test]
-async fn test_hydra_non_udex_scopes_denied() {
+async fn test_server_oauth2_non_udex_scopes_denied() {
     let admin_url = hydra_admin_url();
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -2101,7 +2080,7 @@ async fn test_hydra_non_udex_scopes_denied() {
 /// and is the same for all clients on the same Hydra instance. Wrong-issuer
 /// behaviour is already covered by the static-PEM test suite.
 #[tokio_shared_rt::test]
-async fn test_hydra_wrong_audience_rejected() {
+async fn test_server_oauth2_wrong_audience_rejected() {
     let admin_url = hydra_admin_url();
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -2176,7 +2155,7 @@ async fn test_hydra_wrong_audience_rejected() {
 /// The test server uses a self-signed CA that is not installed in the system
 /// trust store, so the TLS handshake must fail without an explicit CA override.
 #[tokio_shared_rt::test]
-async fn test_tls_untrusted_ca_rejected() {
+async fn test_server_tls_untrusted_ca_rejected() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let data = data(false).await;
