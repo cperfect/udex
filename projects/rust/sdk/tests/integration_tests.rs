@@ -249,7 +249,9 @@ async fn init_hydra_fixture() -> HydraFixture {
 
     wait_for_server(SDK_HYDRA_BIND_ADDR, &ca_pem).await;
 
-    // Register a Hydra client with all scopes needed by the test index.
+    // Register a Hydra client with all scopes needed by the integration tests.
+    // udex:index:v1:create   — required by create_index
+    // udex:index:v1:*:delete — required by delete_index (glob matches any index name)
     register_hydra_client(
         &admin_url,
         &client_id,
@@ -257,7 +259,9 @@ async fn init_hydra_fixture() -> HydraFixture {
         &audience,
         &format!(
             "udex:index:v1:list \
+             udex:index:v1:create \
              udex:index:v1:{index_name}:read \
+             udex:index:v1:*:delete \
              udex:entry:v1:{index_name}:create \
              udex:entry:v1:{index_name}:read \
              udex:entry:v1:{index_name}:write \
@@ -276,7 +280,9 @@ async fn init_hydra_fixture() -> HydraFixture {
             .audience(&audience)
             .scope(format!(
                 "udex:index:v1:list \
+                 udex:index:v1:create \
                  udex:index:v1:{index_name}:read \
+                 udex:index:v1:*:delete \
                  udex:entry:v1:{index_name}:create \
                  udex:entry:v1:{index_name}:read \
                  udex:entry:v1:{index_name}:write \
@@ -1145,7 +1151,9 @@ async fn test_sdk_oauth2_envelope_encrypted_entry() {
     assert_eq!(email_pair.kek_id.as_deref(), Some(kek_id));
     let returned_encrypted_dek = email_pair.dek.as_deref().expect("missing dek on pair");
 
-    let dek_bytes_enc = B64.decode(returned_encrypted_dek).expect("base64 decode DEK");
+    let dek_bytes_enc = B64
+        .decode(returned_encrypted_dek)
+        .expect("base64 decode DEK");
     let (dek_nonce_bytes, dek_ct_bytes) = dek_bytes_enc.split_at(12);
     let unwrapped_dek = kek
         .decrypt(Nonce::from_slice(dek_nonce_bytes), dek_ct_bytes)
@@ -1373,9 +1381,18 @@ async fn wait_for_k8s_server(server_url: &str, ca_pem: &[u8]) {
 // Uses --set-file for the TLS material to avoid shell-escaping issues with
 // multiline PEM values.
 async fn redeploy_k8s_server(k8s_db_url: &str, server_url: &str, ca_pem: &[u8]) {
-    let chart_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../projects/k8s/helm/udex");
-    let cert_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../server/tests/certs/server.crt");
-    let key_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../server/tests/certs/server.key");
+    let chart_dir = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../projects/k8s/helm/udex"
+    );
+    let cert_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../server/tests/certs/server.crt"
+    );
+    let key_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../server/tests/certs/server.key"
+    );
 
     let status = tokio::process::Command::new("helm")
         .args([
@@ -1532,8 +1549,7 @@ async fn init_k8s_fixture() -> Option<K8sFixture> {
 }
 
 pub async fn data_k8s() -> Option<K8sFixture> {
-    static K8S_DATA: tokio::sync::OnceCell<Option<K8sFixture>> =
-        tokio::sync::OnceCell::const_new();
+    static K8S_DATA: tokio::sync::OnceCell<Option<K8sFixture>> = tokio::sync::OnceCell::const_new();
     K8S_DATA.get_or_init(init_k8s_fixture).await.clone()
 }
 
@@ -1625,7 +1641,10 @@ async fn test_sdk_k8s_create_entry_idempotent() {
         .await
         .expect("second k8s create failed");
 
-    assert_eq!(first.key, second.key, "idempotent create returned different keys");
+    assert_eq!(
+        first.key, second.key,
+        "idempotent create returned different keys"
+    );
     assert_eq!(first.context_hash, second.context_hash);
 }
 
