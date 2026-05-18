@@ -24,6 +24,16 @@ spec:
       labels:
         {{- include "udex.selectorLabels" . | nindent 8 }}
     spec:
+      # Pod-level security context: applies defaults for all containers in the pod.
+      # runAsNonRoot + runAsUser/Group force the process to run as 'nobody' (UID 65534,
+      # present in debian:bookworm-slim) rather than root. seccompProfile restricts
+      # which syscalls the process can make to the set allowed by the container runtime.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: udex
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -31,6 +41,21 @@ spec:
           # image-load.sh). Prevents Kubernetes from trying to pull from a
           # registry that doesn't exist in local dev.
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Container-level security context: tightens privileges beyond the pod defaults.
+          # allowPrivilegeEscalation: false prevents the process from gaining new
+          # privileges via setuid/setgid. readOnlyRootFilesystem: true prevents any
+          # writes to the container filesystem (the server only reads config/certs from
+          # mounted volumes and writes logs to stdout — no filesystem writes needed).
+          # capabilities.drop ALL removes every Linux capability; NET_BIND_SERVICE is
+          # added back so the non-root process can bind to port 443 (a privileged port).
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
           ports:
             - name: grpc-tls
               containerPort: 443
