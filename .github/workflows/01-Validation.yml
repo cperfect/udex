@@ -99,3 +99,107 @@ jobs:
       - name: Build & Test
         working-directory: .
         run: bash scripts/validate-test-rust.sh
+
+  changes:
+    name: Detect path changes
+    runs-on: ubuntu-latest
+    outputs:
+      k8s: ${{ steps.filter.outputs.k8s }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            k8s:
+              - 'projects/k8s/**'
+              - 'projects/rust/cli/Dockerfile'
+              - 'projects/rust/cli/src/**'
+              - 'projects/rust/sdk/tests/**'
+
+  k8s-test:
+    name: k8s Integration Test
+    runs-on: ubuntu-latest
+    needs: [test, changes]
+    if: needs.changes.outputs.k8s == 'true'
+
+    env:
+      HYDRA_PUBLIC_URL: http://localhost:4444
+      HYDRA_ADMIN_URL: http://localhost:4445
+      HYDRA_ISSUER: http://localhost:4444/
+      K8S_SERVER_URL: https://localhost:8443
+      RUST_LOG: info
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start services (postgres + hydra)
+        working-directory: projects/compose
+        env:
+          POSTGRES_PASSWORD_SECRET: ${{ secrets.VALIDATE_POSTGRES_PASSWORD_SECRET }}
+          HYDRA_DB_PASSWORD_SECRET: ${{ secrets.VALIDATE_HYDRA_DB_PASSWORD_SECRET }}
+          HYDRA_SECRETS_SYSTEM_SECRET: ${{ secrets.VALIDATE_HYDRA_SECRETS_SYSTEM_SECRET }}
+        run: |
+          docker compose up -d
+          echo "Waiting for Hydra admin API..."
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4445/health/ready && { echo "Hydra ready."; break; }
+            echo "  attempt $i/30…"; sleep 3
+          done
+          curl -sf http://localhost:4445/health/ready || { echo "Hydra did not become ready."; exit 1; }
+
+      - name: Install k3d v5.8.3
+        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.8.3 bash
+
+      - name: Install kubectl v1.36.1
+        run: |
+          curl -LO "https://dl.k8s.io/v1.36.1/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+
+      - name: Install helm v4.0.0
+        run: |
+          curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
+          chmod 700 get_helm.sh
+          ./get_helm.sh -v v4.0.0
+          rm get_helm.sh
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: projects/rust
+
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate key material
+        run: bash scripts/gen-keys-and-certs.sh
+
+      - name: Build Docker image
+        run: bash projects/k8s/scripts/image-build.sh
+
+      - name: Create k3d cluster
+        run: bash projects/k8s/scripts/cluster-create.sh
+
+      - name: Load image into cluster
+        run: bash projects/k8s/scripts/image-load.sh
+
+      - name: Write .env for deploy.sh
+        env:
+          POSTGRES_PASSWORD_SECRET: ${{ secrets.VALIDATE_POSTGRES_PASSWORD_SECRET }}
+        run: echo "POSTGRES_PASSWORD_SECRET=${POSTGRES_PASSWORD_SECRET}" > .env
+
+      - name: Deploy to k3d
+        run: bash projects/k8s/scripts/deploy.sh
+
+      - name: Run k8s integration tests
+        working-directory: projects/rust
+        run: cargo test -p udex-sdk --test integration_tests -- k8s --nocapture
+
+      - name: Teardown
+        if: always()
+        run: |
+          bash projects/k8s/scripts/undeploy.sh || true
+          bash projects/k8s/scripts/cluster-delete.sh || true
