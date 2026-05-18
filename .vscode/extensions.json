@@ -10,6 +10,8 @@
     "me-dutour-mathieu.vscode-github-actions",
     "peakchen90.open-html-in-browser",
     "bierner.markdown-mermaid",
-    "kiranchanda.ai-preflight"
+    "kiranchanda.ai-preflight",
+    "ms-kubernetes-tools.vscode-kubernetes-tools",
+    "inercia.vscode-k3d"
   ]
 }
