@@ -32,8 +32,9 @@ COPY protobuf/ protobuf/
 # Copy the full Rust workspace.
 COPY rust/ rust/
 
-RUN cd rust \
-    && cargo build --profile "${PROFILE}" -p udex-cli \
+WORKDIR /build/rust
+
+RUN cargo build --profile "${PROFILE}" -p udex-cli \
     # Map profile name to output directory: Cargo writes "dev" builds to
     # target/debug/, not target/dev/.
     && dir=$([ "${PROFILE}" = "dev" ] && echo "debug" || echo "${PROFILE}") \
