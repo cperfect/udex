@@ -28,7 +28,9 @@ k3d cluster create "${CLUSTER_NAME}" \
 # inside a devcontainer. Replace it with host.docker.internal (which is also
 # covered by the --tls-san above so cert verification succeeds).
 if grep -q "https://0.0.0.0:" "${HOME}/.kube/config" 2>/dev/null; then
-  sed -i 's|https://0.0.0.0:|https://host.docker.internal:|g' "${HOME}/.kube/config"
+  tmp_kubeconfig="$(mktemp)"
+  sed 's|https://0.0.0.0:|https://host.docker.internal:|g' "${HOME}/.kube/config" >"${tmp_kubeconfig}"
+  mv "${tmp_kubeconfig}" "${HOME}/.kube/config"
   echo "Patched kubeconfig: replaced 0.0.0.0 with host.docker.internal"
 fi
 
