@@ -246,6 +246,22 @@ else
     "Debian/Ubuntu: apt-get install curl   macOS: brew install curl"
 fi
 
+# jq (required by hydra-create-client.sh and kubectl version parsing)
+REQUIRED_JQ_MAJOR="1"
+if command -v jq &>/dev/null; then
+  JQ_VER=$(jq --version 2>/dev/null | sed 's/^jq-//')
+  JQ_MAJOR="${JQ_VER%%.*}"
+  if [[ "${JQ_MAJOR}" -eq "${REQUIRED_JQ_MAJOR}" ]]; then
+    pass "jq $JQ_VER (need major $REQUIRED_JQ_MAJOR)"
+  else
+    fail "jq $JQ_VER (need major $REQUIRED_JQ_MAJOR)" \
+      "Debian/Ubuntu: apt-get install jq   macOS: brew install jq"
+  fi
+else
+  fail "jq not found" \
+    "Debian/Ubuntu: apt-get install jq   macOS: brew install jq"
+fi
+
 # --- Environment & fixtures ------------------------------------------------
 echo ""
 echo "==> Environment & fixtures"
