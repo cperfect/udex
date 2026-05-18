@@ -8,7 +8,7 @@
 - [x] WP04 — SDK test audit: port JWT-only cases to OAuth2 fixture
 - [x] WP05 — k8s test fixture (`data_k8s`)
 - [x] WP06 — CI job (`k8s-test` in `01-Validation.yml`)
-- [ ] WP07 — Documentation and dev-doctor updates
+- [x] WP07 — Documentation and dev-doctor updates
 
 ## Work Package Detail
 
