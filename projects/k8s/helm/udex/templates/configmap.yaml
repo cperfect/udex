@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "udex.fullname" . }}
+  labels:
+    {{- include "udex.labels" . | nindent 4 }}
+data:
+  config.toml: |-
+    [server]
+    bind_address = {{ .Values.server.bindAddress | quote }}
+    request_timeout_secs = {{ .Values.server.requestTimeoutSecs }}
+    max_connections = {{ .Values.server.maxConnections }}
+    max_message_size_bytes = {{ .Values.server.maxMessageSizeBytes }}
+
+    [server.tls]
+    cert = "urn:secrets-rs:file:/etc/udex/tls/tls.crt"
+    key = "urn:secrets-rs:file:/etc/udex/tls/tls.key"
+
+    [server.authz]
+    jwks_url = {{ .Values.authz.jwksUrl | quote }}
+    jwt_issuer = {{ .Values.authz.jwtIssuer | quote }}
+    jwt_audience = {{ .Values.authz.jwtAudience | quote }}
+    danger_allow_non_tls = {{ .Values.authz.dangerAllowNonTls }}
+    scope_claim_name = {{ .Values.authz.scopeClaimName | quote }}
+    mask_subject_in_logs = {{ .Values.authz.maskSubjectInLogs }}
+
+    [datastore]
+    connection_url = "urn:secrets-rs:env:DATABASE_URL"
+    max_connections = {{ .Values.datastore.maxConnections }}
+    min_connections = {{ .Values.datastore.minConnections }}
+    connection_timeout_secs = {{ .Values.datastore.connectionTimeoutSecs }}
+    query_timeout_secs = {{ .Values.datastore.queryTimeoutSecs }}
+    dangerous_allow_non_tls = {{ .Values.datastore.dangerousAllowNonTls }}
+    apply_migrations = {{ .Values.datastore.applyMigrations }}

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "udex.fullname" . }}
+  labels:
+    {{- include "udex.labels" . | nindent 4 }}
+spec:
+  type: LoadBalancer
+  selector:
+    {{- include "udex.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: grpc-tls
+      port: 443
+      targetPort: 443
+      protocol: TCP

@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "udex.fullname" . }}
+  labels:
+    {{- include "udex.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "udex.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "udex.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: udex
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: grpc-tls
+              containerPort: 443
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "udex.fullname" . }}
+                  key: DATABASE_URL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/udex/config.toml
+              subPath: config.toml
+              readOnly: true
+            - name: tls
+              mountPath: /etc/udex/tls
+              readOnly: true
+          livenessProbe:
+            tcpSocket:
+              port: 443
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 443
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "udex.fullname" . }}
+        - name: tls
+          secret:
+            secretName: {{ include "udex.fullname" . }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
