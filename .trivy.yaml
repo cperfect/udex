@@ -10,3 +10,8 @@ scan:
     - CRITICAL
   exit-code: 1      # Non-zero exit when issues at or above severity threshold are found
   ignorefile: .trivyignore
+  # Skip third-party Claude Code marketplace plugins installed into the devcontainer.
+  # These bun.lock files are owned and versioned by the plugin authors, not this repo.
+  # We have no control over their dependency versions and do not ship them in production.
+  skip-dirs:
+    - .devcontainer/home/.claude
