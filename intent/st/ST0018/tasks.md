@@ -5,7 +5,7 @@
 - [x] WP01 — Dockerfile for `udex-cli`
 - [x] WP02 — Helm chart and k8s manifests
 - [x] WP03 — Cluster management and deploy scripts
-- [ ] WP04 — SDK test audit: port JWT-only cases to OAuth2 fixture
+- [x] WP04 — SDK test audit: port JWT-only cases to OAuth2 fixture
 - [ ] WP05 — k8s test fixture (`data_k8s`)
 - [ ] WP06 — CI job (`k8s-test` in `01-Validation.yml`)
 - [ ] WP07 — Documentation and dev-doctor updates
