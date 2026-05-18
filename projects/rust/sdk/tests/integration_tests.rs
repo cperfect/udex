@@ -1,6 +1,6 @@
 //! Integration tests for `udex-sdk`.
 //!
-//! Two fixtures are provided:
+//! Three fixtures are provided:
 //!
 //! 1. **JWT fixture** (`data()`) — always runs. Spins up an embedded server
 //!    with static-JWT auth and connects an SDK client via
@@ -10,6 +10,11 @@
 //!    (set by `HYDRA_ADMIN_URL` / `HYDRA_PUBLIC_URL` in `.env`). Connects the
 //!    SDK using [`ClientOptions::client_credentials`] so the full
 //!    `TokenManager` lifecycle is exercised.
+//!
+//! 3. **k8s fixture** (`data_k8s()`) — requires a live k3d cluster with udex
+//!    deployed (set `K8S_SERVER_URL`, e.g. `https://localhost:8443`). Skipped
+//!    silently when `K8S_SERVER_URL` is not set. Uses the same Hydra instance
+//!    as the Hydra fixture for OAuth2 token acquisition.
 
 use std::net::SocketAddr;
 use std::sync::OnceLock;
@@ -34,6 +39,7 @@ const SDK_JWT_BIND_ADDR: &str = "127.0.0.1:50054";
 const SDK_HYDRA_BIND_ADDR: &str = "127.0.0.1:15055";
 const ID_PREFIX: &str = "sdk-integration-test";
 const ID_HYDRA_PREFIX: &str = "sdk-hydra-integration-test";
+const ID_K8S_PREFIX: &str = "sdk-k8s-integration-test";
 
 // ── Cert / JWT key paths ──────────────────────────────────────────────────────
 // CARGO_MANIFEST_DIR points to the sdk/ package root at compile time.
@@ -1296,4 +1302,259 @@ async fn test_sdk_oauth2_delete_index_not_found() {
         matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::NOT_FOUND),
         "expected NotFound for nonexistent index via Hydra, got: {err}"
     );
+}
+
+// ── k8s fixture ───────────────────────────────────────────────────────────────
+//
+// Connects to a live k3d-deployed udex server. Skipped silently when
+// K8S_SERVER_URL is not set. Uses the same Hydra instance as data_hydra().
+
+type K8sFixture = (UdexClient, String); // client, index name
+
+async fn init_k8s_fixture() -> Option<K8sFixture> {
+    let server_url = match std::env::var("K8S_SERVER_URL") {
+        Ok(url) => url,
+        Err(_) => return None,
+    };
+
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    let admin_url = hydra_admin_url();
+    let public_url = hydra_public_url();
+    let issuer = std::env::var("HYDRA_ISSUER")
+        .unwrap_or_else(|_| format!("{}/", public_url.trim_end_matches('/')));
+    let jwks_url = format!("{public_url}/.well-known/jwks.json");
+
+    let index_name = format!("{ID_K8S_PREFIX}-index");
+    let audience = format!("{ID_K8S_PREFIX}-audience");
+    let client_id = format!("{ID_K8S_PREFIX}-client");
+    let client_secret = "sdk-k8s-test-secret".to_string();
+
+    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
+        .await
+        .expect("read CA cert for k8s fixture");
+
+    register_hydra_client(
+        &admin_url,
+        &client_id,
+        &client_secret,
+        &audience,
+        &format!(
+            "udex:index:v1:list \
+             udex:index:v1:create \
+             udex:index:v1:{index_name}:read \
+             udex:index:v1:**:delete \
+             udex:entry:v1:{index_name}:create \
+             udex:entry:v1:{index_name}:read \
+             udex:entry:v1:{index_name}:write \
+             udex:entry:v1:{index_name}:delete"
+        ),
+    )
+    .await;
+
+    let token_url = format!("{public_url}/oauth2/token");
+
+    // Determine issuer and audience from the k8s server's config.
+    // The k8s deployment uses HYDRA_ISSUER which matches URLS_SELF_ISSUER in Compose.
+    let _ = jwks_url; // resolved by Hydra; not needed for client construction
+    let _ = issuer;
+
+    let client = UdexClient::connect(
+        ClientOptions::builder()
+            .endpoint(&server_url)
+            .ca_cert_pem_bytes(ca_pem)
+            .client_credentials(token_url, &client_id, &client_secret)
+            .audience(&audience)
+            .scope(format!(
+                "udex:index:v1:list \
+                 udex:index:v1:create \
+                 udex:index:v1:{index_name}:read \
+                 udex:index:v1:**:delete \
+                 udex:entry:v1:{index_name}:create \
+                 udex:entry:v1:{index_name}:read \
+                 udex:entry:v1:{index_name}:write \
+                 udex:entry:v1:{index_name}:delete"
+            ))
+            .danger_allow_non_tls() // Hydra token endpoint is plain HTTP in the dev environment
+            .build()
+            .unwrap(),
+    )
+    .await
+    .expect("SDK k8s connect failed");
+
+    // Ensure the test index exists — idempotent across runs since the k8s
+    // server uses a persistent datastore.
+    match client
+        .create_index(CreateIndexRequest {
+            name: index_name.clone(),
+            display_name: index_name.clone(),
+            description: "k8s integration test index".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        })
+        .await
+    {
+        Ok(_) => {}
+        Err(udex_sdk::Error::Rpc(s)) if s.code() == udex_sdk::grpc_code::ALREADY_EXISTS => {}
+        Err(e) => panic!("k8s fixture: failed to create test index: {e}"),
+    }
+
+    Some((client, index_name))
+}
+
+pub async fn data_k8s(serial: bool) -> Data<'static, Option<K8sFixture>> {
+    static K8S_DATA: OnceLock<MaybeOnceAsync<Option<K8sFixture>>> = OnceLock::new();
+    K8S_DATA
+        .get_or_init(|| MaybeOnceAsync::new(|| Box::pin(init_k8s_fixture())))
+        .data(serial)
+        .await
+}
+
+// ── k8s-backed tests ──────────────────────────────────────────────────────────
+//
+// All tests return early (silent skip) when K8S_SERVER_URL is not set.
+// Run against a live cluster: bash projects/k8s/scripts/cluster-create.sh &&
+// bash projects/k8s/scripts/image-build.sh && bash projects/k8s/scripts/image-load.sh &&
+// bash projects/k8s/scripts/deploy.sh
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_list_indices() {
+    let d = data_k8s(false).await;
+    let Some((client, index_name)) = d.as_ref() else {
+        return;
+    };
+
+    let indices = client
+        .list_indices()
+        .await
+        .expect("list_indices against k8s failed");
+    assert!(
+        indices.iter().any(|i| &i.name == index_name),
+        "k8s test index not found in list"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_describe_index() {
+    let d = data_k8s(false).await;
+    let Some((client, index_name)) = d.as_ref() else {
+        return;
+    };
+
+    let index = client
+        .describe_index(index_name)
+        .await
+        .expect("describe_index against k8s failed");
+    assert_eq!(&index.name, index_name);
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_create_and_lookup_entry() {
+    let d = data_k8s(false).await;
+    let Some((client, index_name)) = d.as_ref() else {
+        return;
+    };
+
+    let ctx = context_input(&[("k8s_key", "k8s_value_create_lookup")]);
+
+    let created = client
+        .create_entry(index_name, ctx.clone())
+        .await
+        .expect("create_entry against k8s failed");
+    assert!(!created.key.is_empty());
+
+    let found_ctx = client
+        .lookup_context_by_key(index_name, &created.key)
+        .await
+        .expect("lookup_context_by_key against k8s failed");
+    assert_eq!(found_ctx.pairs[0].key, "k8s_key");
+
+    let found_key = client
+        .lookup_key_by_context(index_name, &created.context_hash)
+        .await
+        .expect("lookup_key_by_context against k8s failed");
+    assert_eq!(found_key.as_deref(), Some(created.key.as_str()));
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_create_entry_idempotent() {
+    let d = data_k8s(false).await;
+    let Some((client, index_name)) = d.as_ref() else {
+        return;
+    };
+
+    let ctx = context_input(&[("k8s_idem_key", "k8s_idem_value")]);
+
+    let first = client
+        .create_entry(index_name, ctx.clone())
+        .await
+        .expect("first k8s create failed");
+    let second = client
+        .create_entry(index_name, ctx)
+        .await
+        .expect("second k8s create failed");
+
+    assert_eq!(first.key, second.key, "idempotent create returned different keys");
+    assert_eq!(first.context_hash, second.context_hash);
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_delete_entry() {
+    let d = data_k8s(false).await;
+    let Some((client, index_name)) = d.as_ref() else {
+        return;
+    };
+
+    let ctx = context_input(&[("k8s_del_key", "k8s_del_value")]);
+    let created = client
+        .create_entry(index_name, ctx)
+        .await
+        .expect("k8s create for delete failed");
+
+    client
+        .delete_entry(index_name, &created.key)
+        .await
+        .expect("k8s delete_entry failed");
+
+    let err = client
+        .lookup_context_by_key(index_name, &created.key)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::NOT_FOUND),
+        "expected NOT_FOUND after k8s delete, got: {err}"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_lookup_or_create_entry() {
+    let d = data_k8s(false).await;
+    let Some((client, index_name)) = d.as_ref() else {
+        return;
+    };
+
+    let ctx = context_input(&[("k8s_loc_key", "k8s_loc_value")]);
+
+    let first = client
+        .lookup_or_create_entry(index_name, ctx.clone())
+        .await
+        .expect("k8s lookup_or_create_entry failed");
+    assert!(!first.key.is_empty());
+
+    let second = client
+        .lookup_or_create_entry(index_name, ctx)
+        .await
+        .expect("k8s lookup_or_create_entry (second) failed");
+
+    assert_eq!(second.key, first.key);
+    assert!(!second.created, "second call must not create a new entry");
 }
