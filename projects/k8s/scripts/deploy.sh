@@ -35,7 +35,10 @@ for cert_file in "${CERTS_DIR}/server.crt" "${CERTS_DIR}/server.key"; do
   fi
 done
 
-# Load .env — export only the variables this script needs.
+# Load .env — allexport exports every variable defined in the file into this
+# process's environment. set +o allexport stops exporting future assignments,
+# but variables already loaded from .env remain exported for the duration of
+# this script (not propagated to the parent shell, which ran us in a subshell).
 set -o allexport
 # shellcheck source=/dev/null
 source "${ENV_FILE}"
