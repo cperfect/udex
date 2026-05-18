@@ -10,7 +10,7 @@ data:
     bind_address = {{ .Values.server.bindAddress | quote }}
     request_timeout_secs = {{ .Values.server.requestTimeoutSecs }}
     max_connections = {{ .Values.server.maxConnections }}
-    max_message_size_bytes = {{ .Values.server.maxMessageSizeBytes }}
+    max_message_size_bytes = {{ .Values.server.maxMessageSizeBytes | int }}
 
     [server.tls]
     cert = "urn:secrets-rs:file:/etc/udex/tls/tls.crt"

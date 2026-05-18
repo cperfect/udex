@@ -1311,6 +1311,72 @@ async fn test_sdk_oauth2_delete_index_not_found() {
 
 type K8sFixture = (UdexClient, String); // client, index name
 
+// Transforms the local DATABASE_URL so k3d pods can reach Postgres on the
+// host Docker network, and swaps the database name to the test-run DB.
+fn k8s_database_url(local_url: &str, db_name: &str) -> String {
+    let with_host = local_url
+        .replace("@localhost:", "@host.k3d.internal:")
+        .replace("@127.0.0.1:", "@host.k3d.internal:");
+    // Replace the db name — last path segment after the port/host, before any '?'.
+    if let Some(at) = with_host.rfind('@') {
+        if let Some(slash) = with_host[at..].find('/') {
+            let base = &with_host[..at + slash + 1];
+            let rest = &with_host[at + slash + 1..];
+            if let Some(q) = rest.find('?') {
+                format!("{}{}{}", base, db_name, &rest[q..])
+            } else {
+                format!("{}{}", base, db_name)
+            }
+        } else {
+            format!("{}/{}", with_host, db_name)
+        }
+    } else {
+        panic!("DATABASE_URL has no @ — unexpected format: {local_url}");
+    }
+}
+
+// Redeploys the k8s server via helm + kubectl with a new DATABASE_URL.
+// Uses --set-file for the TLS material to avoid shell-escaping issues with
+// multiline PEM values.
+async fn redeploy_k8s_server(k8s_db_url: &str) {
+    let chart_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../projects/k8s/helm/udex");
+    let cert_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../server/tests/certs/server.crt");
+    let key_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../server/tests/certs/server.key");
+
+    let status = tokio::process::Command::new("helm")
+        .args([
+            "upgrade",
+            "--install",
+            "udex",
+            chart_dir,
+            "--set-string",
+            &format!("secrets.databaseUrl={k8s_db_url}"),
+            "--set-file",
+            &format!("secrets.tlsCrt={cert_path}"),
+            "--set-file",
+            &format!("secrets.tlsKey={key_path}"),
+        ])
+        .status()
+        .await
+        .expect("helm upgrade: command failed to start");
+    assert!(status.success(), "helm upgrade returned non-zero exit code");
+
+    let status = tokio::process::Command::new("kubectl")
+        .args([
+            "rollout",
+            "status",
+            "deployment/udex-udex",
+            "--timeout=120s",
+        ])
+        .status()
+        .await
+        .expect("kubectl rollout status: command failed to start");
+    assert!(
+        status.success(),
+        "kubectl rollout status returned non-zero exit code"
+    );
+}
+
 async fn init_k8s_fixture() -> Option<K8sFixture> {
     let server_url = match std::env::var("K8S_SERVER_URL") {
         Ok(url) => url,
@@ -1321,18 +1387,27 @@ async fn init_k8s_fixture() -> Option<K8sFixture> {
 
     let admin_url = hydra_admin_url();
     let public_url = hydra_public_url();
-    let issuer = std::env::var("HYDRA_ISSUER")
-        .unwrap_or_else(|_| format!("{}/", public_url.trim_end_matches('/')));
-    let jwks_url = format!("{public_url}/.well-known/jwks.json");
 
     let index_name = format!("{ID_K8S_PREFIX}-index");
-    let audience = format!("{ID_K8S_PREFIX}-audience");
+    // Audience must match jwtAudience in the k8s Helm values ("udex").
+    let audience = "udex".to_string();
     let client_id = format!("{ID_K8S_PREFIX}-client");
     let client_secret = "sdk-k8s-test-secret".to_string();
 
     let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
         .await
         .expect("read CA cert for k8s fixture");
+
+    // Create a fresh isolated test database — mirrors init_postgres() used by
+    // the in-process fixtures. The database is registered for automatic cleanup
+    // on test-binary exit (same #[ctor::dtor] mechanism).
+    let (_datastore, _pool, db_name) = init_postgres().await;
+    let local_db_url =
+        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for k8s tests");
+    let k8s_db_url = k8s_database_url(&local_db_url, &db_name);
+
+    // Redeploy the k8s server against the fresh database.
+    redeploy_k8s_server(&k8s_db_url).await;
 
     register_hydra_client(
         &admin_url,
@@ -1353,11 +1428,6 @@ async fn init_k8s_fixture() -> Option<K8sFixture> {
     .await;
 
     let token_url = format!("{public_url}/oauth2/token");
-
-    // Determine issuer and audience from the k8s server's config.
-    // The k8s deployment uses HYDRA_ISSUER which matches URLS_SELF_ISSUER in Compose.
-    let _ = jwks_url; // resolved by Hydra; not needed for client construction
-    let _ = issuer;
 
     let client = UdexClient::connect(
         ClientOptions::builder()
@@ -1382,9 +1452,8 @@ async fn init_k8s_fixture() -> Option<K8sFixture> {
     .await
     .expect("SDK k8s connect failed");
 
-    // Ensure the test index exists — idempotent across runs since the k8s
-    // server uses a persistent datastore.
-    match client
+    // Fresh database — create the test index directly, no idempotency needed.
+    client
         .create_index(CreateIndexRequest {
             name: index_name.clone(),
             display_name: index_name.clone(),
@@ -1396,21 +1465,15 @@ async fn init_k8s_fixture() -> Option<K8sFixture> {
             hash_algorithm: HashAlgorithm::Xxh3 as i32,
         })
         .await
-    {
-        Ok(_) => {}
-        Err(udex_sdk::Error::Rpc(s)) if s.code() == udex_sdk::grpc_code::ALREADY_EXISTS => {}
-        Err(e) => panic!("k8s fixture: failed to create test index: {e}"),
-    }
+        .expect("k8s fixture: failed to create test index");
 
     Some((client, index_name))
 }
 
-pub async fn data_k8s(serial: bool) -> Data<'static, Option<K8sFixture>> {
-    static K8S_DATA: OnceLock<MaybeOnceAsync<Option<K8sFixture>>> = OnceLock::new();
-    K8S_DATA
-        .get_or_init(|| MaybeOnceAsync::new(|| Box::pin(init_k8s_fixture())))
-        .data(serial)
-        .await
+pub async fn data_k8s() -> Option<K8sFixture> {
+    static K8S_DATA: tokio::sync::OnceCell<Option<K8sFixture>> =
+        tokio::sync::OnceCell::const_new();
+    K8S_DATA.get_or_init(init_k8s_fixture).await.clone()
 }
 
 // ── k8s-backed tests ──────────────────────────────────────────────────────────
@@ -1423,8 +1486,8 @@ pub async fn data_k8s(serial: bool) -> Data<'static, Option<K8sFixture>> {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_sdk_k8s_list_indices() {
-    let d = data_k8s(false).await;
-    let Some((client, index_name)) = d.as_ref() else {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
         return;
     };
 
@@ -1441,8 +1504,8 @@ async fn test_sdk_k8s_list_indices() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_sdk_k8s_describe_index() {
-    let d = data_k8s(false).await;
-    let Some((client, index_name)) = d.as_ref() else {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
         return;
     };
 
@@ -1456,8 +1519,8 @@ async fn test_sdk_k8s_describe_index() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_sdk_k8s_create_and_lookup_entry() {
-    let d = data_k8s(false).await;
-    let Some((client, index_name)) = d.as_ref() else {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
         return;
     };
 
@@ -1485,8 +1548,8 @@ async fn test_sdk_k8s_create_and_lookup_entry() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_sdk_k8s_create_entry_idempotent() {
-    let d = data_k8s(false).await;
-    let Some((client, index_name)) = d.as_ref() else {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
         return;
     };
 
@@ -1508,8 +1571,8 @@ async fn test_sdk_k8s_create_entry_idempotent() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_sdk_k8s_delete_entry() {
-    let d = data_k8s(false).await;
-    let Some((client, index_name)) = d.as_ref() else {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
         return;
     };
 
@@ -1537,8 +1600,8 @@ async fn test_sdk_k8s_delete_entry() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_sdk_k8s_lookup_or_create_entry() {
-    let d = data_k8s(false).await;
-    let Some((client, index_name)) = d.as_ref() else {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
         return;
     };
 

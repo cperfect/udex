@@ -21,7 +21,16 @@ fi
 
 echo "Creating k3d cluster '${CLUSTER_NAME}'..."
 k3d cluster create "${CLUSTER_NAME}" \
-  --port "8443:443@loadbalancer"
+  --port "8443:443@loadbalancer" \
+  --k3s-arg "--tls-san=host.docker.internal@server:*"
+
+# k3d writes 0.0.0.0 as the API server address, which is unreachable from
+# inside a devcontainer. Replace it with host.docker.internal (which is also
+# covered by the --tls-san above so cert verification succeeds).
+if grep -q "https://0.0.0.0:" "${HOME}/.kube/config" 2>/dev/null; then
+  sed -i 's|https://0.0.0.0:|https://host.docker.internal:|g' "${HOME}/.kube/config"
+  echo "Patched kubeconfig: replaced 0.0.0.0 with host.docker.internal"
+fi
 
 echo "Cluster '${CLUSTER_NAME}' ready."
 echo "kubectl context is now: $(kubectl config current-context)"
