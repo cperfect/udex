@@ -18,7 +18,7 @@ services:
       # the missing file.
 
       # mount the user's claude dir so we can keep it between rebuilts (this is gitignored)
-      - .devcontainer/home/.claude:/home/vscode/.claude
+      - ./home/.claude:/home/vscode/.claude
     env_file:
       - path: ../.env
         required: false
