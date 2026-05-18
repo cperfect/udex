@@ -19,8 +19,10 @@ data:
     max_message_size_bytes = {{ .Values.server.maxMessageSizeBytes | int }}
 
     [server.tls]
-    # These URN references tell the server to read the files from the path
-    # where the Secret volume is mounted (see deployment.yaml).
+    # These are URN references (secrets-rs indirection), NOT secrets.
+    # The server resolves them at runtime: "urn:secrets-rs:file:<path>" reads a
+    # file and "urn:secrets-rs:env:<VAR>" reads an env var. The actual key
+    # material lives in the Secret (see secret.yaml) and is never stored here.
     cert = "urn:secrets-rs:file:/etc/udex/tls/tls.crt"
     key = "urn:secrets-rs:file:/etc/udex/tls/tls.key"
 
@@ -33,8 +35,8 @@ data:
     mask_subject_in_logs = {{ .Values.authz.maskSubjectInLogs }}
 
     [datastore]
-    # The connection URL is read from the DATABASE_URL env var injected by the
-    # Deployment from the Secret, not stored here in the ConfigMap.
+    # URN reference (see [server.tls] note above) — not a secret. The actual
+    # DATABASE_URL value is injected from the Secret as an env var by the Deployment.
     connection_url = "urn:secrets-rs:env:DATABASE_URL"
     max_connections = {{ .Values.datastore.maxConnections }}
     min_connections = {{ .Values.datastore.minConnections }}

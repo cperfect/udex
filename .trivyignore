@@ -71,3 +71,10 @@ GHSA-cq8v-f236-94qc  # Not exploitable: aliased mutable references in ThreadRng
                      # all consumers declare rand = "0.8" — see FIXME above.
                      # Advisory: https://github.com/advisories/GHSA-cq8v-f236-94qc
                      # RUSTSEC: https://rustsec.org/advisories/RUSTSEC-2026-0097.html
+
+# projects/k8s/helm/udex/templates/configmap.yaml
+KSV-01010  # False positive: the flagged values are secrets-rs URN references
+           # (e.g. "urn:secrets-rs:file:/etc/udex/tls/tls.key"), not secrets.
+           # They are indirection pointers that tell the server where to load
+           # credentials at runtime (mounted Secret volume or injected env var).
+           # The actual key material is stored in secret.yaml, not here.
