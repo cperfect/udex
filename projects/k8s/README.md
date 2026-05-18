@@ -12,6 +12,57 @@ This directory contains the Helm chart and scripts for running Udex in a local [
 
 Run `bash scripts/dev-doctor.sh` from the workspace root to verify all prerequisites are met.
 
+## Architecture
+
+```mermaid
+graph LR
+    subgraph host["Host machine"]
+        client(["gRPC client\nSDK · CLI"])
+        dev(["Developer\nkubectl · helm · docker"])
+        img["Docker image\nudex:latest"]
+        pg[("PostgreSQL\nlocalhost:5432")]
+        hydra(["Hydra OAuth2\nlocalhost:4444"])
+    end
+
+    subgraph cluster["k3d cluster (Docker network)"]
+        lb["Load balancer\nhost:8443 → :443"]
+
+        subgraph traefik["Traefik (built-in)"]
+            ir["IngressRouteTCP\nHostSNI(*) · TLS passthrough"]
+        end
+
+        subgraph k8s["Kubernetes resources"]
+            svc["Service · :443"]
+            pod["Pod: udex\n:443 gRPC + TLS"]
+            cm["ConfigMap\nconfig.toml"]
+            secret["Secret\nDATABASE_URL · tls.crt · tls.key"]
+        end
+    end
+
+    %% ── Call flow ─────────────────────────────────────────────────────────
+    client  -->|"HTTPS/gRPC · host:8443"| lb
+    lb      --> ir
+    ir      -->|"TCP passthrough"| svc
+    svc     --> pod
+    pod     -->|"SQL · host.k3d.internal:5432"| pg
+    pod     -.->|"JWKS fetch\nhost.k3d.internal:4444"| hydra
+
+    %% ── Cluster management ────────────────────────────────────────────────
+    dev     -->|"image-build.sh"| img
+    img     -->|"image-load.sh"| pod
+    dev     -->|"deploy.sh · helm upgrade"| k8s
+
+    %% ── Config injection (dashed = mounted/injected at startup) ───────────
+    cm      -.->|"mounted: /etc/udex/config.toml"| pod
+    secret  -.->|"env: DATABASE_URL\nvolume: tls.crt/key"| pod
+```
+
+**Call flow** (solid lines): a gRPC client connects to the k3d load balancer on `host:8443`, which forwards to Traefik. The `IngressRouteTCP` rule passes the raw TLS bytes through to the Service and then the pod — the server terminates TLS itself. The pod connects out to PostgreSQL and (on the first request per token) fetches the Hydra JWKS to validate JWTs.
+
+**Cluster management** (solid lines, bottom): `image-build.sh` builds the Docker image locally; `image-load.sh` imports it into the k3d cluster so pods can use `imagePullPolicy: Never`. `deploy.sh` runs `helm upgrade --install`, which creates or updates all Kubernetes resources.
+
+**Config injection** (dashed lines): the ConfigMap is mounted as a file at `/etc/udex/config.toml`; the Secret is projected as both an environment variable (`DATABASE_URL`) and a volume (`tls.crt`, `tls.key`).
+
 ## Quickstart
 
 Five commands from zero to passing k8s integration tests:
