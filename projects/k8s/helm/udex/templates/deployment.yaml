@@ -84,6 +84,7 @@ spec:
           # livenessProbe: restarts the container if it stops accepting TCP connections.
           # Uses a plain TCP check rather than gRPC because it just needs to know
           # if the port is open — the readinessProbe handles actual health.
+          # TODO Consider gRPC-native health checks for production. https://github.com/grpc/grpc/blob/master/doc/health-checking.md
           livenessProbe:
             tcpSocket:
               port: 443
