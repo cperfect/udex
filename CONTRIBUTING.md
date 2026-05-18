@@ -62,6 +62,24 @@ cargo test --all-targets
 
 See [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) for the full pre-commit checklist and local check commands.
 
+### Local k8s development
+
+A local Kubernetes cluster (via k3d) lets you run the full end-to-end stack — server deployed in a pod, TLS termination via Helm, and the SDK hitting it over gRPC — without needing a remote cluster.
+
+See [projects/k8s/README.md](projects/k8s/README.md) for the full walkthrough, including a five-command quickstart and script reference.
+
+**Quickstart:**
+
+```bash
+bash projects/k8s/scripts/image-build.sh
+bash projects/k8s/scripts/cluster-create.sh
+bash projects/k8s/scripts/image-load.sh
+bash projects/k8s/scripts/deploy.sh
+bash scripts/validate-k8s-test.sh
+```
+
+k3d, kubectl, and Helm must be installed (see Prerequisites above). The devcontainer provides these automatically.
+
 ### Security scanning
 
 > Dependabot has been disabled and replaced by regular scanning with Trivy. Results are uploaded to the GitHub security panel.
@@ -116,6 +134,7 @@ Tests **MUST** be automated and reliable. Flakey tests are broken tests — fix 
 ├── projects/              # Code projects, divided by technology
 │   ├── protobuf/          # .proto definitions — source of truth for all API types
 │   ├── compose/           # Docker Compose for local dev (PostgreSQL + Hydra)
+│   ├── k8s/               # Helm chart and scripts for local k3d Kubernetes dev
 │   └── rust/              # Rust workspace (see projects/rust/CONTRIBUTING.md)
 │       ├── api/           # udex-api — generated types, authz, hashing; no I/O
 │       ├── server/        # udex-server — gRPC handlers, authn, config, logging

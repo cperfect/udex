@@ -1,3 +1,9 @@
+# ConfigMap — stores the server's config.toml as a plain-text file in the cluster.
+# The Deployment mounts this as /etc/udex/config.toml inside the container.
+# ConfigMaps are not encrypted; do not put secrets here — see secret.yaml.
+#
+# The |- block scalar renders multi-line text without a trailing newline.
+# Values are interpolated from values.yaml using Go template expressions.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -13,6 +19,8 @@ data:
     max_message_size_bytes = {{ .Values.server.maxMessageSizeBytes | int }}
 
     [server.tls]
+    # These URN references tell the server to read the files from the path
+    # where the Secret volume is mounted (see deployment.yaml).
     cert = "urn:secrets-rs:file:/etc/udex/tls/tls.crt"
     key = "urn:secrets-rs:file:/etc/udex/tls/tls.key"
 
@@ -25,6 +33,8 @@ data:
     mask_subject_in_logs = {{ .Values.authz.maskSubjectInLogs }}
 
     [datastore]
+    # The connection URL is read from the DATABASE_URL env var injected by the
+    # Deployment from the Secret, not stored here in the ConfigMap.
     connection_url = "urn:secrets-rs:env:DATABASE_URL"
     max_connections = {{ .Values.datastore.maxConnections }}
     min_connections = {{ .Values.datastore.minConnections }}
