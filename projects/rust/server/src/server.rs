@@ -75,7 +75,7 @@ where
 
     let index_service_inner = IndexService::new(datastore_arc.clone());
 
-    let mut entry_service_inner = EntryService::new(datastore_arc.clone());
+    let entry_service_inner = EntryService::new(datastore_arc.clone());
 
     index_service_inner
         .init(config.init_indexes.clone())

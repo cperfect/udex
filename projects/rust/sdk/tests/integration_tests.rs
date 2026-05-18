@@ -1335,10 +1335,44 @@ fn k8s_database_url(local_url: &str, db_name: &str) -> String {
     }
 }
 
-// Redeploys the k8s server via helm + kubectl with a new DATABASE_URL.
+// Polls the k8s server healthz endpoint after a helm rollout.
+// The readiness probe (tcpSocket) passes as soon as the port is open; Traefik
+// IngressRouteTCP routing updates lag slightly behind. Polling gRPC healthz
+// directly ensures the new pod is actually serving before create_index runs.
+async fn wait_for_k8s_server(server_url: &str, ca_pem: &[u8]) {
+    let addr = server_url
+        .strip_prefix("https://")
+        .expect("K8S_SERVER_URL must start with https://");
+    let tls = ClientTlsConfig::new()
+        .ca_certificate(Certificate::from_pem(ca_pem))
+        .domain_name("host.docker.internal");
+    for _ in 0..60 {
+        sleep(Duration::from_millis(500)).await;
+        let Ok(ch) = Channel::from_shared(format!("https://{addr}"))
+            .unwrap()
+            .tls_config(tls.clone())
+            .unwrap()
+            .connect()
+            .await
+        else {
+            continue;
+        };
+        if HealthzServiceClient::new(ch)
+            .healthz(tonic::Request::new(HealthzRequest {}))
+            .await
+            .is_ok()
+        {
+            return;
+        }
+    }
+    panic!("k8s server at {server_url} did not become ready within 30s after helm rollout");
+}
+
+// Redeploys the k8s server via helm + kubectl with a new DATABASE_URL, then
+// waits until the new pod is the only pod and is actually serving gRPC.
 // Uses --set-file for the TLS material to avoid shell-escaping issues with
 // multiline PEM values.
-async fn redeploy_k8s_server(k8s_db_url: &str) {
+async fn redeploy_k8s_server(k8s_db_url: &str, server_url: &str, ca_pem: &[u8]) {
     let chart_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../projects/k8s/helm/udex");
     let cert_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../server/tests/certs/server.crt");
     let key_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../server/tests/certs/server.key");
@@ -1375,6 +1409,33 @@ async fn redeploy_k8s_server(k8s_db_url: &str) {
         status.success(),
         "kubectl rollout status returned non-zero exit code"
     );
+
+    // kubectl rollout status returns when the new pod is Ready, but the old pod
+    // may still be Terminating and Traefik may still route traffic to it.
+    // Wait until exactly one pod exists before polling healthz.
+    for _ in 0..60u32 {
+        let out = tokio::process::Command::new("kubectl")
+            .args([
+                "get",
+                "pods",
+                "-l",
+                "app.kubernetes.io/name=udex",
+                "--no-headers",
+            ])
+            .output()
+            .await
+            .expect("kubectl get pods: command failed to start");
+        let count = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .count();
+        if count <= 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+
+    wait_for_k8s_server(server_url, ca_pem).await;
 }
 
 async fn init_k8s_fixture() -> Option<K8sFixture> {
@@ -1407,7 +1468,7 @@ async fn init_k8s_fixture() -> Option<K8sFixture> {
     let k8s_db_url = k8s_database_url(&local_db_url, &db_name);
 
     // Redeploy the k8s server against the fresh database.
-    redeploy_k8s_server(&k8s_db_url).await;
+    redeploy_k8s_server(&k8s_db_url, &server_url, &ca_pem).await;
 
     register_hydra_client(
         &admin_url,

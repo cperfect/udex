@@ -195,8 +195,8 @@ jobs:
         run: bash projects/k8s/scripts/deploy.sh
 
       - name: Run k8s integration tests
-        working-directory: projects/rust
-        run: cargo test -p udex-sdk --test integration_tests -- k8s --nocapture
+        working-directory: .
+        run: bash scripts/validate-k8s-test.sh
 
       - name: Teardown
         if: always()
