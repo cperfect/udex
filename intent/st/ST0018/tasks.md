@@ -2,7 +2,7 @@
 
 ## Work Packages
 
-- [ ] WP01 — Dockerfile for `udex-cli`
+- [x] WP01 — Dockerfile for `udex-cli`
 - [ ] WP02 — Helm chart and k8s manifests
 - [ ] WP03 — Cluster management and deploy scripts
 - [ ] WP04 — SDK test audit: port JWT-only cases to OAuth2 fixture
