@@ -187,15 +187,17 @@ if [[ "${K3D_PRESENT}" == true ]]; then
   if command -v kubectl &>/dev/null; then
     if KUBECTL_VER=$(
       kubectl version --client=true --output=yaml 2>/dev/null |
-        awk -F': ' '/gitVersion:/ {print $2; exit}' |
+        awk -F': ' '/^[[:space:]]*gitVersion:/ {print $2; exit}' |
         tr -d 'v'
     ); then
       KUBECTL_MAJOR="${KUBECTL_VER%%.*}"
-      if [[ "${KUBECTL_MAJOR}" =~ ^[0-9]+$ ]] && [[ "${KUBECTL_MAJOR}" -eq "${REQUIRED_KUBECTL_MAJOR}" ]]; then
-        pass "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)"
-      elif [[ "${KUBECTL_MAJOR}" =~ ^[0-9]+$ ]]; then
-        fail "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)" \
-          "Install kubectl: https://kubernetes.io/docs/tasks/tools/"
+      if [[ "${KUBECTL_MAJOR}" =~ ^[0-9]+$ ]]; then
+        if [[ "${KUBECTL_MAJOR}" -eq "${REQUIRED_KUBECTL_MAJOR}" ]]; then
+          pass "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)"
+        else
+          fail "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)" \
+            "Install kubectl: https://kubernetes.io/docs/tasks/tools/"
+        fi
       else
         fail "kubectl version could not be parsed" \
           "Install kubectl: https://kubernetes.io/docs/tasks/tools/"
