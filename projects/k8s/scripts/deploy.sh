@@ -53,15 +53,23 @@ fi
 # reachable from k3d pods via host.k3d.internal.
 K8S_DATABASE_URL="postgres://postgres:${POSTGRES_PASSWORD_SECRET}@host.k3d.internal:5432/postgres"
 
-TLS_CRT="$(cat "${CERTS_DIR}/server.crt")"
-TLS_KEY="$(cat "${CERTS_DIR}/server.key")"
+# Write DATABASE_URL to a temp file so it stays out of argv (and therefore
+# out of process listings and shell history). The trap ensures cleanup on
+# error; on the happy path it is deleted immediately after helm reads it.
+db_url_tmp="$(mktemp)"
+trap 'rm -f "${db_url_tmp}"' EXIT
+printf '%s' "${K8S_DATABASE_URL}" >"${db_url_tmp}"
 
+# --set-file reads each value from a file rather than argv, keeping secret
+# material out of process listings and avoiding multiline quoting issues with
+# PEM content. The TLS files are passed by their on-disk paths directly.
 echo "Deploying release '${RELEASE_NAME}' to namespace '${NAMESPACE}'..."
 helm upgrade --install "${RELEASE_NAME}" "${CHART_DIR}" \
   --namespace "${NAMESPACE}" \
-  --set-string "secrets.databaseUrl=${K8S_DATABASE_URL}" \
-  --set-string "secrets.tlsCrt=${TLS_CRT}" \
-  --set-string "secrets.tlsKey=${TLS_KEY}"
+  --set-file "secrets.databaseUrl=${db_url_tmp}" \
+  --set-file "secrets.tlsCrt=${CERTS_DIR}/server.crt" \
+  --set-file "secrets.tlsKey=${CERTS_DIR}/server.key"
+rm -f "${db_url_tmp}"
 
 echo "Waiting for rollout..."
 kubectl rollout status deployment/"${RELEASE_NAME}-udex" \
