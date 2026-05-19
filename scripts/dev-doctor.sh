@@ -191,9 +191,9 @@ if [[ "${K3D_PRESENT}" == true ]]; then
         tr -d 'v'
     ); then
       KUBECTL_MAJOR="${KUBECTL_VER%%.*}"
-      if [[ -n "${KUBECTL_VER}" ]] && [[ "${KUBECTL_MAJOR}" =~ ^[0-9]+$ ]] && [[ "${KUBECTL_MAJOR}" -eq "${REQUIRED_KUBECTL_MAJOR}" ]]; then
+      if [[ "${KUBECTL_MAJOR}" =~ ^[0-9]+$ ]] && [[ "${KUBECTL_MAJOR}" -eq "${REQUIRED_KUBECTL_MAJOR}" ]]; then
         pass "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)"
-      elif [[ -n "${KUBECTL_VER}" ]] && [[ "${KUBECTL_MAJOR}" =~ ^[0-9]+$ ]]; then
+      elif [[ "${KUBECTL_MAJOR}" =~ ^[0-9]+$ ]]; then
         fail "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)" \
           "Install kubectl: https://kubernetes.io/docs/tasks/tools/"
       else
