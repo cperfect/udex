@@ -124,6 +124,7 @@ jobs:
     if: needs.changes.outputs.k8s == 'true'
 
     env:
+      DATABASE_URL: postgres://postgres:${{ secrets.VALIDATE_POSTGRES_PASSWORD_SECRET }}@localhost:5432/postgres
       HYDRA_PUBLIC_URL: http://localhost:4444
       HYDRA_ADMIN_URL: http://localhost:4445
       HYDRA_ISSUER: http://localhost:4444/
