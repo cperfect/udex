@@ -52,7 +52,7 @@ async fn init_entry_service() -> MaybeOnceType {
         .expect("Failed to initialize index service");
 
     // Create a new datastore instance for the EntryService from the same pool
-    let mut entry_service: EntryService<PostgresDatastore> = EntryService::new(datastore.clone());
+    let entry_service: EntryService<PostgresDatastore> = EntryService::new(datastore.clone());
 
     entry_service
         .init(Arc::new(index_server))
@@ -387,6 +387,87 @@ async fn test_entry_service_lookup_or_create_validation_errors() {
         Code::InvalidArgument,
         "empty index_name → INVALID_ARGUMENT"
     );
+}
+
+/// Regression: an index created at runtime (not via init_indexes) must be
+/// usable for create_entry without a server restart.
+///
+/// Previously, EntryService.index_hasher_fns was only populated during init(),
+/// so any index created after startup caused a "hash function not found" error.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_entry_service_create_entry_after_runtime_create_index() {
+    use tonic::Request;
+    use udex_api::entry::{ContextInput, CreateEntryRequest, KeyValuePair, Value};
+    use udex_api::index::{HashAlgorithm, Index};
+    use udex_datastore::Datastore;
+
+    logging::init_test_tracing();
+
+    let datastore_fixtures = init_postgres().await;
+    let datastore = Arc::new(datastore_fixtures.0);
+
+    // Initialise both services with no pre-configured indices — hasher cache starts empty.
+    let index_service = IndexService::new(datastore.clone());
+    index_service
+        .init(vec![])
+        .await
+        .expect("index service init must succeed");
+
+    let entry_service: EntryService<PostgresDatastore> = EntryService::new(datastore.clone());
+    entry_service
+        .init(Arc::new(index_service))
+        .await
+        .expect("entry service init must succeed");
+
+    // Simulate a runtime create_index by writing directly to the datastore —
+    // the same path the IndexService gRPC handler takes.
+    let runtime_index_name = format!("{}_runtime_index", ID_PREFIX);
+    datastore
+        .create_index(Index {
+            name: runtime_index_name.clone(),
+            description: "runtime-created index".to_string(),
+            display_name: "Runtime Index".to_string(),
+            max_bulk_operations: 10,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 5,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+            created_at: Some(udex_api::now_timestamp()),
+            created_by: "test".to_string(),
+            updated_at: None,
+            updated_by: None,
+        })
+        .await
+        .expect("runtime create_index must succeed");
+
+    // create_entry must succeed without a restart — the lazy DB lookup populates the cache.
+    let response = entry_service
+        .create_entry(Request::new(CreateEntryRequest {
+            index_name: runtime_index_name,
+            context: Some(ContextInput {
+                pairs: vec![KeyValuePair {
+                    key: "user_id".to_string(),
+                    value: Some(Value {
+                        value: Some(udex_api::entry::value::Value::StringValue(
+                            "runtime_user".to_string(),
+                        )),
+                    }),
+                    kek_id: None,
+                    dek: None,
+                }],
+            }),
+        }))
+        .await
+        .expect("create_entry on a runtime-created index must succeed");
+
+    let inner = response.into_inner();
+    assert!(!inner.key.is_empty(), "key must not be empty");
+    assert!(
+        !inner.context_hash.is_empty(),
+        "context_hash must not be empty"
+    );
+    Uuid::parse_str(&inner.key).expect("key must be a valid UUID");
 }
 
 /// lookup_key_by_context_or_create: a context_hash that does not match the

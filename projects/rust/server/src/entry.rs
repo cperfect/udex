@@ -2,6 +2,7 @@
 // It contains the server implementation for the Udex Entry service.
 
 use std::{collections::HashMap, sync::Arc};
+use tokio::sync::RwLock;
 use tonic::{Request, Response, Status};
 use udex_api::{
     entry::{
@@ -14,7 +15,7 @@ use udex_api::{
         LookupKeyByContextOrCreateResponse, LookupKeyByContextRequest, LookupKeyByContextResponse,
     },
     hash::{xxh3_context_hash, ContextHasher},
-    index::{index_service_server::IndexService, ListIndicesRequest},
+    index::{index_service_server::IndexService, HashAlgorithm, ListIndicesRequest},
 };
 use udex_datastore::{
     Datastore, Entry, EntryReadOperation, EntryReadResult, EntryWriteOperation, EntryWriteResult,
@@ -28,7 +29,9 @@ use crate::{Error, HealthCheck};
 /// Handles all entry-related operations including CRUD operations and bulk operations.
 pub struct EntryService<D> {
     datastore: Arc<D>,
-    index_hasher_fns: HashMap<String, ContextHasher>, // Maps index names to ContextHasher functions
+    // Lazily populated from the datastore on first use per index; avoids requiring
+    // EntryService to be notified when IndexService creates a new index at runtime.
+    index_hasher_fns: RwLock<HashMap<String, ContextHasher>>,
 }
 
 #[tonic::async_trait]
@@ -52,17 +55,14 @@ where
 {
     /// Creates a new EntryServer instance.
     pub fn new(datastore: Arc<D>) -> Self {
-        let index_hasher_fns: HashMap<String, ContextHasher> = HashMap::new();
-
         Self {
             datastore,
-            index_hasher_fns,
+            index_hasher_fns: RwLock::new(HashMap::new()),
         }
     }
 
-    /// Initializes the EntryService.
-    pub async fn init(&mut self, index_service: Arc<dyn IndexService>) -> Result<(), Error> {
-        // Initialize the index map from the index service
+    /// Initializes the EntryService by pre-warming the hasher cache from existing indices.
+    pub async fn init(&self, index_service: Arc<dyn IndexService>) -> Result<(), Error> {
         let indexes = index_service
             .list_indices(tonic::Request::new(ListIndicesRequest {}))
             .await
@@ -70,44 +70,71 @@ where
             .into_inner()
             .indices;
 
+        let mut cache = self.index_hasher_fns.write().await;
         for index in &indexes {
-            match index.hash_algorithm {
-                h if h == udex_api::index::HashAlgorithm::Xxh3 as i32 => {
-                    self.index_hasher_fns
-                        .insert(index.name.clone(), xxh3_context_hash);
-                }
-                // Add more hash algorithms as needed
-                _ => {
-                    return Err(Error::ConfigValidation(format!(
-                        "Unsupported hash algorithm for index {}",
-                        index.name
-                    )));
-                }
-            }
+            let hasher_fn = Self::hash_algorithm_to_hasher(index.hash_algorithm).map_err(|_| {
+                Error::ConfigValidation(format!(
+                    "Unsupported hash algorithm for index {}",
+                    index.name
+                ))
+            })?;
+            cache.insert(index.name.clone(), hasher_fn);
         }
 
         Ok(())
     }
 
+    fn hash_algorithm_to_hasher(algorithm: i32) -> Result<ContextHasher, ()> {
+        if algorithm == HashAlgorithm::Xxh3 as i32 {
+            Ok(xxh3_context_hash)
+        } else {
+            Err(())
+        }
+    }
+
     /// Converts a ContextInput to a Context by generating a hash.
-    /// Uses the configured hash algorithm (xxh3) for context identification.
-    #[allow(clippy::result_large_err)]
-    fn context_input_to_context(
+    ///
+    /// The hasher for `index_name` is looked up in the in-memory cache first. On a
+    /// cache miss the index is fetched from the datastore and the cache is populated,
+    /// so indices created via `create_index` at runtime are automatically supported
+    /// without requiring a server restart.
+    async fn context_input_to_context(
         &self,
         index_name: String,
         input: ContextInput,
     ) -> Result<Context, Status> {
-        let hasher_fn = self
-            .index_hasher_fns
-            .get(&index_name)
-            .ok_or_else(|| Status::internal(format!(
-                "Hash function for index {} not found - have the indexes and this entry service been initialised?",
+        // Fast path: hasher already cached.
+        if let Some(f) = self.index_hasher_fns.read().await.get(&index_name).copied() {
+            let hash = f(&input)
+                .map_err(|e| Status::internal(format!("Failed to generate context hash: {}", e)))?;
+            return Ok(Context {
+                hash,
+                pairs: input.pairs,
+            });
+        }
+
+        // Slow path: fetch algorithm from the datastore and populate the cache.
+        let index = self
+            .datastore
+            .get_index(&index_name)
+            .await
+            .map_err(|e| self.datastore_error_to_status(e))?;
+
+        let hasher_fn = Self::hash_algorithm_to_hasher(index.hash_algorithm).map_err(|_| {
+            Status::internal(format!(
+                "Unsupported hash algorithm for index {}",
                 index_name
-            )))?;
+            ))
+        })?;
+
+        self.index_hasher_fns
+            .write()
+            .await
+            .entry(index_name)
+            .or_insert(hasher_fn);
 
         let hash = hasher_fn(&input)
             .map_err(|e| Status::internal(format!("Failed to generate context hash: {}", e)))?;
-
         Ok(Context {
             hash,
             pairs: input.pairs,
@@ -204,7 +231,9 @@ where
         let key = Uuid::new_v4();
 
         // Convert context input to context with hash
-        let context = self.context_input_to_context(index_name.clone(), context_input)?;
+        let context = self
+            .context_input_to_context(index_name.clone(), context_input)
+            .await?;
 
         // save this for the response before moving the context below
         let context_hash = context.hash.clone();
@@ -344,7 +373,9 @@ where
 
         // Server always recomputes the hash; mismatch means the client used a
         // different algorithm or corrupted the payload.
-        let context = self.context_input_to_context(req.index_name.clone(), context_input)?;
+        let context = self
+            .context_input_to_context(req.index_name.clone(), context_input)
+            .await?;
         if context.hash != req.context_hash {
             return Err(Status::invalid_argument(format!(
                 "context_hash mismatch: client supplied {}, server computed {}",
@@ -402,8 +433,9 @@ where
                         .ok_or_else(|| Status::invalid_argument("context is required"))?;
 
                     // Convert context input to context with hash
-                    let context =
-                        self.context_input_to_context(req.index_name.clone(), context_input)?;
+                    let context = self
+                        .context_input_to_context(req.index_name.clone(), context_input)
+                        .await?;
 
                     // save this for the response before moving the context below
                     let context_hash = context.hash.clone();
@@ -442,8 +474,9 @@ where
                         return Err(Status::invalid_argument("context_hash is required"));
                     }
 
-                    let context =
-                        self.context_input_to_context(req.index_name.clone(), context_input)?;
+                    let context = self
+                        .context_input_to_context(req.index_name.clone(), context_input)
+                        .await?;
                     if context.hash != lookup_op.context_hash {
                         return Err(Status::invalid_argument(format!(
                             "context_hash mismatch: client supplied {}, server computed {}",

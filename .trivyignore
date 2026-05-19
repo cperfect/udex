@@ -71,3 +71,25 @@ GHSA-cq8v-f236-94qc  # Not exploitable: aliased mutable references in ThreadRng
                      # all consumers declare rand = "0.8" — see FIXME above.
                      # Advisory: https://github.com/advisories/GHSA-cq8v-f236-94qc
                      # RUSTSEC: https://rustsec.org/advisories/RUSTSEC-2026-0097.html
+
+# projects/k8s/helm/udex/templates/deployment.yaml
+KSV-0013   # By design: image tag is "latest" — this is a local k3d development chart.
+           # image-load.sh imports udex:latest directly into the cluster; there is no
+           # registry and no other tag to pin. A fixed tag would be appropriate for a
+           # production chart but is not meaningful here.
+KSV-0117   # By design: containerPort 443 is a privileged port — this is a TLS gRPC
+           # server. NET_BIND_SERVICE capability is explicitly added in the container
+           # securityContext so the non-root process (UID 65534) can bind port 443.
+           # The low port is inherent to the service, not a misconfiguration.
+KSV-0022   # By design: NET_BIND_SERVICE is the only capability added, and all others
+           # are explicitly dropped (capabilities.drop: [ALL]). This net result is
+           # strictly more restrictive than the default capability set. The capability
+           # is required solely to allow the non-root process (UID 65534) to bind the
+           # privileged port 443 (see KSV-0117 above).
+
+# projects/k8s/helm/udex/templates/configmap.yaml
+KSV-01010  # False positive: the flagged values are secrets-rs URN references
+           # (e.g. "urn:secrets-rs:file:/etc/udex/tls/tls.key"), not secrets.
+           # They are indirection pointers that tell the server where to load
+           # credentials at runtime (mounted Secret volume or injected env var).
+           # The actual key material is stored in secret.yaml, not here.

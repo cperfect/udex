@@ -1,0 +1,43 @@
+image:
+  repository: udex
+  tag: latest
+  # Never pull — image is loaded into k3d with image-load.sh
+  pullPolicy: Never
+
+server:
+  bindAddress: "0.0.0.0:443"
+  requestTimeoutSecs: 30
+  maxConnections: 1000
+  maxMessageSizeBytes: 4194304
+
+authz:
+  # Hydra JWKS endpoint reachable from inside k3d pods via host.k3d.internal.
+  # danger_allow_non_tls is required because the local Compose Hydra has no TLS.
+  jwksUrl: "http://host.k3d.internal:4444/.well-known/jwks.json"
+  # Must match URLS_SELF_ISSUER in the Compose Hydra config.
+  jwtIssuer: "http://localhost:4444/"
+  jwtAudience: "udex"
+  dangerAllowNonTls: true
+  # Hydra uses "scp" (array) instead of the RFC 8693 "scope" claim.
+  scopeClaimName: "scp"
+  maskSubjectInLogs: false
+
+datastore:
+  maxConnections: 10
+  minConnections: 1
+  connectionTimeoutSecs: 10
+  queryTimeoutSecs: 30
+  # Compose PostgreSQL has no TLS.
+  dangerousAllowNonTls: true
+  # Apply pending migrations on startup — acceptable for local dev.
+  applyMigrations: true
+
+# Secrets — never store real values here.
+# Provide at deploy time via --set-string or scripts/deploy.sh.
+secrets:
+  # PostgreSQL connection URL, e.g. postgres://postgres:secret@host.k3d.internal:5432/postgres
+  databaseUrl: ""
+  # PEM-encoded server TLS certificate (raw PEM, not base64)
+  tlsCrt: ""
+  # PEM-encoded server TLS private key (raw PEM, not base64)
+  tlsKey: ""

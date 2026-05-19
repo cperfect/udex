@@ -52,9 +52,17 @@ cargo clippy --all-targets -- -D warnings
 > are set automatically (the devcontainer compose file points them at the `hydra`
 > service). Just run `cargo test` — no filter needed.
 >
+> **k8s integration tests** — Tests prefixed with `test_sdk_k8s_` require a live
+> k3d cluster with Udex deployed. Set `K8S_SERVER_URL=https://host.docker.internal:8443`
+> (devcontainer default) or `https://localhost:8443` (CI). When `K8S_SERVER_URL` is not
+> set the fixture returns `None` and every `test_sdk_k8s_*` test exits early — they are
+> silently skipped in a normal `cargo test` run. Use `bash scripts/validate-k8s-test.sh`
+> to run them locally; see [projects/k8s/README.md](../../projects/k8s/README.md) for
+> cluster setup.
+>
 > **Integration test naming** — Every integration test function must be prefixed
-> with a layer indicator: `test_sdk_`, `test_sdk_oauth2_`, `test_server_`,
-> `test_server_oauth2_`, `test_index_service_`, `test_entry_service_`,
+> with a layer indicator: `test_sdk_`, `test_sdk_oauth2_`, `test_sdk_k8s_`,
+> `test_server_`, `test_server_oauth2_`, `test_index_service_`, `test_entry_service_`,
 > `test_datastore_`, or `test_cli_`. This makes it immediately obvious from
 > output which layer a failing test covers. Shared fixture helpers live in
 > `udex-test-utils` — check there before duplicating fixture code.

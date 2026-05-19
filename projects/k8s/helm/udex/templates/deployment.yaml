@@ -1,0 +1,115 @@
+# Deployment — tells Kubernetes to run and maintain one replica of the udex pod.
+# A Deployment manages a ReplicaSet which in turn manages the actual Pods.
+# On upgrade, Kubernetes performs a rolling update: starts the new pod, waits
+# for it to pass the readinessProbe, then terminates the old pod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "udex.fullname" . }}
+  labels:
+    {{- include "udex.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "udex.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Checksum of the Secret — forces a pod restart whenever the Secret
+        # changes (e.g. a new DATABASE_URL or rotated TLS cert). Without this,
+        # Kubernetes would not restart pods on Secret-only changes because the
+        # Deployment spec itself has not changed.
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "udex.selectorLabels" . | nindent 8 }}
+    spec:
+      # Pod-level security context: applies defaults for all containers in the pod.
+      # runAsNonRoot + runAsUser/Group force the process to run as 'nobody' (UID 65534,
+      # present in debian:bookworm-slim) rather than root. seccompProfile restricts
+      # which syscalls the process can make to the set allowed by the container runtime.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: udex
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          # Never: image must already be present in the cluster (loaded via
+          # image-load.sh). Prevents Kubernetes from trying to pull from a
+          # registry that doesn't exist in local dev.
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Container-level security context: tightens privileges beyond the pod defaults.
+          # allowPrivilegeEscalation: false prevents the process from gaining new
+          # privileges via setuid/setgid. readOnlyRootFilesystem: true prevents any
+          # writes to the container filesystem (the server only reads config/certs from
+          # mounted volumes and writes logs to stdout — no filesystem writes needed).
+          # capabilities.drop ALL removes every Linux capability; NET_BIND_SERVICE is
+          # added back so the non-root process can bind to port 443 (a privileged port).
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
+          ports:
+            - name: grpc-tls
+              containerPort: 443
+              protocol: TCP
+          env:
+            # Inject DATABASE_URL from the Secret as an environment variable.
+            # The server reads it via the "urn:secrets-rs:env:DATABASE_URL" URI
+            # in config.toml — the actual URL string never appears in the ConfigMap.
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "udex.fullname" . }}
+                  key: DATABASE_URL
+          volumeMounts:
+            # Mount config.toml from the ConfigMap at the path the server expects.
+            # subPath mounts a single file rather than the whole ConfigMap directory.
+            - name: config
+              mountPath: /etc/udex/config.toml
+              subPath: config.toml
+              readOnly: true
+            # Mount the TLS cert and key from the Secret into /etc/udex/tls/.
+            # The server reads them via the file URNs in config.toml.
+            - name: tls
+              mountPath: /etc/udex/tls
+              readOnly: true
+          # livenessProbe: restarts the container if it stops accepting TCP connections.
+          # Uses a plain TCP check rather than gRPC because it just needs to know
+          # if the port is open — the readinessProbe handles actual health.
+          # TODO Consider gRPC-native health checks for production. https://github.com/grpc/grpc/blob/master/doc/health-checking.md
+          livenessProbe:
+            tcpSocket:
+              port: 443
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          # readinessProbe: gates traffic routing. The pod is not added to the
+          # Service endpoints (and therefore does not receive traffic from the
+          # load balancer) until this probe succeeds.
+          readinessProbe:
+            tcpSocket:
+              port: 443
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        # ConfigMap volume: exposes config.toml as a file inside the pod.
+        - name: config
+          configMap:
+            name: {{ include "udex.fullname" . }}
+        # Secret volume: exposes tls.crt and tls.key as files inside the pod.
+        # Only the listed items are projected; other Secret keys are not exposed.
+        - name: tls
+          secret:
+            secretName: {{ include "udex.fullname" . }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key

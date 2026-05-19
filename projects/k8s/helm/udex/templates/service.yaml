@@ -1,0 +1,27 @@
+# Service — a stable network endpoint that routes traffic to the pods selected
+# by selectorLabels. Pods come and go during deployments; the Service address
+# stays constant.
+#
+# type: LoadBalancer: in a cloud cluster this provisions an external load
+# balancer. In k3d, the "load balancer" is a local container that k3d creates
+# automatically and maps to the host port configured in cluster-create.sh
+# (8443 on the host → 443 in the cluster).
+#
+# The IngressRouteTCP (ingressroutetcp.yaml) sits in front of this Service and
+# handles Traefik-level TCP routing with TLS passthrough.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "udex.fullname" . }}
+  labels:
+    {{- include "udex.labels" . | nindent 4 }}
+spec:
+  type: LoadBalancer
+  # selector routes traffic to pods whose labels match selectorLabels.
+  selector:
+    {{- include "udex.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: grpc-tls
+      port: 443        # port exposed on the Service (cluster-internal)
+      targetPort: 443  # port the container listens on (must match containerPort in deployment.yaml)
+      protocol: TCP

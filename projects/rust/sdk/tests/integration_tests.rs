@@ -1,6 +1,6 @@
 //! Integration tests for `udex-sdk`.
 //!
-//! Two fixtures are provided:
+//! Three fixtures are provided:
 //!
 //! 1. **JWT fixture** (`data()`) — always runs. Spins up an embedded server
 //!    with static-JWT auth and connects an SDK client via
@@ -10,7 +10,13 @@
 //!    (set by `HYDRA_ADMIN_URL` / `HYDRA_PUBLIC_URL` in `.env`). Connects the
 //!    SDK using [`ClientOptions::client_credentials`] so the full
 //!    `TokenManager` lifecycle is exercised.
+//!
+//! 3. **k8s fixture** (`data_k8s()`) — requires a live k3d cluster with udex
+//!    deployed (set `K8S_SERVER_URL`, e.g. `https://localhost:8443`). Skipped
+//!    silently when `K8S_SERVER_URL` is not set. Uses the same Hydra instance
+//!    as the Hydra fixture for OAuth2 token acquisition.
 
+use std::io::Write;
 use std::net::SocketAddr;
 use std::sync::OnceLock;
 
@@ -34,6 +40,7 @@ const SDK_JWT_BIND_ADDR: &str = "127.0.0.1:50054";
 const SDK_HYDRA_BIND_ADDR: &str = "127.0.0.1:15055";
 const ID_PREFIX: &str = "sdk-integration-test";
 const ID_HYDRA_PREFIX: &str = "sdk-hydra-integration-test";
+const ID_K8S_PREFIX: &str = "sdk-k8s-integration-test";
 
 // ── Cert / JWT key paths ──────────────────────────────────────────────────────
 // CARGO_MANIFEST_DIR points to the sdk/ package root at compile time.
@@ -243,7 +250,9 @@ async fn init_hydra_fixture() -> HydraFixture {
 
     wait_for_server(SDK_HYDRA_BIND_ADDR, &ca_pem).await;
 
-    // Register a Hydra client with all scopes needed by the test index.
+    // Register a Hydra client with all scopes needed by the integration tests.
+    // udex:index:v1:create   — required by create_index
+    // udex:index:v1:*:delete — required by delete_index (glob matches any index name)
     register_hydra_client(
         &admin_url,
         &client_id,
@@ -251,7 +260,9 @@ async fn init_hydra_fixture() -> HydraFixture {
         &audience,
         &format!(
             "udex:index:v1:list \
+             udex:index:v1:create \
              udex:index:v1:{index_name}:read \
+             udex:index:v1:*:delete \
              udex:entry:v1:{index_name}:create \
              udex:entry:v1:{index_name}:read \
              udex:entry:v1:{index_name}:write \
@@ -270,7 +281,9 @@ async fn init_hydra_fixture() -> HydraFixture {
             .audience(&audience)
             .scope(format!(
                 "udex:index:v1:list \
+                 udex:index:v1:create \
                  udex:index:v1:{index_name}:read \
+                 udex:index:v1:*:delete \
                  udex:entry:v1:{index_name}:create \
                  udex:entry:v1:{index_name}:read \
                  udex:entry:v1:{index_name}:write \
@@ -313,7 +326,7 @@ fn make_token(
             "udex:index:v1:list \
              udex:index:v1:create \
              udex:index:v1:{index_name}:read \
-             udex:index:v1:**:delete \
+             udex:index:v1:*:delete \
              udex:entry:v1:{index_name}:create \
              udex:entry:v1:{index_name}:read \
              udex:entry:v1:{index_name}:write \
@@ -642,7 +655,9 @@ async fn test_sdk_lookup_or_create_returns_existing_entry() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_sdk_invalid_token_returns_rpc_error() {
-    // Ensure the JWT fixture server is started before connecting.
+    // JWT-specific: exercises static_bearer_token rejection at the server.
+    // The OAuth2 equivalent is test_sdk_oauth2_invalid_credentials_return_auth_error,
+    // which covers the token-acquisition failure path instead.
     let _d = data(false).await;
 
     // Connect with a deliberately wrong static token; server should reject it.
@@ -1016,6 +1031,159 @@ async fn test_sdk_oauth2_invalid_credentials_return_auth_error() {
 
 #[rstest]
 #[tokio_shared_rt::test]
+async fn test_sdk_oauth2_lookup_or_create_creates_new_entry() {
+    let d = data_hydra(false).await;
+    let client = &d.0;
+    let index_name = &d.1;
+
+    let ctx = context_input(&[("hydra_loc_key", "hydra_loc_create_value")]);
+
+    let resp = client
+        .lookup_or_create_entry(index_name, ctx.clone())
+        .await
+        .expect("lookup_or_create_entry via Hydra failed");
+
+    assert!(resp.created, "created must be true for an unseen context");
+    assert!(!resp.key.is_empty());
+    assert!(!resp.context_hash.is_empty());
+
+    let via_create = client
+        .create_entry(index_name, ctx)
+        .await
+        .expect("create_entry via Hydra failed");
+    assert_eq!(resp.context_hash, via_create.context_hash);
+    assert_eq!(resp.key, via_create.key);
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_oauth2_lookup_or_create_returns_existing_entry() {
+    let d = data_hydra(false).await;
+    let client = &d.0;
+    let index_name = &d.1;
+
+    let ctx = context_input(&[("hydra_loc_key", "hydra_loc_found_value")]);
+
+    let first = client
+        .lookup_or_create_entry(index_name, ctx.clone())
+        .await
+        .expect("first lookup_or_create_entry via Hydra failed");
+    assert!(first.created);
+
+    let second = client
+        .lookup_or_create_entry(index_name, ctx)
+        .await
+        .expect("second lookup_or_create_entry via Hydra failed");
+
+    assert!(!second.created, "second call must not create a new entry");
+    assert_eq!(second.key, first.key);
+    assert_eq!(second.context_hash, first.context_hash);
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_oauth2_envelope_encrypted_entry() {
+    use aes_gcm::{
+        aead::{Aead, AeadCore, KeyInit, OsRng},
+        Aes256Gcm, Key, Nonce,
+    };
+    use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+
+    let d = data_hydra(false).await;
+    let client = &d.0;
+    let index_name = &d.1;
+
+    let kek_id = "hydra-test-kek-v1";
+    let kek_bytes = Aes256Gcm::generate_key(OsRng);
+    let kek = Aes256Gcm::new(&kek_bytes);
+    let dek_bytes = Aes256Gcm::generate_key(OsRng);
+    let dek = Aes256Gcm::new(&dek_bytes);
+
+    let plaintext_email = "bob@example.com";
+    let value_nonce = Aes256Gcm::generate_nonce(OsRng);
+    let value_ct = dek
+        .encrypt(&value_nonce, plaintext_email.as_bytes())
+        .expect("encrypt value");
+    let encrypted_value = B64.encode([value_nonce.as_slice(), &value_ct].concat());
+
+    let dek_nonce = Aes256Gcm::generate_nonce(OsRng);
+    let dek_ct = kek
+        .encrypt(&dek_nonce, dek_bytes.as_slice())
+        .expect("encrypt DEK");
+    let encrypted_dek = B64.encode([dek_nonce.as_slice(), &dek_ct].concat());
+
+    let ctx = ContextInput {
+        pairs: vec![
+            KeyValuePair {
+                key: "user_id".to_string(),
+                value: Some(Value {
+                    value: Some(udex_sdk::value::Value::StringValue("99".to_string())),
+                }),
+                kek_id: None,
+                dek: None,
+            },
+            KeyValuePair {
+                key: "email".to_string(),
+                value: Some(Value {
+                    value: Some(udex_sdk::value::Value::StringValue(encrypted_value)),
+                }),
+                kek_id: Some(kek_id.to_string()),
+                dek: Some(encrypted_dek),
+            },
+        ],
+    };
+
+    let created = client
+        .create_entry(index_name, ctx)
+        .await
+        .expect("create_entry via Hydra failed");
+    assert!(!created.key.is_empty());
+
+    let found_ctx = client
+        .lookup_context_by_key(index_name, &created.key)
+        .await
+        .expect("lookup_context_by_key via Hydra failed");
+
+    let email_pair = found_ctx
+        .pairs
+        .iter()
+        .find(|p| p.key == "email")
+        .expect("email pair missing");
+    assert_eq!(email_pair.kek_id.as_deref(), Some(kek_id));
+    let returned_encrypted_dek = email_pair.dek.as_deref().expect("missing dek on pair");
+
+    let dek_bytes_enc = B64
+        .decode(returned_encrypted_dek)
+        .expect("base64 decode DEK");
+    let (dek_nonce_bytes, dek_ct_bytes) = dek_bytes_enc.split_at(12);
+    let unwrapped_dek = kek
+        .decrypt(Nonce::from_slice(dek_nonce_bytes), dek_ct_bytes)
+        .expect("decrypt DEK");
+    let dek_dec = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&unwrapped_dek));
+
+    let enc_value = match email_pair
+        .value
+        .as_ref()
+        .and_then(|v| v.value.as_ref())
+        .expect("missing value")
+    {
+        udex_sdk::value::Value::StringValue(s) => s.clone(),
+        v => panic!("unexpected value type: {v:?}"),
+    };
+    let enc_bytes = B64.decode(&enc_value).expect("base64 decode value");
+    let (val_nonce_bytes, val_ct_bytes) = enc_bytes.split_at(12);
+    let decrypted = dek_dec
+        .decrypt(Nonce::from_slice(val_nonce_bytes), val_ct_bytes)
+        .expect("decrypt value");
+
+    assert_eq!(
+        String::from_utf8(decrypted).expect("UTF-8"),
+        plaintext_email
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
 async fn test_sdk_delete_index_empty() {
     let d = data(false).await;
     let client = &d.0;
@@ -1078,4 +1246,464 @@ async fn test_sdk_delete_index_not_found() {
         matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::NOT_FOUND),
         "expected NotFound for nonexistent index, got: {err}"
     );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_oauth2_delete_index_empty() {
+    let d = data_hydra(false).await;
+    let client = &d.0;
+
+    let name = format!("{ID_HYDRA_PREFIX}-delete-empty");
+
+    client
+        .create_index(CreateIndexRequest {
+            name: name.clone(),
+            display_name: "Delete Empty Hydra".to_string(),
+            description: "hydra delete test".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 10,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        })
+        .await
+        .expect("create_index via Hydra failed");
+
+    client
+        .delete_index(&name)
+        .await
+        .expect("delete_index on empty index via Hydra should succeed");
+
+    let err = client.delete_index(&name).await.unwrap_err();
+    assert!(
+        matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::NOT_FOUND),
+        "deleted index should not be found on re-delete via Hydra, got: {err}"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_oauth2_delete_index_not_empty() {
+    let d = data_hydra(false).await;
+    let client = &d.0;
+    let index_name = &d.1;
+
+    // The shared Hydra index has entries from other tests; deletion must fail.
+    let err = client.delete_index(index_name).await.unwrap_err();
+    assert!(
+        matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::FAILED_PRECONDITION),
+        "expected FailedPrecondition for non-empty index via Hydra, got: {err}"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_oauth2_delete_index_not_found() {
+    let d = data_hydra(false).await;
+    let client = &d.0;
+
+    let err = client
+        .delete_index("nonexistent-hydra-index-xyz")
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::NOT_FOUND),
+        "expected NotFound for nonexistent index via Hydra, got: {err}"
+    );
+}
+
+// ── k8s fixture ───────────────────────────────────────────────────────────────
+//
+// Connects to a live k3d-deployed udex server. Skipped silently when
+// K8S_SERVER_URL is not set. Uses the same Hydra instance as data_hydra().
+
+type K8sFixture = (UdexClient, String); // client, index name
+
+// Transforms the local DATABASE_URL so k3d pods can reach Postgres on the
+// host Docker network, and swaps the database name to the test-run DB.
+fn k8s_database_url(local_url: &str, db_name: &str) -> String {
+    let with_host = local_url
+        .replace("@localhost:", "@host.k3d.internal:")
+        .replace("@127.0.0.1:", "@host.k3d.internal:");
+    // Replace the db name — last path segment after the port/host, before any '?'.
+    if let Some(at) = with_host.rfind('@') {
+        if let Some(slash) = with_host[at..].find('/') {
+            let base = &with_host[..at + slash + 1];
+            let rest = &with_host[at + slash + 1..];
+            if let Some(q) = rest.find('?') {
+                format!("{}{}{}", base, db_name, &rest[q..])
+            } else {
+                format!("{}{}", base, db_name)
+            }
+        } else {
+            format!("{}/{}", with_host, db_name)
+        }
+    } else {
+        panic!("DATABASE_URL has no @ — unexpected format: {local_url}");
+    }
+}
+
+// Polls the k8s server healthz endpoint after a helm rollout.
+// The readiness probe (tcpSocket) passes as soon as the port is open; Traefik
+// IngressRouteTCP routing updates lag slightly behind. Polling gRPC healthz
+// directly ensures the new pod is actually serving before create_index runs.
+async fn wait_for_k8s_server(server_url: &str, ca_pem: &[u8]) {
+    let addr = server_url
+        .strip_prefix("https://")
+        .expect("K8S_SERVER_URL must start with https://");
+    let tls = ClientTlsConfig::new()
+        .ca_certificate(Certificate::from_pem(ca_pem))
+        .domain_name("host.docker.internal");
+    for _ in 0..60 {
+        sleep(Duration::from_millis(500)).await;
+        let Ok(ch) = Channel::from_shared(format!("https://{addr}"))
+            .unwrap()
+            .tls_config(tls.clone())
+            .unwrap()
+            .connect()
+            .await
+        else {
+            continue;
+        };
+        if HealthzServiceClient::new(ch)
+            .healthz(tonic::Request::new(HealthzRequest {}))
+            .await
+            .is_ok()
+        {
+            return;
+        }
+    }
+    panic!("k8s server at {server_url} did not become ready within 30s after helm rollout");
+}
+
+// Redeploys the k8s server via helm + kubectl with a new DATABASE_URL, then
+// waits until the new pod is the only pod and is actually serving gRPC.
+// Uses --set-file for the TLS material to avoid shell-escaping issues with
+// multiline PEM values.
+async fn redeploy_k8s_server(k8s_db_url: &str, server_url: &str, ca_pem: &[u8]) {
+    let chart_dir = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../projects/k8s/helm/udex"
+    );
+    let cert_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../server/tests/certs/server.crt"
+    );
+    let key_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../server/tests/certs/server.key"
+    );
+    let mut db_url_file = tempfile::NamedTempFile::new().expect("tempfile for DATABASE_URL");
+    db_url_file
+        .write_all(k8s_db_url.as_bytes())
+        .expect("write DATABASE_URL temp file");
+    db_url_file.flush().expect("flush DATABASE_URL temp file");
+
+    let status = tokio::process::Command::new("helm")
+        .args([
+            "upgrade",
+            "--install",
+            "udex",
+            chart_dir,
+            "--set-file",
+            &format!("secrets.databaseUrl={}", db_url_file.path().display()),
+            "--set-file",
+            &format!("secrets.tlsCrt={cert_path}"),
+            "--set-file",
+            &format!("secrets.tlsKey={key_path}"),
+        ])
+        .status()
+        .await
+        .expect("helm upgrade: command failed to start");
+    assert!(status.success(), "helm upgrade returned non-zero exit code");
+
+    let status = tokio::process::Command::new("kubectl")
+        .args([
+            "rollout",
+            "status",
+            "deployment/udex-udex",
+            "--timeout=120s",
+        ])
+        .status()
+        .await
+        .expect("kubectl rollout status: command failed to start");
+    assert!(
+        status.success(),
+        "kubectl rollout status returned non-zero exit code"
+    );
+
+    // kubectl rollout status returns when the new pod is Ready, but the old pod
+    // may still be Terminating and Traefik may still route traffic to it.
+    // Wait until exactly one pod exists before polling healthz.
+    for _ in 0..60u32 {
+        let out = tokio::process::Command::new("kubectl")
+            .args([
+                "get",
+                "pods",
+                "-l",
+                "app.kubernetes.io/name=udex",
+                "--no-headers",
+            ])
+            .output()
+            .await
+            .expect("kubectl get pods: command failed to start");
+        let count = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .count();
+        if count <= 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+
+    wait_for_k8s_server(server_url, ca_pem).await;
+}
+
+async fn init_k8s_fixture() -> Option<K8sFixture> {
+    let server_url = match std::env::var("K8S_SERVER_URL") {
+        Ok(url) => url,
+        Err(_) => return None,
+    };
+
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    let admin_url = hydra_admin_url();
+    let public_url = hydra_public_url();
+
+    let index_name = format!("{ID_K8S_PREFIX}-index");
+    // Audience must match jwtAudience in the k8s Helm values ("udex").
+    let audience = "udex".to_string();
+    let client_id = format!("{ID_K8S_PREFIX}-client");
+    let client_secret = "sdk-k8s-test-secret".to_string();
+
+    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
+        .await
+        .expect("read CA cert for k8s fixture");
+
+    // Create a fresh isolated test database — mirrors init_postgres() used by
+    // the in-process fixtures. The database is registered for automatic cleanup
+    // on test-binary exit (same #[ctor::dtor] mechanism).
+    let (_datastore, _pool, db_name) = init_postgres().await;
+    let local_db_url =
+        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for k8s tests");
+    let k8s_db_url = k8s_database_url(&local_db_url, &db_name);
+
+    // Redeploy the k8s server against the fresh database.
+    redeploy_k8s_server(&k8s_db_url, &server_url, &ca_pem).await;
+
+    register_hydra_client(
+        &admin_url,
+        &client_id,
+        &client_secret,
+        &audience,
+        &format!(
+            "udex:index:v1:list \
+             udex:index:v1:create \
+             udex:index:v1:{index_name}:read \
+             udex:index:v1:*:delete \
+             udex:entry:v1:{index_name}:create \
+             udex:entry:v1:{index_name}:read \
+             udex:entry:v1:{index_name}:write \
+             udex:entry:v1:{index_name}:delete"
+        ),
+    )
+    .await;
+
+    let token_url = format!("{public_url}/oauth2/token");
+
+    let client = UdexClient::connect(
+        ClientOptions::builder()
+            .endpoint(&server_url)
+            .ca_cert_pem_bytes(ca_pem)
+            .client_credentials(token_url, &client_id, &client_secret)
+            .audience(&audience)
+            .scope(format!(
+                "udex:index:v1:list \
+                 udex:index:v1:create \
+                 udex:index:v1:{index_name}:read \
+                 udex:index:v1:*:delete \
+                 udex:entry:v1:{index_name}:create \
+                 udex:entry:v1:{index_name}:read \
+                 udex:entry:v1:{index_name}:write \
+                 udex:entry:v1:{index_name}:delete"
+            ))
+            .danger_allow_non_tls() // Hydra token endpoint is plain HTTP in the dev environment
+            .build()
+            .unwrap(),
+    )
+    .await
+    .expect("SDK k8s connect failed");
+
+    // Fresh database — create the test index directly, no idempotency needed.
+    client
+        .create_index(CreateIndexRequest {
+            name: index_name.clone(),
+            display_name: index_name.clone(),
+            description: "k8s integration test index".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        })
+        .await
+        .expect("k8s fixture: failed to create test index");
+
+    Some((client, index_name))
+}
+
+pub async fn data_k8s() -> Option<K8sFixture> {
+    static K8S_DATA: tokio::sync::OnceCell<Option<K8sFixture>> = tokio::sync::OnceCell::const_new();
+    K8S_DATA.get_or_init(init_k8s_fixture).await.clone()
+}
+
+// ── k8s-backed tests ──────────────────────────────────────────────────────────
+//
+// All tests return early (silent skip) when K8S_SERVER_URL is not set.
+// Run against a live cluster: bash projects/k8s/scripts/cluster-create.sh &&
+// bash projects/k8s/scripts/image-build.sh && bash projects/k8s/scripts/image-load.sh &&
+// bash projects/k8s/scripts/deploy.sh
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_list_indices() {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
+        return;
+    };
+
+    let indices = client
+        .list_indices()
+        .await
+        .expect("list_indices against k8s failed");
+    assert!(
+        indices.iter().any(|i| &i.name == index_name),
+        "k8s test index not found in list"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_describe_index() {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
+        return;
+    };
+
+    let index = client
+        .describe_index(index_name)
+        .await
+        .expect("describe_index against k8s failed");
+    assert_eq!(&index.name, index_name);
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_create_and_lookup_entry() {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
+        return;
+    };
+
+    let ctx = context_input(&[("k8s_key", "k8s_value_create_lookup")]);
+
+    let created = client
+        .create_entry(index_name, ctx.clone())
+        .await
+        .expect("create_entry against k8s failed");
+    assert!(!created.key.is_empty());
+
+    let found_ctx = client
+        .lookup_context_by_key(index_name, &created.key)
+        .await
+        .expect("lookup_context_by_key against k8s failed");
+    assert_eq!(found_ctx.pairs[0].key, "k8s_key");
+
+    let found_key = client
+        .lookup_key_by_context(index_name, &created.context_hash)
+        .await
+        .expect("lookup_key_by_context against k8s failed");
+    assert_eq!(found_key.as_deref(), Some(created.key.as_str()));
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_create_entry_idempotent() {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
+        return;
+    };
+
+    let ctx = context_input(&[("k8s_idem_key", "k8s_idem_value")]);
+
+    let first = client
+        .create_entry(index_name, ctx.clone())
+        .await
+        .expect("first k8s create failed");
+    let second = client
+        .create_entry(index_name, ctx)
+        .await
+        .expect("second k8s create failed");
+
+    assert_eq!(
+        first.key, second.key,
+        "idempotent create returned different keys"
+    );
+    assert_eq!(first.context_hash, second.context_hash);
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_delete_entry() {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
+        return;
+    };
+
+    let ctx = context_input(&[("k8s_del_key", "k8s_del_value")]);
+    let created = client
+        .create_entry(index_name, ctx)
+        .await
+        .expect("k8s create for delete failed");
+
+    client
+        .delete_entry(index_name, &created.key)
+        .await
+        .expect("k8s delete_entry failed");
+
+    let err = client
+        .lookup_context_by_key(index_name, &created.key)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::NOT_FOUND),
+        "expected NOT_FOUND after k8s delete, got: {err}"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_lookup_or_create_entry() {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
+        return;
+    };
+
+    let ctx = context_input(&[("k8s_loc_key", "k8s_loc_value")]);
+
+    let first = client
+        .lookup_or_create_entry(index_name, ctx.clone())
+        .await
+        .expect("k8s lookup_or_create_entry failed");
+    assert!(!first.key.is_empty());
+
+    let second = client
+        .lookup_or_create_entry(index_name, ctx)
+        .await
+        .expect("k8s lookup_or_create_entry (second) failed");
+
+    assert_eq!(second.key, first.key);
+    assert!(!second.created, "second call must not create a new entry");
 }

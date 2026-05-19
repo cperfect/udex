@@ -185,6 +185,7 @@ This project is developed using [Claude Code](https://claude.ai/code) (Anthropic
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting policy |
 | [.devcontainer/](.devcontainer/README.md) | VS Code dev container — tools and first-time setup |
 | [projects/compose/](projects/compose/README.md) | Docker Compose — local PostgreSQL + Hydra services |
+| [projects/k8s/](projects/k8s/README.md) | Helm chart and scripts for local k3d Kubernetes development |
 | [projects/protobuf/](projects/protobuf/README.md) | Protobuf API definitions — source of truth for all API types |
 | [projects/rust/api/](projects/rust/api/README.md) | `udex-api` — generated types, authz, hashing |
 | [projects/rust/server/](projects/rust/server/README.md) | `udex-server` — gRPC server |
