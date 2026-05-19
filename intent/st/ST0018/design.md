@@ -29,9 +29,9 @@ The k8s deployment uses OAuth2 only. `AuthzConfig.jwks_url` is set to `http://ho
 
 ### Server configuration
 
-The server reads a YAML config file via `UdexConfig::load`. In k8s:
+The server reads a TOML config file via `UdexConfig::load`. In k8s:
 
-- The config file is mounted from a ConfigMap at `/etc/udex/config.yaml`.
+- The config file is mounted from a ConfigMap at `/etc/udex/config.toml`.
 - TLS cert and key are mounted from a k8s Secret at `/etc/udex/tls/tls.crt` and `/etc/udex/tls/tls.key`. The config references them as `urn:secrets-rs:file:/etc/udex/tls/tls.crt` etc.
 - `DATABASE_URL` is injected as an environment variable from a k8s Secret. The config references it as `urn:secrets-rs:env:DATABASE_URL`.
 - Postgres in Compose does not have TLS, so `datastore.dangerous_allow_non_tls = true`.
