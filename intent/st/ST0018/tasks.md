@@ -19,8 +19,8 @@ File: `projects/rust/cli/Dockerfile`
 - Multi-stage: `builder` (rust:1.95.0-bookworm + protoc) and `runtime` (debian:bookworm-slim).
 - `ARG PROFILE=release`; `cargo build --profile ${PROFILE} -p udex-cli`.
 - Builder copies binary to `/build/udex` to normalise the `debug`/`release` path difference.
-- Runtime stage: `EXPOSE 443`, `ENTRYPOINT ["udex", "serve", "--config", "/etc/udex/config.yaml"]`.
-- Verify: `docker build -f projects/rust/cli/Dockerfile projects/rust/ -t udex:dev --build-arg PROFILE=dev` and `docker build ... -t udex:latest` both succeed.
+- Runtime stage: `EXPOSE 443`, `ENTRYPOINT ["udex", "serve", "--config", "/etc/udex/config.toml"]`.
+- Verify: `docker build -f projects/rust/cli/Dockerfile projects/ -t udex:dev --build-arg PROFILE=dev` and `docker build ... -t udex:latest` both succeed.
 
 ### WP02 — Helm chart and k8s manifests
 
@@ -28,9 +28,9 @@ Directory: `projects/k8s/helm/udex/`
 
 - `Chart.yaml` with name, version, appVersion.
 - `values.yaml` with all configurable fields: image, server, authz, datastore.
-- `templates/configmap.yaml` — renders the full `UdexConfig` YAML from values.
+- `templates/configmap.yaml` — renders the full `UdexConfig` TOML from values.
 - `templates/secret.yaml` — holds `DATABASE_URL`, `tls.crt`, `tls.key` (base64-encoded from values or `--set`).
-- `templates/deployment.yaml` — mounts ConfigMap as `/etc/udex/config.yaml`; mounts Secret volume for TLS files; injects `DATABASE_URL` env var from Secret.
+- `templates/deployment.yaml` — mounts ConfigMap as `/etc/udex/config.toml`; mounts Secret volume for TLS files; injects `DATABASE_URL` env var from Secret.
 - `templates/service.yaml` — `type: LoadBalancer`, port 443.
 - Verify: `helm lint projects/k8s/helm/udex` passes with no errors.
 
@@ -40,7 +40,7 @@ Directory: `projects/k8s/scripts/`
 
 - `cluster-create.sh` — `k3d cluster create udex --port "8443:443@loadbalancer"`. Idempotent (skip if cluster exists).
 - `cluster-delete.sh` — `k3d cluster delete udex`.
-- `image-build.sh` — `docker build -f projects/rust/cli/Dockerfile projects/rust/ -t udex:latest [--build-arg PROFILE=...]`. Accepts optional `--dev` flag.
+- `image-build.sh` — `docker build -f projects/rust/cli/Dockerfile projects/ -t udex:latest [--build-arg PROFILE=...]`. Accepts optional `--dev` flag.
 - `image-load.sh` — `k3d image import udex:latest -c udex`.
 - `deploy.sh` — `helm upgrade --install udex projects/k8s/helm/udex --set ...` (passes DATABASE_URL, TLS cert/key from env or `.env`). Runs `kubectl rollout status deployment/udex`.
 - `undeploy.sh` — `helm uninstall udex`.

@@ -16,6 +16,7 @@
 //!    silently when `K8S_SERVER_URL` is not set. Uses the same Hydra instance
 //!    as the Hydra fixture for OAuth2 token acquisition.
 
+use std::io::Write;
 use std::net::SocketAddr;
 use std::sync::OnceLock;
 
@@ -1393,6 +1394,11 @@ async fn redeploy_k8s_server(k8s_db_url: &str, server_url: &str, ca_pem: &[u8]) 
         env!("CARGO_MANIFEST_DIR"),
         "/../server/tests/certs/server.key"
     );
+    let mut db_url_file = tempfile::NamedTempFile::new().expect("tempfile for DATABASE_URL");
+    db_url_file
+        .write_all(k8s_db_url.as_bytes())
+        .expect("write DATABASE_URL temp file");
+    db_url_file.flush().expect("flush DATABASE_URL temp file");
 
     let status = tokio::process::Command::new("helm")
         .args([
@@ -1400,8 +1406,8 @@ async fn redeploy_k8s_server(k8s_db_url: &str, server_url: &str, ca_pem: &[u8]) 
             "--install",
             "udex",
             chart_dir,
-            "--set-string",
-            &format!("secrets.databaseUrl={k8s_db_url}"),
+            "--set-file",
+            &format!("secrets.databaseUrl={}", db_url_file.path().display()),
             "--set-file",
             &format!("secrets.tlsCrt={cert_path}"),
             "--set-file",

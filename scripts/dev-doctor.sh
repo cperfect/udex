@@ -29,6 +29,10 @@ fail() {
   printf "         → %s\n" "$2"
 }
 
+is_nonempty_integer() {
+  [[ -n "${1:-}" ]] && [[ "${1}" =~ ^[0-9]+$ ]]
+}
+
 # --- Tools -----------------------------------------------------------------
 echo ""
 echo "==> Tools"
@@ -172,10 +176,13 @@ K3D_PRESENT=false
 if command -v k3d &>/dev/null; then
   K3D_VER=$(k3d version 2>/dev/null | head -1 | awk '{print $3}' | tr -d 'v')
   K3D_MAJOR="${K3D_VER%%.*}"
-  if [[ "${K3D_MAJOR}" -eq "${REQUIRED_K3D_MAJOR}" ]]; then
+  if is_nonempty_integer "${K3D_MAJOR}" && [[ "${K3D_MAJOR}" -eq "${REQUIRED_K3D_MAJOR}" ]]; then
     pass "k3d $K3D_VER (need major $REQUIRED_K3D_MAJOR)"
-  else
+  elif is_nonempty_integer "${K3D_MAJOR}"; then
     fail "k3d $K3D_VER (need major $REQUIRED_K3D_MAJOR)" \
+      "Install k3d: https://k3d.io/stable/#installation"
+  else
+    fail "k3d version could not be parsed" \
       "Install k3d: https://k3d.io/stable/#installation"
   fi
   K3D_PRESENT=true
@@ -218,10 +225,13 @@ if [[ "${K3D_PRESENT}" == true ]]; then
   if command -v helm &>/dev/null; then
     HELM_VER=$(helm version --short 2>/dev/null | cut -d'+' -f1 | tr -d 'v')
     HELM_MAJOR="${HELM_VER%%.*}"
-    if [[ "${HELM_MAJOR}" -eq "${REQUIRED_HELM_MAJOR}" ]]; then
+    if is_nonempty_integer "${HELM_MAJOR}" && [[ "${HELM_MAJOR}" -eq "${REQUIRED_HELM_MAJOR}" ]]; then
       pass "helm $HELM_VER (need major $REQUIRED_HELM_MAJOR)"
-    else
+    elif is_nonempty_integer "${HELM_MAJOR}"; then
       fail "helm $HELM_VER (need major $REQUIRED_HELM_MAJOR)" \
+        "Install Helm: https://helm.sh/docs/intro/install/"
+    else
+      fail "helm version could not be parsed" \
         "Install Helm: https://helm.sh/docs/intro/install/"
     fi
   else
@@ -267,10 +277,13 @@ REQUIRED_JQ_MAJOR="1"
 if command -v jq &>/dev/null; then
   JQ_VER=$(jq --version 2>/dev/null | sed 's/^jq-//')
   JQ_MAJOR="${JQ_VER%%.*}"
-  if [[ "${JQ_MAJOR}" -eq "${REQUIRED_JQ_MAJOR}" ]]; then
+  if is_nonempty_integer "${JQ_MAJOR}" && [[ "${JQ_MAJOR}" -eq "${REQUIRED_JQ_MAJOR}" ]]; then
     pass "jq $JQ_VER (need major $REQUIRED_JQ_MAJOR)"
-  else
+  elif is_nonempty_integer "${JQ_MAJOR}"; then
     fail "jq $JQ_VER (need major $REQUIRED_JQ_MAJOR)" \
+      "Debian/Ubuntu: apt-get install jq   macOS: brew install jq"
+  else
+    fail "jq version could not be parsed" \
       "Debian/Ubuntu: apt-get install jq   macOS: brew install jq"
   fi
 else

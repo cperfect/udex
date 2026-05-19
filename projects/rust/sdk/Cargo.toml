@@ -49,3 +49,4 @@ secrets-rs = { workspace = true }
 ory-hydra-client = { version = "26.2", default-features = false, features = ["rustls-tls"] }
 aes-gcm = "0.10"
 base64 = "0.22"
+tempfile = { workspace = true }
