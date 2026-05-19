@@ -124,6 +124,16 @@ udex token inspect eyJhbGci...
 See [JWT Claims](../api/README.md#jwt-claims) for the required token structure
 and permission format.
 
+### Version
+
+```bash
+# Human-readable output
+udex version           # udex 0.1.0
+
+# Machine-readable JSON (useful for scripting)
+udex version --json    # {"version":"0.1.0"}
+```
+
 ### Context utilities
 
 ```bash
