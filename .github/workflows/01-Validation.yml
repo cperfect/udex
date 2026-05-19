@@ -42,6 +42,27 @@ jobs:
         working-directory: .
         run: bash scripts/validate-lint-bench.sh
 
+  k8s-lint:
+    name: k8s Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install helm v4.0.0
+        run: |
+          curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4
+          chmod 700 get_helm.sh
+          ./get_helm.sh -v v4.0.0
+          rm get_helm.sh
+
+      # Each step delegates to a script in scripts/ so developers can run the
+      # exact same command locally and get the same outcome as CI.
+      - name: Helm lint
+        run: bash scripts/validate-lint-helm.sh
+
+      # TODO: Add Dockerfile linting with hadolint once it is added to the
+      # devcontainer. https://github.com/hadolint/hadolint
+
   test:
     name: Build & Test
     runs-on: ubuntu-latest

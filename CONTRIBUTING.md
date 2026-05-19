@@ -81,6 +81,12 @@ bash scripts/validate-k8s-test.sh
 
 k3d, kubectl, and Helm must be installed (see Prerequisites above). The devcontainer provides these automatically.
 
+To lint the Helm chart locally (mirrors the `k8s-lint` CI job):
+
+```bash
+bash scripts/validate-lint-helm.sh
+```
+
 ### Security scanning
 
 > Dependabot has been disabled and replaced by regular scanning with Trivy. Results are uploaded to the GitHub security panel.
