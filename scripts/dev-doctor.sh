@@ -186,12 +186,15 @@ if [[ "${K3D_PRESENT}" == true ]]; then
   REQUIRED_KUBECTL_MAJOR="1"
   if command -v kubectl &>/dev/null; then
     if KUBECTL_VER=$(
-      kubectl version --client --output=yaml 2>/dev/null |
-        awk -F': ' '/^[[:space:]]*gitVersion:/ {print $2; exit}' |
+      kubectl version --client --output=jsonpath='{.clientVersion.gitVersion}' 2>/dev/null |
         tr -d 'v'
     ); then
-      KUBECTL_MAJOR="${KUBECTL_VER%%.*}"
-      if [[ "${KUBECTL_MAJOR}" =~ ^[0-9]+$ ]]; then
+      if [[ -n "${KUBECTL_VER}" ]]; then
+        KUBECTL_MAJOR="${KUBECTL_VER%%.*}"
+      else
+        KUBECTL_MAJOR=""
+      fi
+      if [[ -n "${KUBECTL_VER}" ]] && [[ "${KUBECTL_MAJOR}" =~ ^[0-9]+$ ]]; then
         if [[ "${KUBECTL_MAJOR}" -eq "${REQUIRED_KUBECTL_MAJOR}" ]]; then
           pass "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)"
         else
