@@ -185,12 +185,23 @@ fi
 if [[ "${K3D_PRESENT}" == true ]]; then
   REQUIRED_KUBECTL_MAJOR="1"
   if command -v kubectl &>/dev/null; then
-    KUBECTL_VER=$(kubectl version --client --output=json 2>/dev/null | jq -r '.clientVersion.gitVersion' | tr -d 'v')
-    KUBECTL_MAJOR="${KUBECTL_VER%%.*}"
-    if [[ "${KUBECTL_MAJOR}" -eq "${REQUIRED_KUBECTL_MAJOR}" ]]; then
-      pass "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)"
+    if KUBECTL_VER=$(
+      kubectl version --client=true --output=yaml 2>/dev/null |
+        awk -F': ' '/gitVersion:/ {print $2; exit}' |
+        tr -d 'v'
+    ); then
+      KUBECTL_MAJOR="${KUBECTL_VER%%.*}"
+      if [[ -n "${KUBECTL_VER}" ]] && [[ "${KUBECTL_MAJOR}" =~ ^[0-9]+$ ]] && [[ "${KUBECTL_MAJOR}" -eq "${REQUIRED_KUBECTL_MAJOR}" ]]; then
+        pass "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)"
+      elif [[ -n "${KUBECTL_VER}" ]] && [[ "${KUBECTL_MAJOR}" =~ ^[0-9]+$ ]]; then
+        fail "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)" \
+          "Install kubectl: https://kubernetes.io/docs/tasks/tools/"
+      else
+        fail "kubectl version could not be parsed" \
+          "Install kubectl: https://kubernetes.io/docs/tasks/tools/"
+      fi
     else
-      fail "kubectl $KUBECTL_VER (need major $REQUIRED_KUBECTL_MAJOR)" \
+      fail "kubectl version could not be read" \
         "Install kubectl: https://kubernetes.io/docs/tasks/tools/"
     fi
   else
@@ -246,7 +257,7 @@ else
     "Debian/Ubuntu: apt-get install curl   macOS: brew install curl"
 fi
 
-# jq (required by hydra-create-client.sh and kubectl version parsing)
+# jq (required by hydra-create-client.sh)
 REQUIRED_JQ_MAJOR="1"
 if command -v jq &>/dev/null; then
   JQ_VER=$(jq --version 2>/dev/null | sed 's/^jq-//')
