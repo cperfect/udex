@@ -186,7 +186,7 @@ if [[ "${K3D_PRESENT}" == true ]]; then
   REQUIRED_KUBECTL_MAJOR="1"
   if command -v kubectl &>/dev/null; then
     if KUBECTL_VER=$(
-      kubectl version --client=true --output=yaml 2>/dev/null |
+      kubectl version --client --output=yaml 2>/dev/null |
         awk -F': ' '/^[[:space:]]*gitVersion:/ {print $2; exit}' |
         tr -d 'v'
     ); then
