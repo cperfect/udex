@@ -325,7 +325,7 @@ fn make_token(
             "udex:index:v1:list \
              udex:index:v1:create \
              udex:index:v1:{index_name}:read \
-             udex:index:v1:**:delete \
+             udex:index:v1:*:delete \
              udex:entry:v1:{index_name}:create \
              udex:entry:v1:{index_name}:read \
              udex:entry:v1:{index_name}:write \
@@ -1496,7 +1496,7 @@ async fn init_k8s_fixture() -> Option<K8sFixture> {
             "udex:index:v1:list \
              udex:index:v1:create \
              udex:index:v1:{index_name}:read \
-             udex:index:v1:**:delete \
+             udex:index:v1:*:delete \
              udex:entry:v1:{index_name}:create \
              udex:entry:v1:{index_name}:read \
              udex:entry:v1:{index_name}:write \
@@ -1517,7 +1517,7 @@ async fn init_k8s_fixture() -> Option<K8sFixture> {
                 "udex:index:v1:list \
                  udex:index:v1:create \
                  udex:index:v1:{index_name}:read \
-                 udex:index:v1:**:delete \
+                 udex:index:v1:*:delete \
                  udex:entry:v1:{index_name}:create \
                  udex:entry:v1:{index_name}:read \
                  udex:entry:v1:{index_name}:write \
