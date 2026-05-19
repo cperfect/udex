@@ -7,12 +7,6 @@ rustup component add clippy
 rustup component add rustfmt
 rustup show
 
-# install claude code
-# npm install -g @anthropic-ai/claude-code
-# curl -fsSL https://claude.ai/install.sh | bash
-# verify claude
-claude --version
-
 # intent setup
 # Verify installation
 intent --version
@@ -70,8 +64,10 @@ ln -s ../.env .devcontainer/.env
 
 bash scripts/gen-keys-and-certs.sh
 
-# claude 
-curl -fsSL https://claude.ai/install.sh | bash
+# install claude code — major-version pin; npm verifies package integrity via
+# the registry's SHA-512 hash, so no separate checksum step is needed.
+npm install -g @anthropic-ai/claude-code@2
+claude --version
 
 # see comment above
 # Install Claude Code subagent 
