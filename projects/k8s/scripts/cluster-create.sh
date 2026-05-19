@@ -7,7 +7,7 @@ set -euo pipefail
 
 CLUSTER_NAME="udex"
 
-for cmd in k3d docker; do
+for cmd in k3d docker kubectl; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "ERROR: $cmd is required but not installed." >&2
     exit 1
