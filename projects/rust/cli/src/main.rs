@@ -192,6 +192,8 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
                 }
             }
         }
+
+        Commands::Version(args) => commands::version::run(args),
     }
 }
 

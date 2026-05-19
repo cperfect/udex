@@ -1,11 +1,11 @@
 {
-  "c4.diagram.plantuml.enabled": true,
-  "c4.diagram.structurizr.enabled": true,
   "rust-analyzer.linkedProjects": [
     "projects/rust/Cargo.toml"
   ],
-  "rust-analyzer.testExplorer": true
-  // "rust-analyzer.cargo.features": [
-  //   "integration_test",
-  // ],
+  "rust-analyzer.testExplorer": true,
+  "[rust]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.detectIndentation": false
+  }
 }

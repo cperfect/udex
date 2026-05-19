@@ -13,3 +13,4 @@ pub mod index;
 pub mod migrate;
 pub mod serve;
 pub mod token;
+pub mod version;

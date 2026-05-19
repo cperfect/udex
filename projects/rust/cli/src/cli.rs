@@ -82,6 +82,8 @@ pub enum Commands {
         #[command(subcommand)]
         command: MigrateCommands,
     },
+    /// Print the CLI version
+    Version(VersionArgs),
 }
 
 // --- serve ---
@@ -320,4 +322,14 @@ pub struct MigrateArgs {
     /// Path to configuration file [env: UDEX_CONFIG]
     #[arg(long, env = "UDEX_CONFIG", default_value = "udex.toml")]
     pub config: PathBuf,
+}
+
+// --- version ---
+
+/// Arguments for `udex version`.
+#[derive(Parser)]
+pub struct VersionArgs {
+    /// Output version as JSON (`{"version":"0.1.0"}`)
+    #[arg(short, long)]
+    pub json: bool,
 }
