@@ -85,6 +85,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: projects/rust
+          # shared-key ensures test and k8s-test share the same cache slot.
+          # Without it all three jobs (lint, test, k8s-test) compete for the
+          # same key, and whichever saves first (usually lint) wins — leaving
+          # k8s-test with a partial cache that lacks the compiled test binaries.
+          shared-key: udex-build
 
       - uses: arduino/setup-protoc@v3
         with:
@@ -170,6 +175,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: projects/rust
+          shared-key: udex-build
 
       - uses: arduino/setup-protoc@v3
         with:
