@@ -12,11 +12,6 @@ pub mod udex {
             include!("udex.entry.v1.rs");
         }
     }
-    pub mod healthz {
-        pub mod v1 {
-            include!("udex.healthz.v1.rs");
-        }
-    }
 }
 // export the google.protobuf module so the generated code can use it
 pub mod google {

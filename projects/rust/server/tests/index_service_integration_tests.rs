@@ -27,7 +27,8 @@ async fn init_index_service() -> MaybeOnceType {
     let datastore_fixtures = init_postgres().await;
     let datastore = Arc::from(datastore_fixtures.0);
 
-    let index_server: IndexService<PostgresDatastore> = IndexService::new(datastore);
+    let (reporter, _) = tonic_health::server::health_reporter();
+    let index_server: IndexService<PostgresDatastore> = IndexService::new(datastore, reporter);
 
     // statically define an index for testing
     let init_index = udex_api::index::UpdateIndexRequest {

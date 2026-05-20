@@ -3,7 +3,7 @@ verblock: "20 May 2026:v0.1: Chris Perfect - Initial version"
 wp_id: WP-02
 title: "Update all test fixtures to use standard health client"
 scope: Medium
-status: Not Started
+status: Done
 ---
 
 # WP-02: Update all test fixtures to use standard health client

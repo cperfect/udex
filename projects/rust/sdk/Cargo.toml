@@ -34,6 +34,7 @@ name = "envelope_write"
 path = "examples/envelope_write.rs"
 
 [dev-dependencies]
+tonic-health = { workspace = true }
 udex-test-utils = { path = "../test-utils" }
 udex-server = { path = "../server" }
 udex-datastore = { path = "../datastore", features = ["integration_test"] }

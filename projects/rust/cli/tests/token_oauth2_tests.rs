@@ -18,7 +18,7 @@ use predicates::prelude::*;
 use rstest::*;
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
-use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzRequest};
+use tonic_health::pb::{health_client::HealthClient, HealthCheckRequest};
 use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
 use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, register_hydra_client};
@@ -136,8 +136,10 @@ async fn wait_for_server(addr: &str, ca_pem: &[u8]) {
         else {
             continue;
         };
-        if HealthzServiceClient::new(ch)
-            .healthz(tonic::Request::new(HealthzRequest {}))
+        if HealthClient::new(ch)
+            .check(HealthCheckRequest {
+                service: "".to_string(),
+            })
             .await
             .is_ok()
         {

@@ -32,6 +32,7 @@ secrets-rs = { workspace = true }
 secrets-rs-macros = { workspace = true }
 
 [dev-dependencies]
+tonic-health = { workspace = true }
 udex-test-utils = { path = "../test-utils" }
 assert_cmd = { workspace = true }
 predicates = { workspace = true }

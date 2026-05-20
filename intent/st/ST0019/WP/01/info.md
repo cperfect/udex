@@ -3,7 +3,7 @@ verblock: "20 May 2026:v0.1: Chris Perfect - Initial version"
 wp_id: WP-01
 title: "Add tonic-health, wire reporter, remove custom healthz"
 scope: Medium
-status: Not Started
+status: Done
 ---
 
 # WP-01: Add tonic-health, wire reporter, remove custom healthz

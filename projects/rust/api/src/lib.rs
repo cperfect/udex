@@ -13,7 +13,6 @@ pub mod hash;
 // Re-export the generated modules for convenience
 pub use generated::google::protobuf;
 pub use generated::udex::entry::v1 as entry;
-pub use generated::udex::healthz::v1 as healthz;
 pub use generated::udex::index::v1 as index;
 
 use time::OffsetDateTime;

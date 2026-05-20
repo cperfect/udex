@@ -12,7 +12,9 @@ use udex_api::index::{
 };
 use udex_datastore::Datastore;
 
-use crate::{Error, HealthCheck};
+use tonic_health::{server::HealthReporter, ServingStatus};
+
+use crate::Error;
 
 /// Returns `Some(invalid_char)` if `name` contains a character outside the allowed set
 /// (Unicode letters, Unicode digits, hyphens, underscores), or `None` if the name is valid.
@@ -26,9 +28,10 @@ fn format_invalid_name_char(c: char) -> String {
 }
 
 /// Server implementation for the Index service.
-/// Handles all index-related operations including health checks, CRUD operations.
+/// Handles all index-related operations including CRUD operations.
 pub struct IndexService<D> {
     datastore: Arc<D>,
+    health_reporter: HealthReporter,
 }
 
 impl<D> IndexService<D>
@@ -36,8 +39,11 @@ where
     D: Datastore + Send + Sync + 'static,
 {
     /// Creates a new IndexService instance.
-    pub fn new(datastore: Arc<D>) -> Self {
-        Self { datastore }
+    pub fn new(datastore: Arc<D>, health_reporter: HealthReporter) -> Self {
+        Self {
+            datastore,
+            health_reporter,
+        }
     }
 
     /// Creates a new index in the datastore - used internally
@@ -195,22 +201,12 @@ where
                 self.create_index_internal(index).await?;
             }
         }
-        Ok(())
-    }
-}
 
-#[tonic::async_trait]
-impl<D> HealthCheck for IndexService<D>
-where
-    D: Datastore + Send + Sync + 'static,
-{
-    /// Checks if the server is healthy.
-    async fn is_healthy(&self) -> Result<bool, Error> {
-        // Check if the datastore is healthy
-        self.datastore
-            .is_healthy()
-            .await
-            .map_err(|e| Error::ServerError(format!("Datastore health check failed: {}", e)))
+        self.health_reporter
+            .set_service_status("udex.index.v1.IndexService", ServingStatus::Serving)
+            .await;
+
+        Ok(())
     }
 }
 

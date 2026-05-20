@@ -23,7 +23,9 @@ use udex_datastore::{
 };
 use uuid::Uuid;
 
-use crate::{Error, HealthCheck};
+use tonic_health::{server::HealthReporter, ServingStatus};
+
+use crate::Error;
 
 /// Server implementation for the Entry service.
 /// Handles all entry-related operations including CRUD operations and bulk operations.
@@ -32,21 +34,7 @@ pub struct EntryService<D> {
     // Lazily populated from the datastore on first use per index; avoids requiring
     // EntryService to be notified when IndexService creates a new index at runtime.
     index_hasher_fns: RwLock<HashMap<String, ContextHasher>>,
-}
-
-#[tonic::async_trait]
-impl<D> HealthCheck for EntryService<D>
-where
-    D: Datastore + Send + Sync + 'static,
-{
-    /// Checks if the server is healthy.
-    async fn is_healthy(&self) -> Result<bool, Error> {
-        // Check if the datastore is healthy
-        self.datastore
-            .is_healthy()
-            .await
-            .map_err(|e| Error::ServerError(format!("Datastore health check failed: {}", e)))
-    }
+    health_reporter: HealthReporter,
 }
 
 impl<D> EntryService<D>
@@ -54,10 +42,11 @@ where
     D: Datastore + Send + Sync + 'static,
 {
     /// Creates a new EntryServer instance.
-    pub fn new(datastore: Arc<D>) -> Self {
+    pub fn new(datastore: Arc<D>, health_reporter: HealthReporter) -> Self {
         Self {
             datastore,
             index_hasher_fns: RwLock::new(HashMap::new()),
+            health_reporter,
         }
     }
 
@@ -80,6 +69,10 @@ where
             })?;
             cache.insert(index.name.clone(), hasher_fn);
         }
+
+        self.health_reporter
+            .set_service_status("udex.entry.v1.EntryService", ServingStatus::Serving)
+            .await;
 
         Ok(())
     }
