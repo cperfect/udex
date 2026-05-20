@@ -20,7 +20,8 @@ WORKDIR /build
 # anything and does not need protoc or the proto files.
 FROM chef AS planner
 COPY rust/ rust/
-RUN cd rust && cargo chef prepare --recipe-path recipe.json
+WORKDIR /build/rust
+RUN cargo chef prepare --recipe-path recipe.json
 
 # ── Builder ───────────────────────────────────────────────────────────────────
 FROM chef AS builder
@@ -50,12 +51,15 @@ COPY protobuf/ protobuf/
 # Cook (compile) all dependencies. Cached as long as recipe.json —
 # and therefore Cargo.toml / Cargo.lock — does not change.
 COPY --from=planner /build/rust/recipe.json rust/recipe.json
-RUN cd rust && cargo chef cook --profile "${PROFILE}" --recipe-path recipe.json
+WORKDIR /build/rust
+RUN cargo chef cook --profile "${PROFILE}" --recipe-path recipe.json
 
 # Copy real source and compile only the workspace crates. All dependency
 # objects from the cook step are reused; only udex-* crates are compiled here.
+WORKDIR /build
 COPY rust/ rust/
-RUN cd rust && cargo build --profile "${PROFILE}" -p udex-cli \
+WORKDIR /build/rust
+RUN cargo build --profile "${PROFILE}" -p udex-cli \
     # Map profile name to output directory: Cargo writes "dev" builds to
     # target/debug/, not target/dev/.
     && dir=$([ "${PROFILE}" = "dev" ] && echo "debug" || echo "${PROFILE}") \
