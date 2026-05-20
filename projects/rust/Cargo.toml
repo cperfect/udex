@@ -48,6 +48,10 @@ sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-rustls", "postgres
 
 # Authentication
 jsonwebtoken = { version = "10.3", features = ["use_pem", "aws_lc_rs"] }
+oauth2 = { version = "5", features = ["reqwest"] }
+
+# HTTP client
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 # CLI
 clap = { version = "4", features = ["derive", "env"] }

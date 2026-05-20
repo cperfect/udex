@@ -1,0 +1,12 @@
+# Compiled Rust artifacts. CI restores these via Swatinem/rust-cache before
+# running docker build, which would inflate the build context by 2+ GB.
+# The Docker build compiles from source and never reads this directory.
+rust/target/
+
+# Not referenced by the Dockerfile — exclude to keep the build context clean.
+k8s/
+compose/
+**/README.md
+
+# macOS metadata — never needed in the build context.
+**/.DS_Store

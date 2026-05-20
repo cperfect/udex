@@ -1,9 +1,30 @@
 # Build context: projects/
 # Example: docker build -f projects/rust/cli/Dockerfile projects/ -t udex:latest
 #          docker build -f projects/rust/cli/Dockerfile projects/ -t udex:dev --build-arg PROFILE=dev
+#
+# Layer caching strategy (cargo-chef):
+#   1. planner  — parses Cargo manifests, emits recipe.json (no compilation)
+#   2. builder  — cooks (compiles) all dependencies from recipe.json; this
+#                 layer is fully cached when only source files change and
+#                 Cargo.toml / Cargo.lock are unchanged
+#   3. builder  — copies real source, compiles workspace crates only (~1-2 min)
+#   4. runtime  — copies the stripped binary into a minimal debian image
+
+# ── Chef installer ────────────────────────────────────────────────────────────
+FROM rust:1.95.0-bookworm AS chef
+RUN cargo install cargo-chef --locked --version 0.1.77
+WORKDIR /build
+
+# ── Planner: produce recipe.json from Cargo manifests ────────────────────────
+# The planner only reads Cargo.toml / Cargo.lock — it does not compile
+# anything and does not need protoc or the proto files.
+FROM chef AS planner
+COPY rust/ rust/
+WORKDIR /build/rust
+RUN cargo chef prepare --recipe-path recipe.json
 
 # ── Builder ───────────────────────────────────────────────────────────────────
-FROM rust:1.95.0-bookworm AS builder
+FROM chef AS builder
 
 ARG PROFILE=release
 
@@ -23,17 +44,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends unzip curl ca-c
     && protoc --version \
     && apt-get purge -y unzip curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /build
-
-# Copy proto definitions (required by api/build.rs, which resolves them as
-# ../../protobuf relative to the workspace root).
+# Proto files are required by api/build.rs (tonic-build) when the build script
+# runs during dependency cooking. Must be present before `cargo chef cook`.
 COPY protobuf/ protobuf/
 
-# Copy the full Rust workspace.
-COPY rust/ rust/
-
+# Cook (compile) all dependencies. Cached as long as recipe.json —
+# and therefore Cargo.toml / Cargo.lock — does not change.
+COPY --from=planner /build/rust/recipe.json rust/recipe.json
 WORKDIR /build/rust
+RUN cargo chef cook --profile "${PROFILE}" --recipe-path recipe.json
 
+# Copy real source and compile only the workspace crates. All dependency
+# objects from the cook step are reused; only udex-* crates are compiled here.
+WORKDIR /build
+COPY rust/ rust/
+WORKDIR /build/rust
 RUN cargo build --profile "${PROFILE}" -p udex-cli \
     # Map profile name to output directory: Cargo writes "dev" builds to
     # target/debug/, not target/dev/.
