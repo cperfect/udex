@@ -1,8 +1,20 @@
 ---
-verblock: "20 May 2026:v0.1: Chris Perfect / Claude - WP01+WP02 as-built"
+verblock: "20 May 2026:v0.2: Chris Perfect / Claude - WP04 as-built"
 ---
 
 # ST0019 Implementation Notes
+
+## WP04 — Documentation and FAQ
+
+- `docs/FAQ.md`: new entry "Why does Udex use the gRPC Health Checking Protocol instead of a custom healthz endpoint?" — covers tooling support, per-service granularity, native k8s probe enablement, and that the old proto was bespoke. Future-features bullet added for non-TLS health port.
+- `docs/ARCHITECTURE.md`: added unauthenticated endpoint note (three registered services) in the Authentication & Authorization section; links to FAQ.
+- `projects/rust/server/README.md`: removed `healthz.rs` row; auth section updated to reference `grpc.health.v1.Health`.
+- `projects/rust/api/README.md`: removed `healthz (udex.healthz.v1)` row.
+- `projects/k8s/README.md`: new "Health probes" section — registered services table, why `tcpSocket` is used instead of native `grpc` probes (TLS constraint), and how to probe manually with `grpc-health-probe`.
+
+## WP03 — Helm chart probe comment
+
+Native k8s `grpc` probes do not support TLS (confirmed on 1.31.5). The server is TLS-only on port 443, so native probes would fail at the TLS handshake. `tcpSocket` probes are retained. The TODO comment was replaced with an explanation of the constraint and the future path (non-TLS health port enables native grpc probes without any extra binary). Helm lint passes.
 
 ## WP01+WP02 — tonic-health wire-up and test fixture migration
 

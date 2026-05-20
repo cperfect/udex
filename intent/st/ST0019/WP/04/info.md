@@ -3,7 +3,7 @@ verblock: "20 May 2026:v0.1: Chris Perfect - Initial version"
 wp_id: WP-04
 title: "Documentation and FAQ"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-04: Documentation and FAQ

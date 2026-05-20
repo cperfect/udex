@@ -10,7 +10,6 @@ Generated gRPC types and service stubs for Udex. Contains no I/O — all network
 |--------|----------|
 | `entry` (`udex.entry.v1`) | `EntryServiceClient`, `EntryServiceServer`, request/response types |
 | `index` (`udex.index.v1`) | `IndexServiceClient`, `IndexServiceServer`, request/response types |
-| `healthz` (`udex.healthz.v1`) | `HealthzServiceClient`, `HealthzServiceServer` |
 | `authz` | Claims, permissions, and authorization wrappers for both services |
 | `hash` | `xxh3_context_hash()` — deterministic context hashing (offline) |
 

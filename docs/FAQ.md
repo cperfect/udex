@@ -43,6 +43,15 @@ As a high-performance, high-reliability back-end system I wanted it to be someth
 ## Why RPC and not REST?
 I think the RPC model suits Udex better than REST, especially for the bulk scenarios. gRPC in particular is more network efficient than HTTP REST. I also think that, as a service involved in integration and data governance, it would be better for the API to avoid breaking changes and keep backwards compatibility as far as possible and the protobuf model suits this, which in turn leads to RPC.
 
+## Why does Udex use the gRPC Health Checking Protocol instead of a custom healthz endpoint?
+
+Udex implements the [standard gRPC Health Checking Protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md) (`grpc.health.v1.Health`) rather than a bespoke healthz service for four reasons:
+
+- **Broad tooling support** — the standard is understood natively by Kubernetes, Envoy, Istio, `grpc-health-probe`, and any gRPC-aware load balancer. No Udex-specific client code or configuration is required.
+- **Per-service granularity** — the protocol carries a service name (`""` for overall server, `"udex.entry.v1.EntryService"`, `"udex.index.v1.IndexService"`). This is built in; a custom proto would duplicate the concern.
+- **Enables native Kubernetes `grpc` probes** — Kubernetes has supported native `grpc` probe type since 1.24 (GA). These probes actually exercise the gRPC stack, whereas `tcpSocket` probes only confirm the port is open. The current deployment uses `tcpSocket` because the server is TLS-only on port 443 and native `grpc` probes do not support TLS; a future non-TLS health port would remove that constraint.
+- **The old `udex.healthz.v1` proto was bespoke** — it had no tooling support outside this repository and imposed a custom client on every caller that needed to check server health.
+
 ## What future features might Udex support?
 * Optional REST interface
 * Optional UI (which would mean supporting OIDC)
@@ -52,6 +61,7 @@ I think the RPC model suits Udex better than REST, especially for the bulk scena
 * Alternate hash algorithms
 * Alternate key generation algorithms/formats - as long as they are opaque and globally unique
 * Separate db connection Pools per index - this would allow for separation of connection resources and/or allow for different schemas/dbs/servers per index.
+* A dedicated non-TLS health port — this would allow Kubernetes native `grpc` probes to exercise the full gRPC stack rather than only confirming the TCP port is open, without requiring an extra binary in the container image (see [Why does Udex use the gRPC Health Checking Protocol?](#why-does-udex-use-the-grpc-health-checking-protocol-instead-of-a-custom-healthz-endpoint)).
 
 ## How do I apply database migrations?
 

@@ -11,7 +11,6 @@ gRPC server crate for Udex. Implements the `IndexService` and `EntryService` han
 | `server.rs` | `start()` (production entry point) and `serve<D>()` (test-friendly generic) |
 | `index.rs` | `IndexService` gRPC handler |
 | `entry.rs` | `EntryService` gRPC handler |
-| `healthz.rs` | `HealthzService` — unauthenticated liveness check |
 | `authz.rs` | `AuthzInterceptor` — JWT validation and permission enforcement on every request |
 | `config.rs` | `ServerConfig` / `AuthzConfig` with `validate()` |
 | `logging.rs` | `init_tracing()` — JSON structured logs via `tracing-subscriber` |
@@ -33,7 +32,7 @@ udex_server::serve(server_config, datastore).await?;
 
 ## Authorization
 
-The server enforces authorization on every gRPC request except `/healthz`.
+The server enforces authorization on every gRPC request except `grpc.health.v1.Health`.
 Authentication — establishing *who* the caller is — is the responsibility of an
 upstream OAuth2 server (or a self-signed key pair in development/test).
 

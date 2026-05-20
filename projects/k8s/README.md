@@ -124,6 +124,28 @@ helm/udex/
     └── service.yaml    # LoadBalancer on port 443
 ```
 
+## Health probes
+
+Udex exposes the standard [gRPC Health Checking Protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md) (`grpc.health.v1.Health`) on port 443, with three registered services:
+
+| Service name | What it represents |
+|---|---|
+| `""` | Overall server — SERVING as soon as the gRPC listener starts |
+| `"udex.entry.v1.EntryService"` | Entry handler — SERVING after index initialisation completes |
+| `"udex.index.v1.IndexService"` | Index handler — SERVING after index initialisation completes |
+
+### Why `tcpSocket` probes and not native `grpc` probes?
+
+Kubernetes native `grpc` probe type (stable since k8s 1.24) makes a plain, non-TLS gRPC connection. The Udex server is TLS-only on port 443, so a native `grpc` probe would fail at the TLS handshake on any Kubernetes version.
+
+The Helm chart therefore uses `tcpSocket` probes, which confirm that the port is open and the TLS handshake succeeds — sufficient to detect a crashed or deadlocked process. When Udex gains a dedicated non-TLS health port in a future release, the chart will be updated to use native `grpc` probes without any extra binary in the image.
+
+To probe the health endpoint manually (e.g. from inside the cluster), use `grpc-health-probe` with TLS flags:
+
+```bash
+grpc-health-probe -addr=<pod-ip>:443 -tls -tls-no-verify
+```
+
 ## Running k8s tests locally
 
 ```bash
