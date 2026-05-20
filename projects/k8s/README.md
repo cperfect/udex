@@ -130,7 +130,7 @@ Udex exposes the standard [gRPC Health Checking Protocol](https://github.com/grp
 
 | Service name | What it represents |
 |---|---|
-| `""` | Overall server — SERVING as soon as the gRPC listener starts |
+| `""` | Overall server — SERVING after entry and index initialisation complete |
 | `"udex.entry.v1.EntryService"` | Entry handler — SERVING after index initialisation completes |
 | `"udex.index.v1.IndexService"` | Index handler — SERVING after index initialisation completes |
 
