@@ -10,4 +10,3 @@ compose/
 
 # macOS metadata — never needed in the build context.
 .DS_Store
-rust/.DS_Store
