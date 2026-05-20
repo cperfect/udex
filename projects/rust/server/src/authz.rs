@@ -53,35 +53,26 @@ impl AuthzInterceptor {
         let key_source = match (config.jwks_url, config.jwt_public_key) {
             (Some(url), None) => {
                 let url_for_err = url.clone();
+                // Shared reference lets the same Fn closure be passed to multiple
+                // map_err calls: &Fn(E)->T satisfies the FnOnce bound map_err requires.
+                let jwks_err = |e: reqwest::Error| {
+                    Error::ConfigValidation(format!(
+                        "Failed to fetch JWKS from '{url_for_err}': {e}"
+                    ))
+                };
                 let jwks_text = reqwest::Client::builder()
                     .timeout(Duration::from_secs(10))
                     .build()
-                    .map_err(|e| {
-                        Error::ConfigValidation(format!(
-                            "Failed to build HTTP client for JWKS fetch from '{url_for_err}': {e}"
-                        ))
-                    })?
+                    .map_err(&jwks_err)?
                     .get(&url)
                     .send()
                     .await
-                    .map_err(|e| {
-                        Error::ConfigValidation(format!(
-                            "Failed to fetch JWKS from '{url_for_err}': {e}"
-                        ))
-                    })?
+                    .map_err(&jwks_err)?
                     .error_for_status()
-                    .map_err(|e| {
-                        Error::ConfigValidation(format!(
-                            "Failed to fetch JWKS from '{url_for_err}': {e}"
-                        ))
-                    })?
+                    .map_err(&jwks_err)?
                     .text()
                     .await
-                    .map_err(|e| {
-                        Error::ConfigValidation(format!(
-                            "Failed to fetch JWKS from '{url_for_err}': {e}"
-                        ))
-                    })?;
+                    .map_err(&jwks_err)?;
 
                 let jwks: JwkSet = serde_json::from_str(&jwks_text).map_err(|e| {
                     Error::ConfigValidation(format!(
