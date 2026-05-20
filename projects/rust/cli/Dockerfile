@@ -12,7 +12,7 @@
 
 # ── Chef installer ────────────────────────────────────────────────────────────
 FROM rust:1.95.0-bookworm AS chef
-RUN cargo install cargo-chef --locked
+RUN cargo install cargo-chef --locked --version 0.1.77
 WORKDIR /build
 
 # ── Planner: produce recipe.json from Cargo manifests ────────────────────────
