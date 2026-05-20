@@ -136,7 +136,7 @@ Udex exposes the standard [gRPC Health Checking Protocol](https://github.com/grp
 
 ### Why `tcpSocket` probes and not native `grpc` probes?
 
-Kubernetes native `grpc` probe type (stable since k8s 1.24) makes a plain, non-TLS gRPC connection. The Udex server is TLS-only on port 443, so a native `grpc` probe would fail at the TLS handshake on any Kubernetes version.
+Kubernetes native `grpc` probe type (beta/default since k8s 1.24, GA since 1.27) makes a plain, non-TLS gRPC connection. The Udex server is TLS-only on port 443, so a native `grpc` probe would fail at the TLS handshake on any Kubernetes version.
 
 The Helm chart therefore uses `tcpSocket` probes, which confirm that the port is open and the TLS handshake succeeds — sufficient to detect a crashed or deadlocked process. When Udex gains a dedicated non-TLS health port in a future release, the chart will be updated to use native `grpc` probes without any extra binary in the image.
 

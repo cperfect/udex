@@ -85,7 +85,7 @@ spec:
           # open and the TLS handshake succeeds, which is sufficient to detect a
           # crashed or deadlocked process.
           #
-          # Native k8s `grpc` probes (stable since 1.24) do not support TLS —
+          # Native k8s `grpc` probes (beta/default since 1.24, GA since 1.27) do not support TLS —
           # they make a plain gRPC connection. Because the server is TLS-only on
           # port 443, native gRPC probes would fail at the handshake. The server
           # does expose grpc.health.v1.Health (ST0019) and could be probed via an
