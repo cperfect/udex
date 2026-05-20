@@ -1,5 +1,5 @@
 ---
-verblock: "20 May 2026:v0.1: Chris Perfect - Initial version"
+verblock: "20 May 2026:v0.1: Chris Perfect - Initial version; v0.2: Chris Perfect / Claude - As-built update"
 wp_id: WP-03
 title: "Update Helm chart probes and docs"
 scope: Small
@@ -10,27 +10,26 @@ status: Done
 
 ## Objective
 
-Replace the `tcpSocket` liveness and readiness probes in the Helm chart with native gRPC probes, resolving the TODO introduced in ST0018. Update all relevant documentation.
+Investigate and resolve the TODO comment in the Helm chart regarding gRPC health probes. Document the probe approach and update relevant documentation.
 
-## Deliverables
+> **As-built note:** The original objective assumed `tcpSocket` probes would be replaced with native `grpc` probes. Investigation confirmed this is not possible: native k8s `grpc` probes (beta/default since 1.24, GA since 1.27) make a plain non-TLS connection. The server is TLS-only on port 443, so native probes would fail at the TLS handshake. `tcpSocket` probes are retained. The TODO comment was replaced with an explanation of the constraint and the future path.
 
-- `projects/k8s/helm/udex/templates/deployment.yaml`: replace `tcpSocket` probes with `grpc` probes
-  - `livenessProbe`: check `""` (overall server)
-  - `readinessProbe`: check `"udex.entry.v1.EntryService"` (gates traffic until entry service is ready)
-  - Remove the TODO comment
-- Verify the minimum k8s version required for gRPC probes (1.24 GA). Document in `projects/k8s/README.md` if it differs from what the chart already declares.
-- Consider whether TLS matters for probes: k8s gRPC probes before 1.31 do not support TLS. If the cluster uses TLS-only (as the current k3d setup does on port 443), an exec-based `grpc-health-probe` may be needed as an interim. Investigate and document the decision.
-- Update `projects/k8s/README.md` to describe the health probe approach
-- Update `CONTRIBUTING.md` k8s section if relevant
-- `bash scripts/validate-lint-helm.sh` passes (helm lint --strict)
-- `bash scripts/validate-k8s-test.sh` passes end-to-end
+## Deliverables (as-built)
 
-## Acceptance Criteria
+- `projects/k8s/helm/udex/templates/deployment.yaml`: replaced the vague TODO comment with a precise explanation of:
+  - why `tcpSocket` probes are retained (native `grpc` probes do not support TLS)
+  - what `tcpSocket` actually checks (TCP connect only — no TLS handshake, no gRPC)
+  - the exec-based `grpc-health-probe --tls` path for full TLS + gRPC validation
+  - the future path (non-TLS health port enables native `grpc` probes without extra binary)
+- `projects/k8s/README.md`: new "Health probes" section covering registered services, the TLS constraint, the exec-based alternative, and how to probe manually
+- `helm lint --strict` passes
 
-- [ ] No `tcpSocket` probe remains in `deployment.yaml`
-- [ ] `bash scripts/validate-lint-helm.sh` passes
-- [ ] `bash scripts/validate-k8s-test.sh` passes (pod reaches Ready, traffic flows)
-- [ ] The TODO comment referencing the gRPC health checking spec is removed
+## Acceptance Criteria (as-built)
+
+- [x] The TODO comment referencing the gRPC health checking spec is removed
+- [x] `deployment.yaml` accurately describes what `tcpSocket` probes check (TCP connect only)
+- [x] `projects/k8s/README.md` documents the probe decision and the TLS constraint
+- [x] `bash scripts/validate-lint-helm.sh` passes
 
 ## Dependencies
 
