@@ -1,10 +1,10 @@
 ---
 verblock: "20 May 2026:v0.1: Chris Perfect - Initial version"
 intent_version: 2.4.0
-status: WIP
+status: Completed
 slug: grpc-native-health-check
 created: 20260520
-completed:
+completed: 20260520
 ---
 
 # ST0019: gRPC native health check

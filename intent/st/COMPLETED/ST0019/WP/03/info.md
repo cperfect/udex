@@ -3,7 +3,7 @@ verblock: "20 May 2026:v0.1: Chris Perfect - Initial version"
 wp_id: WP-03
 title: "Update Helm chart probes and docs"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: Update Helm chart probes and docs
