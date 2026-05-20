@@ -351,6 +351,22 @@ async fn test_server_health_check() {
         "Health service returned non-serving status"
     );
 
+    // Verify per-service statuses — these are set by each service's init() and must
+    // be SERVING by the time the server is accepting connections.
+    for service in &["udex.entry.v1.EntryService", "udex.index.v1.IndexService"] {
+        let resp = client
+            .check(tonic::Request::new(HealthCheckRequest {
+                service: service.to_string(),
+            }))
+            .await
+            .unwrap_or_else(|e| panic!("Health check for {service} failed: {e}"));
+        assert_eq!(
+            resp.into_inner().status,
+            ServingStatus::Serving as i32,
+            "{service} health status is not SERVING"
+        );
+    }
+
     println!("✓ Successfully connected to health service over TLS");
     println!("✓ Server is using certificate from tests/certs/server.crt");
     println!("✓ Client verified server certificate with CA from tests/certs/ca.crt");
