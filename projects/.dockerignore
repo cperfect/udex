@@ -9,4 +9,4 @@ compose/
 **/README.md
 
 # macOS metadata — never needed in the build context.
-.DS_Store
+**/.DS_Store
