@@ -16,6 +16,7 @@ udex-api = { path = "../api" }
 udex-datastore = { path = "../datastore"}
 tokio = { workspace = true }
 tonic = { workspace = true }
+tonic-health = { workspace = true }
 tonic-middleware = "0.3.0"
 prost = { workspace = true }
 thiserror = { workspace = true }

@@ -9,7 +9,9 @@ use std::sync::OnceLock;
 use time::OffsetDateTime;
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Channel, ClientTlsConfig};
-use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzRequest};
+use tonic_health::pb::{
+    health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
+};
 use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
 use udex_datastore::integration_test::init_postgres;
 use udex_server::{config::ServerConfig, logging, server};
@@ -300,9 +302,9 @@ fn generate_test_jwt(
     encode(&header, claims, signing_key).expect("Failed to generate JWT")
 }
 
-/// Tests that the healthz service is available over TLS and returns a 200 OK response.
+/// Tests that the standard gRPC health service responds SERVING over TLS.
 #[tokio_shared_rt::test] //We use tokio shared runtime to ensure the static variables are still valid between tests -https://docs.rs/tokio-shared-rt/latest/tokio_shared_rt/
-async fn test_server_healthz() {
+async fn test_server_health_check() {
     // Initialize rustls crypto provider
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -325,34 +327,47 @@ async fn test_server_healthz() {
         .tls_config(tls_config)
         .expect("Failed to configure TLS");
 
-    // Connect to the healthz service with TLS
-    let mut client = HealthzServiceClient::connect(endpoint)
+    // Connect to the standard gRPC health service with TLS
+    let channel = endpoint
+        .connect()
         .await
-        .expect("Failed to connect to healthz service over TLS");
+        .expect("Failed to connect to health service over TLS");
+    let mut client = HealthClient::new(channel);
 
-    // Make healthz request
-    let request = tonic::Request::new(HealthzRequest {});
+    // Make health check request
+    let request = tonic::Request::new(HealthCheckRequest {
+        service: "".to_string(),
+    });
     let response = client
-        .healthz(request)
+        .check(request)
         .await
-        .expect("Healthz request failed");
-    let healthz_response = response.into_inner();
+        .expect("Health check request failed");
+    let health_response = response.into_inner();
 
     // Verify the response
-    assert!(
-        healthz_response.is_healthy,
-        "Healthz service returned unhealthy status"
-    );
-    assert!(
-        healthz_response.server_time.is_some(),
-        "Server time should be present"
-    );
-    assert!(
-        !healthz_response.status_messages.is_empty(),
-        "Status messages should be present"
+    assert_eq!(
+        health_response.status,
+        ServingStatus::Serving as i32,
+        "Health service returned non-serving status"
     );
 
-    println!("✓ Successfully connected to healthz service over TLS");
+    // Verify per-service statuses — these are set by each service's init() and must
+    // be SERVING by the time the server is accepting connections.
+    for service in &["udex.entry.v1.EntryService", "udex.index.v1.IndexService"] {
+        let resp = client
+            .check(tonic::Request::new(HealthCheckRequest {
+                service: service.to_string(),
+            }))
+            .await
+            .unwrap_or_else(|e| panic!("Health check for {service} failed: {e}"));
+        assert_eq!(
+            resp.into_inner().status,
+            ServingStatus::Serving as i32,
+            "{service} health status is not SERVING"
+        );
+    }
+
+    println!("✓ Successfully connected to health service over TLS");
     println!("✓ Server is using certificate from tests/certs/server.crt");
     println!("✓ Client verified server certificate with CA from tests/certs/ca.crt");
 
@@ -361,14 +376,14 @@ async fn test_server_healthz() {
     let http_endpoint =
         Channel::from_shared(format!("http://{}", bind_address)).expect("Invalid HTTP endpoint");
 
-    let http_client_result = HealthzServiceClient::connect(http_endpoint).await;
-
-    match http_client_result {
-        Ok(mut http_client) => {
+    match http_endpoint.connect().await {
+        Ok(ch) => {
             // If connection succeeded, the request should still fail due to protocol mismatch
             println!("⚠ HTTP connection succeeded (server may accept both protocols)");
-            let http_request = tonic::Request::new(HealthzRequest {});
-            let http_response_result = http_client.healthz(http_request).await;
+            let http_request = tonic::Request::new(HealthCheckRequest {
+                service: "".to_string(),
+            });
+            let http_response_result = HealthClient::new(ch).check(http_request).await;
             assert!(
                 http_response_result.is_err(),
                 "HTTP request should fail on TLS-configured server"
@@ -613,20 +628,25 @@ async fn test_server_authz() {
         .tls_config(tls_config)
         .expect("Failed to configure TLS");
 
-    // Test 1: Healthz service should work WITHOUT bearer token
+    // Test 1: Health service should work WITHOUT bearer token
     {
-        let mut healthz_client = HealthzServiceClient::connect(endpoint.clone())
+        let channel = endpoint
+            .clone()
+            .connect()
             .await
-            .expect("Failed to connect to healthz service");
+            .expect("Failed to connect to health service");
+        let mut health_client = HealthClient::new(channel);
 
-        let healthz_request = tonic::Request::new(HealthzRequest {});
-        let healthz_response = healthz_client.healthz(healthz_request).await;
+        let health_request = tonic::Request::new(HealthCheckRequest {
+            service: "".to_string(),
+        });
+        let health_response = health_client.check(health_request).await;
 
         assert!(
-            healthz_response.is_ok(),
-            "Healthz service should work without authentication"
+            health_response.is_ok(),
+            "Health service should work without authentication"
         );
-        println!("✓ Healthz service works without bearer token");
+        println!("✓ Health service works without bearer token");
     }
 
     // Test 2: Index service should FAIL without bearer token
@@ -1753,7 +1773,8 @@ async fn test_server_tls_wrong_ca_rejected() {
         .tls_config(tls_config)
         .expect("Failed to configure TLS");
 
-    let err = HealthzServiceClient::connect(endpoint)
+    let err = endpoint
+        .connect()
         .await
         .expect_err("Connection with wrong CA certificate must be rejected");
     let err_str = format!("{err:?}");
@@ -2170,7 +2191,8 @@ async fn test_server_tls_untrusted_ca_rejected() {
         .tls_config(tls_config)
         .expect("Failed to configure TLS");
 
-    let err = HealthzServiceClient::connect(endpoint)
+    let err = endpoint
+        .connect()
         .await
         .expect_err("Connection using system trust store must be rejected for self-signed test CA");
     let err_str = format!("{err:?}");

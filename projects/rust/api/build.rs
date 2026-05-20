@@ -77,7 +77,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &[
             proto_dir.join("udex.index.v1.proto"),
             proto_dir.join("udex.entry.v1.proto"),
-            proto_dir.join("udex.healthz.v1.proto"),
         ],
         &[proto_dir],
     )?;
@@ -101,11 +100,6 @@ pub mod udex {
     pub mod entry {
         pub mod v1 {
             include!("udex.entry.v1.rs");
-        }
-    }
-    pub mod healthz {
-        pub mod v1 {
-            include!("udex.healthz.v1.rs");
         }
     }
 }

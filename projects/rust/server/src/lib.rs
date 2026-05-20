@@ -9,13 +9,11 @@
 mod authz;
 pub mod config;
 pub mod entry;
-pub mod healthz;
 pub mod index;
 pub mod logging;
 pub mod server;
 
 pub use entry::EntryService;
-pub use healthz::HealthzService;
 pub use index::IndexService;
 pub use server::start;
 
@@ -32,10 +30,4 @@ pub enum Error {
     /// Validation error
     #[error("Config validation failed: {0}")]
     ConfigValidation(String),
-}
-
-#[tonic::async_trait]
-pub trait HealthCheck {
-    /// Checks the server is healthy
-    async fn is_healthy(&self) -> Result<bool, Error>;
 }

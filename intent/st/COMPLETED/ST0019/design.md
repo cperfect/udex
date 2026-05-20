@@ -1,4 +1,4 @@
-# Design - ST0010: Rust SDK
+# Design - ST0019: gRPC native health check
 
 ## Approach
 

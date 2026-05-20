@@ -76,6 +76,8 @@ Udex initially only supports [OAuth 2.0 Client Credentials Flow](https://oauth.n
 
 Tokens are Json Web Tokens (JWTs) with the standard set of claims plus additional ones that map to the permissions model. Udex validates the token for every operation and will fail bulk transactions if any operation cannot be validated.
 
+The `grpc.health.v1.Health` service is the only unauthenticated endpoint. It exposes status for three registered services: `""` (overall server), `"udex.entry.v1.EntryService"`, and `"udex.index.v1.IndexService"`. See the [FAQ](FAQ.md#why-does-udex-use-the-grpc-health-checking-protocol-instead-of-a-custom-healthz-endpoint) for the rationale behind the standard protocol choice.
+
 ### Permissions
 
 Udex does not support field-level permissions (e.g. on context keys or values). Where fine-grained permissions are required they must be provided by systems between the client and Udex.

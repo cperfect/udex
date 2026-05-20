@@ -6,7 +6,7 @@ use udex_api::entry::entry_service_server::EntryService as EntryServiceTrait;
 use udex_api::index::HashAlgorithm;
 use udex_datastore::integration_test::init_postgres;
 use udex_datastore::postgres::PostgresDatastore;
-use udex_server::{logging, EntryService, HealthCheck, IndexService};
+use udex_server::{logging, EntryService, IndexService};
 use uuid::Uuid;
 
 const ID_PREFIX: &str = "entry_service_integration_test_";
@@ -29,7 +29,9 @@ async fn init_entry_service() -> MaybeOnceType {
 
     // Use the existing datastore to create the index
     let index_name = format!("{}_index", ID_PREFIX);
-    let index_server: IndexService<PostgresDatastore> = IndexService::new(datastore.clone());
+    let (index_reporter, _) = tonic_health::server::health_reporter();
+    let index_server: IndexService<PostgresDatastore> =
+        IndexService::new(datastore.clone(), index_reporter);
 
     // statically define an index for testing
     let init_index = udex_api::index::UpdateIndexRequest {
@@ -52,7 +54,9 @@ async fn init_entry_service() -> MaybeOnceType {
         .expect("Failed to initialize index service");
 
     // Create a new datastore instance for the EntryService from the same pool
-    let entry_service: EntryService<PostgresDatastore> = EntryService::new(datastore.clone());
+    let (entry_reporter, _) = tonic_health::server::health_reporter();
+    let entry_service: EntryService<PostgresDatastore> =
+        EntryService::new(datastore.clone(), entry_reporter);
 
     entry_service
         .init(Arc::new(index_server))
@@ -74,14 +78,9 @@ pub async fn data(serial: bool) -> Data<'static, MaybeOnceType> {
 #[rstest]
 #[tokio_shared_rt::test] //We use tokio shared runtime to ensure the static variables are still valid between tests -https://docs.rs/tokio-shared-rt/latest/tokio_shared_rt/
 async fn test_entry_service_init() {
-    let data = data(false).await;
-    let entry_server = &data.0;
-    //check entry server health
-    let is_healthy = entry_server
-        .is_healthy()
-        .await
-        .expect("Health check failed");
-    assert!(is_healthy, "Entry server should be healthy");
+    // Verifies that init_entry_service() completes without panicking.
+    // Health status is verified end-to-end via test_server_health_check in server_integration_tests.
+    let _data = data(false).await;
 }
 
 /// Tests creating an entry through the gRPC service
@@ -408,13 +407,16 @@ async fn test_entry_service_create_entry_after_runtime_create_index() {
     let datastore = Arc::new(datastore_fixtures.0);
 
     // Initialise both services with no pre-configured indices — hasher cache starts empty.
-    let index_service = IndexService::new(datastore.clone());
+    let (idx_reporter, _) = tonic_health::server::health_reporter();
+    let index_service = IndexService::new(datastore.clone(), idx_reporter);
     index_service
         .init(vec![])
         .await
         .expect("index service init must succeed");
 
-    let entry_service: EntryService<PostgresDatastore> = EntryService::new(datastore.clone());
+    let (entry_reporter, _) = tonic_health::server::health_reporter();
+    let entry_service: EntryService<PostgresDatastore> =
+        EntryService::new(datastore.clone(), entry_reporter);
     entry_service
         .init(Arc::new(index_service))
         .await

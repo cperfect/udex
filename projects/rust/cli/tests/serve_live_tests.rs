@@ -12,7 +12,9 @@ use std::process::Command;
 
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
-use udex_api::healthz::{healthz_service_client::HealthzServiceClient, HealthzRequest};
+use tonic_health::pb::{
+    health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
+};
 use udex_datastore::integration_test::init_postgres;
 
 const BIND_ADDR: &str = "127.0.0.1:50054";
@@ -84,7 +86,7 @@ dangerous_allow_non_tls = true
     )
 }
 
-/// Poll healthz over TLS until the server responds or we give up.
+/// Poll the standard gRPC health service over TLS until SERVING or we give up.
 async fn wait_for_ready(ca_pem: &str) -> bool {
     for _ in 0..30 {
         sleep(Duration::from_millis(300)).await;
@@ -100,8 +102,10 @@ async fn wait_for_ready(ca_pem: &str) -> bool {
         else {
             continue;
         };
-        if HealthzServiceClient::new(ch)
-            .healthz(tonic::Request::new(HealthzRequest {}))
+        if HealthClient::new(ch)
+            .check(HealthCheckRequest {
+                service: "".to_string(),
+            })
             .await
             .is_ok()
         {
@@ -111,12 +115,12 @@ async fn wait_for_ready(ca_pem: &str) -> bool {
     false
 }
 
-/// Verifies that `udex serve` starts correctly and serves healthz over TLS.
+/// Verifies that `udex serve` starts correctly and the gRPC health service reports SERVING over TLS.
 ///
 /// The test writes a complete `udex.toml`, spawns the binary, waits for the
-/// server to become ready, then asserts the healthz response is healthy.
+/// server to become ready, then asserts the health check response is SERVING.
 #[tokio::test]
-async fn test_serve_healthz_over_tls() {
+async fn test_serve_health_check_over_tls() {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     // Create a fresh database with migrations applied.
@@ -139,14 +143,14 @@ async fn test_serve_healthz_over_tls() {
         .expect("failed to spawn udex serve");
     let _server = ServerProcess(child);
 
-    // Wait for the server to become ready via TLS healthz.
+    // Wait for the server to become ready via TLS health check.
     let ca_pem = std::fs::read_to_string(CA_CERT).expect("read CA cert");
     assert!(
         wait_for_ready(&ca_pem).await,
         "udex serve did not become ready within the timeout"
     );
 
-    // Connect and assert the healthz response is healthy.
+    // Connect and assert the health check response is SERVING.
     let tls = ClientTlsConfig::new()
         .ca_certificate(Certificate::from_pem(ca_pem))
         .domain_name("localhost");
@@ -158,19 +162,17 @@ async fn test_serve_healthz_over_tls() {
         .await
         .expect("failed to connect to server over TLS");
 
-    let body = HealthzServiceClient::new(channel)
-        .healthz(tonic::Request::new(HealthzRequest {}))
+    let body = HealthClient::new(channel)
+        .check(HealthCheckRequest {
+            service: "".to_string(),
+        })
         .await
-        .expect("healthz request failed")
+        .expect("health check request failed")
         .into_inner();
 
-    assert!(
-        body.is_healthy,
-        "server reported unhealthy: {:?}",
-        body.status_messages
-    );
-    assert!(
-        body.server_time.is_some(),
-        "server_time missing from healthz response"
+    assert_eq!(
+        body.status,
+        ServingStatus::Serving as i32,
+        "server reported non-serving status"
     );
 }

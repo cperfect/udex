@@ -1,16 +1,15 @@
 use crate::{
-    authz::AuthzInterceptor, config::ServerConfig, logging, EntryService, Error, HealthzService,
-    IndexService,
+    authz::AuthzInterceptor, config::ServerConfig, logging, EntryService, Error, IndexService,
 };
 use std::sync::Arc;
 use tonic::transport::Server as TonicServer;
 use tonic::transport::{Identity, ServerTlsConfig};
+use tonic_health::ServingStatus;
 use tonic_middleware::InterceptorFor;
 use tower_http::trace::TraceLayer;
 use udex_api::{
     authz::{entry::EntryServiceAuthorizor, index::IndexServiceAuthorizor},
     entry::entry_service_server::EntryServiceServer,
-    healthz::healthz_service_server::HealthzServiceServer,
     index::index_service_server::IndexServiceServer,
 };
 use udex_datastore::Datastore;
@@ -73,9 +72,11 @@ where
 
     let datastore_arc = Arc::new(datastore);
 
-    let index_service_inner = IndexService::new(datastore_arc.clone());
+    let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
-    let entry_service_inner = EntryService::new(datastore_arc.clone());
+    let index_service_inner = IndexService::new(datastore_arc.clone(), health_reporter.clone());
+
+    let entry_service_inner = EntryService::new(datastore_arc.clone(), health_reporter.clone());
 
     index_service_inner
         .init(config.init_indexes.clone())
@@ -87,17 +88,18 @@ where
         .init(index_service_inner_arc.clone())
         .await?;
 
+    // All services are ready; mark the overall server as SERVING. This is set last so
+    // the "" service only becomes healthy after both IndexService and EntryService have
+    // completed init() — preventing a health probe from observing a partially-ready server.
+    health_reporter
+        .set_service_status("", ServingStatus::Serving)
+        .await;
+
     let entry_service_inner_arc = Arc::new(entry_service_inner);
 
     let entry_service = EntryServiceAuthorizor::new(entry_service_inner_arc.clone());
 
     let index_service = IndexServiceAuthorizor::new(index_service_inner_arc.clone());
-
-    // which we need to consume in the server
-    let healthz_service = HealthzService::new(
-        entry_service_inner_arc.clone(),
-        index_service_inner_arc.clone(),
-    );
 
     tracing::info!(addr = %addr, "Starting Udex server with TLS");
 
@@ -119,7 +121,6 @@ where
 
     let entry_server = EntryServiceServer::new(entry_service);
     let index_server = IndexServiceServer::new(index_service);
-    let healthz_service = HealthzServiceServer::new(healthz_service); // healthz is not authenticated
 
     // Build and start the server with TLS
     TonicServer::builder()
@@ -128,7 +129,7 @@ where
         .map_err(|e| Error::ServerError(format!("TLS configuration error: {}", e)))?
         .add_service(InterceptorFor::new(index_server, auth_interceptor.clone()))
         .add_service(InterceptorFor::new(entry_server, auth_interceptor.clone()))
-        .add_service(healthz_service)
+        .add_service(health_service)
         .serve(addr)
         .await
         .map_err(|e| Error::ServerError(format!("Server error: {e:?}")))?;

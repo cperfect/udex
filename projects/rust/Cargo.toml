@@ -21,6 +21,7 @@ description = "Universal lookup directory for entities"
 # Core async runtime and networking
 tokio = { version = "1.36", features = ["full"] }
 tonic = { version = "0.13", features = ["transport", "_tls-any"] }
+tonic-health = "0.13"
 prost = "0.13.5"
 prost-types = "0.13.5"
 

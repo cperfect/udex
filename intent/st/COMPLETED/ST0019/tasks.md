@@ -1,4 +1,4 @@
-# Tasks - ST0010: Rust SDK
+# Tasks - ST0019: gRPC native health check
 
 ## Tasks
 
