@@ -16,7 +16,7 @@ Replace the custom `HealthzService` / `HealthCheck` trait / `udex.healthz.v1` pr
 
 - `tonic-health` added to workspace `Cargo.toml` (server dep; client in test dev-deps)
 - `HealthReporter` created at server startup in `server.rs`; passed to `EntryService::new` and `IndexService::new`
-- `EntryService` and `IndexService` hold a `HealthReporter` and call `set_serving`/`set_not_serving` when the datastore status changes
+- `EntryService` and `IndexService` hold a `HealthReporter`; this PR sets `SERVING` during initialization/startup wiring and does not yet implement reactive datastore-driven `set_not_serving` transitions
 - Services registered with the reporter: `""`, `"udex.entry.v1.EntryService"`, `"udex.index.v1.IndexService"`
 - `HealthServiceServer` (from `tonic-health`) added to the tonic router alongside entry and index
 - `server/src/healthz.rs` deleted
