@@ -49,7 +49,7 @@ Udex implements the [standard gRPC Health Checking Protocol](https://github.com/
 
 - **Broad tooling support** — the standard is understood natively by Kubernetes, Envoy, Istio, `grpc-health-probe`, and any gRPC-aware load balancer. No Udex-specific client code or configuration is required.
 - **Per-service granularity** — the protocol carries a service name (`""` for overall server, `"udex.entry.v1.EntryService"`, `"udex.index.v1.IndexService"`). This is built in; a custom proto would duplicate the concern.
-- **Enables native Kubernetes `grpc` probes** — Kubernetes has supported native `grpc` probe type since 1.24 (beta, enabled by default; GA in 1.27). These probes actually exercise the gRPC stack, whereas `tcpSocket` probes only confirm the port is open. The current deployment uses `tcpSocket` because the server is TLS-only on port 443 and native `grpc` probes do not support TLS; a future non-TLS health port would remove that constraint.
+- **Enables native Kubernetes `grpc` probes** — Kubernetes has supported native `grpc` probe type since 1.24 (beta, enabled by default; GA in 1.27). These probes actually exercise the gRPC stack, whereas `tcpSocket` probes only establish a TCP connection (no TLS handshake, no gRPC). The current deployment uses `tcpSocket` because the server is TLS-only on port 443 and native `grpc` probes do not support TLS; a future non-TLS health port would remove that constraint.
 - **The old `udex.healthz.v1` proto was bespoke** — it had no tooling support outside this repository and imposed a custom client on every caller that needed to check server health.
 
 ## What future features might Udex support?

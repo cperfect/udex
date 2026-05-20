@@ -81,18 +81,18 @@ spec:
             - name: tls
               mountPath: /etc/udex/tls
               readOnly: true
-          # livenessProbe / readinessProbe: TCP socket checks confirm the port is
-          # open and the TLS handshake succeeds, which is sufficient to detect a
-          # crashed or deadlocked process.
+          # livenessProbe / readinessProbe: kubelet's tcpSocket probe only establishes
+          # a TCP connection — it does not perform a TLS handshake or send any data.
+          # This is enough to detect a crashed or deadlocked process that is no longer
+          # accepting connections, but it does not validate the TLS certificate or the
+          # gRPC stack. For full TLS + gRPC validation use an exec-based probe:
+          #   exec: [grpc-health-probe, -addr=:443, -tls, -tls-ca-cert=/etc/udex/tls/ca.crt]
+          # (requires grpc-health-probe in the image, which the current image does not ship).
           #
-          # Native k8s `grpc` probes (beta/default since 1.24, GA since 1.27) do not support TLS —
-          # they make a plain gRPC connection. Because the server is TLS-only on
-          # port 443, native gRPC probes would fail at the handshake. The server
-          # does expose grpc.health.v1.Health (ST0019) and could be probed via an
-          # exec-based grpc-health-probe with --tls, but the simpler path is to
-          # add a dedicated non-TLS health port to the server in a future release,
-          # which would let native `grpc` probes work without any extra binary in
-          # the image.
+          # Native k8s `grpc` probes (beta/default since 1.24, GA since 1.27) make a
+          # plain, non-TLS gRPC connection; they would fail the TLS handshake against
+          # the TLS-only server on port 443. A future non-TLS health port would let
+          # native `grpc` probes work without any extra binary in the image.
           livenessProbe:
             tcpSocket:
               port: 443
