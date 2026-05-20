@@ -24,7 +24,7 @@ Native k8s `grpc` probes do not support TLS (confirmed on 1.31.5). The server is
 
 - `tonic-health = "0.13"` added to workspace `Cargo.toml` and `server/Cargo.toml`.
 - `tonic_health::server::health_reporter()` called at startup in `server.rs`; returns `(HealthReporter, HealthServer<HealthService>)` — the service is added directly to the tonic router (no re-wrapping needed).
-- The overall `""` service is set to `SERVING` in `server.rs` immediately after the reporter is created.
+- The overall `""` service is set to `SERVING` in `server.rs` after both `IndexService::init()` and `EntryService::init()` complete successfully, so the overall status only becomes healthy once all services are ready.
 - `HealthReporter` is cloned and passed to `IndexService::new()` and `EntryService::new()` as a second argument.
 - Each service calls `reporter.set_service_status("udex.{entry,index}.v1.{Entry,Index}Service", ServingStatus::Serving)` at the end of its `init()` method.
 - The `HealthCheck` trait and its `is_healthy()` impls were removed from `entry.rs`, `index.rs`, and `lib.rs`.

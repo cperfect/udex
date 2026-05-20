@@ -73,9 +73,6 @@ where
     let datastore_arc = Arc::new(datastore);
 
     let (health_reporter, health_service) = tonic_health::server::health_reporter();
-    health_reporter
-        .set_service_status("", ServingStatus::Serving)
-        .await;
 
     let index_service_inner = IndexService::new(datastore_arc.clone(), health_reporter.clone());
 
@@ -90,6 +87,13 @@ where
     entry_service_inner
         .init(index_service_inner_arc.clone())
         .await?;
+
+    // All services are ready; mark the overall server as SERVING. This is set last so
+    // the "" service only becomes healthy after both IndexService and EntryService have
+    // completed init() — preventing a health probe from observing a partially-ready server.
+    health_reporter
+        .set_service_status("", ServingStatus::Serving)
+        .await;
 
     let entry_service_inner_arc = Arc::new(entry_service_inner);
 
