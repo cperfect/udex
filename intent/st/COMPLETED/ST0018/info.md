@@ -1,10 +1,10 @@
 ---
 verblock: "18 May 2026:v0.1: Chris Perfect - Initial version"
 intent_version: 2.4.0
-status: WIP
+status: Completed
 slug: local-k8s-and-helm-development
 created: 20260518
-completed:
+completed: 20260520
 ---
 
 # ST0018: Local k8s and helm development
