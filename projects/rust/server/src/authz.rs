@@ -56,7 +56,11 @@ impl AuthzInterceptor {
                 let jwks_text = reqwest::Client::builder()
                     .timeout(Duration::from_secs(10))
                     .build()
-                    .map_err(|e| Error::ConfigValidation(e.to_string()))?
+                    .map_err(|e| {
+                        Error::ConfigValidation(format!(
+                            "Failed to build HTTP client for JWKS fetch from '{url_for_err}': {e}"
+                        ))
+                    })?
                     .get(&url)
                     .send()
                     .await
