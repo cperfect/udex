@@ -47,32 +47,37 @@ pub struct AuthzInterceptor {
 }
 
 impl AuthzInterceptor {
-    pub fn new(config: AuthzConfig) -> Result<Self, Error> {
+    pub async fn new(config: AuthzConfig) -> Result<Self, Error> {
         config.validate()?;
         // TODO If the identity provider rotates signing keys, a server restart would be required to pick up the new JWKS. This is acceptable for test/demo purposes (which is the case for now) but for production use, consider implementing periodic JWKS refresh (e.g., background task with configurable interval, or refresh on kid miss with rate limiting).
         let key_source = match (config.jwks_url, config.jwt_public_key) {
             (Some(url), None) => {
                 let url_for_err = url.clone();
-                let jwks_text = std::thread::spawn(move || -> Result<String, String> {
-                    reqwest::blocking::Client::builder()
-                        .timeout(Duration::from_secs(10))
-                        .build()
-                        .map_err(|e| e.to_string())?
-                        .get(&url)
-                        .send()
-                        .map_err(|e| e.to_string())?
-                        .error_for_status()
-                        .map_err(|e| e.to_string())?
-                        .text()
-                        .map_err(|e| e.to_string())
-                })
-                .join()
-                .map_err(|_| Error::ConfigValidation("JWKS fetch panicked".to_string()))?
-                .map_err(|e| {
-                    Error::ConfigValidation(format!(
-                        "Failed to fetch JWKS from '{url_for_err}': {e}"
-                    ))
-                })?;
+                let jwks_text = reqwest::Client::builder()
+                    .timeout(Duration::from_secs(10))
+                    .build()
+                    .map_err(|e| Error::ConfigValidation(e.to_string()))?
+                    .get(&url)
+                    .send()
+                    .await
+                    .map_err(|e| {
+                        Error::ConfigValidation(format!(
+                            "Failed to fetch JWKS from '{url_for_err}': {e}"
+                        ))
+                    })?
+                    .error_for_status()
+                    .map_err(|e| {
+                        Error::ConfigValidation(format!(
+                            "Failed to fetch JWKS from '{url_for_err}': {e}"
+                        ))
+                    })?
+                    .text()
+                    .await
+                    .map_err(|e| {
+                        Error::ConfigValidation(format!(
+                            "Failed to fetch JWKS from '{url_for_err}': {e}"
+                        ))
+                    })?;
 
                 let jwks: JwkSet = serde_json::from_str(&jwks_text).map_err(|e| {
                     Error::ConfigValidation(format!(
@@ -296,7 +301,7 @@ mod tests {
         s
     }
 
-    fn test_interceptor() -> AuthzInterceptor {
+    async fn test_interceptor() -> AuthzInterceptor {
         AuthzInterceptor::new(AuthzConfig {
             jwks_url: None,
             jwt_public_key: Some(bound_pem_secret("tests/jwt/signing_public_key.pem")),
@@ -306,10 +311,11 @@ mod tests {
             scope_claim_name: None,
             mask_subject_in_logs: false,
         })
+        .await
         .expect("Failed to create test AuthzInterceptor")
     }
 
-    fn test_interceptor_masked() -> AuthzInterceptor {
+    async fn test_interceptor_masked() -> AuthzInterceptor {
         AuthzInterceptor::new(AuthzConfig {
             jwks_url: None,
             jwt_public_key: Some(bound_pem_secret("tests/jwt/signing_public_key.pem")),
@@ -319,11 +325,12 @@ mod tests {
             scope_claim_name: None,
             mask_subject_in_logs: true,
         })
+        .await
         .expect("Failed to create masked test AuthzInterceptor")
     }
 
-    #[test]
-    fn test_new_rejects_both_key_sources() {
+    #[tokio::test]
+    async fn test_new_rejects_both_key_sources() {
         let Err(err) = AuthzInterceptor::new(AuthzConfig {
             jwks_url: Some("http://localhost:4444/.well-known/jwks.json".to_string()),
             jwt_public_key: Some(bound_pem_secret("tests/jwt/signing_public_key.pem")),
@@ -332,7 +339,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
-        }) else {
+        })
+        .await
+        else {
             panic!("expected ConfigValidation error for both key sources");
         };
         assert!(
@@ -341,8 +350,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_new_rejects_no_key_source() {
+    #[tokio::test]
+    async fn test_new_rejects_no_key_source() {
         let Err(err) = AuthzInterceptor::new(AuthzConfig {
             jwks_url: None,
             jwt_public_key: None,
@@ -351,7 +360,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
-        }) else {
+        })
+        .await
+        else {
             panic!("expected ConfigValidation error for no key source");
         };
         assert!(
@@ -360,36 +371,36 @@ mod tests {
         );
     }
 
-    #[test]
-    fn extract_bearer_token_canonical() {
-        let interceptor = test_interceptor();
+    #[tokio::test]
+    async fn extract_bearer_token_canonical() {
+        let interceptor = test_interceptor().await;
         assert_eq!(
             interceptor.extract_bearer_token("Bearer mytoken").unwrap(),
             "mytoken"
         );
     }
 
-    #[test]
-    fn extract_bearer_token_lowercase_scheme() {
-        let interceptor = test_interceptor();
+    #[tokio::test]
+    async fn extract_bearer_token_lowercase_scheme() {
+        let interceptor = test_interceptor().await;
         assert_eq!(
             interceptor.extract_bearer_token("bearer mytoken").unwrap(),
             "mytoken"
         );
     }
 
-    #[test]
-    fn extract_bearer_token_uppercase_scheme() {
-        let interceptor = test_interceptor();
+    #[tokio::test]
+    async fn extract_bearer_token_uppercase_scheme() {
+        let interceptor = test_interceptor().await;
         assert_eq!(
             interceptor.extract_bearer_token("BEARER mytoken").unwrap(),
             "mytoken"
         );
     }
 
-    #[test]
-    fn extract_bearer_token_trims_token_whitespace() {
-        let interceptor = test_interceptor();
+    #[tokio::test]
+    async fn extract_bearer_token_trims_token_whitespace() {
+        let interceptor = test_interceptor().await;
         assert_eq!(
             interceptor
                 .extract_bearer_token("Bearer   mytoken  ")
@@ -398,21 +409,21 @@ mod tests {
         );
     }
 
-    #[test]
-    fn extract_bearer_token_wrong_scheme_is_err() {
-        let interceptor = test_interceptor();
+    #[tokio::test]
+    async fn extract_bearer_token_wrong_scheme_is_err() {
+        let interceptor = test_interceptor().await;
         assert!(interceptor.extract_bearer_token("Basic mytoken").is_err());
     }
 
-    #[test]
-    fn extract_bearer_token_missing_token_is_err() {
-        let interceptor = test_interceptor();
+    #[tokio::test]
+    async fn extract_bearer_token_missing_token_is_err() {
+        let interceptor = test_interceptor().await;
         assert!(interceptor.extract_bearer_token("Bearer").is_err());
     }
 
-    #[test]
-    fn extract_bearer_token_empty_is_err() {
-        let interceptor = test_interceptor();
+    #[tokio::test]
+    async fn extract_bearer_token_empty_is_err() {
+        let interceptor = test_interceptor().await;
         assert!(interceptor.extract_bearer_token("").is_err());
     }
 
@@ -448,17 +459,13 @@ mod tests {
     }
 
     #[traced_test]
-    #[test]
-    fn test_mask_subject_in_logs_emits_masked() {
+    #[tokio::test]
+    async fn test_mask_subject_in_logs_emits_masked() {
         use tonic_middleware::RequestInterceptor;
         let token = make_valid_token("alice@example.com");
-        let interceptor = test_interceptor_masked();
+        let interceptor = test_interceptor_masked().await;
         let req = make_request_with_token(&token);
-        tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap()
-            .block_on(async { interceptor.intercept(req).await })
-            .expect("intercept ok");
+        interceptor.intercept(req).await.expect("intercept ok");
         // "alice@example.com" (17 chars) → "al*************om"
         assert!(
             logs_contain("al*************om"),
@@ -471,17 +478,13 @@ mod tests {
     }
 
     #[traced_test]
-    #[test]
-    fn test_mask_subject_in_logs_false_emits_subject() {
+    #[tokio::test]
+    async fn test_mask_subject_in_logs_false_emits_subject() {
         use tonic_middleware::RequestInterceptor;
         let token = make_valid_token("alice@example.com");
-        let interceptor = test_interceptor();
+        let interceptor = test_interceptor().await;
         let req = make_request_with_token(&token);
-        tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap()
-            .block_on(async { interceptor.intercept(req).await })
-            .expect("intercept ok");
+        interceptor.intercept(req).await.expect("intercept ok");
         assert!(logs_contain("alice@example.com"), "expected subject in log");
         assert!(
             !logs_contain("al*************om"),
@@ -512,17 +515,17 @@ mod tests {
     }
 
     #[traced_test]
-    #[test]
-    fn test_invalid_jwt_emits_warn() {
-        let interceptor = test_interceptor();
+    #[tokio::test]
+    async fn test_invalid_jwt_emits_warn() {
+        let interceptor = test_interceptor().await;
         let result = interceptor.validate_jwt("this.is.not.a.valid.jwt");
         assert!(result.is_err());
         assert!(logs_contain("JWT validation error"));
     }
 
     #[traced_test]
-    #[test]
-    fn test_jwt_wrong_issuer_emits_warn() {
+    #[tokio::test]
+    async fn test_jwt_wrong_issuer_emits_warn() {
         use jsonwebtoken::{encode, EncodingKey, Header};
         use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -549,14 +552,14 @@ mod tests {
 
         let token = encode(&header, &claims, &encoding_key).expect("Failed to encode JWT");
 
-        let interceptor = test_interceptor();
+        let interceptor = test_interceptor().await;
         let result = interceptor.validate_jwt(&token);
         assert!(result.is_err());
         assert!(logs_contain("JWT validation error"));
     }
 
-    #[test]
-    fn test_jwt_empty_sub_is_rejected() {
+    #[tokio::test]
+    async fn test_jwt_empty_sub_is_rejected() {
         use jsonwebtoken::{encode, EncodingKey, Header};
         use std::time::{SystemTime, UNIX_EPOCH};
         let now = SystemTime::now()
@@ -578,13 +581,13 @@ mod tests {
         header.typ = Some("JWT".to_string());
         let token = encode(&header, &claims, &encoding_key).expect("encode JWT");
 
-        let result = test_interceptor().validate_jwt(&token);
+        let result = test_interceptor().await.validate_jwt(&token);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
     }
 
-    #[test]
-    fn test_jwt_missing_sub_is_rejected() {
+    #[tokio::test]
+    async fn test_jwt_missing_sub_is_rejected() {
         use jsonwebtoken::{encode, EncodingKey, Header};
         use std::time::{SystemTime, UNIX_EPOCH};
         #[derive(serde::Serialize)]
@@ -612,7 +615,7 @@ mod tests {
         header.typ = Some("JWT".to_string());
         let token = encode(&header, &claims, &encoding_key).expect("encode JWT");
 
-        let result = test_interceptor().validate_jwt(&token);
+        let result = test_interceptor().await.validate_jwt(&token);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
     }

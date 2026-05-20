@@ -88,13 +88,6 @@ where
         .init(index_service_inner_arc.clone())
         .await?;
 
-    // All services are ready; mark the overall server as SERVING. This is set last so
-    // the "" service only becomes healthy after both IndexService and EntryService have
-    // completed init() — preventing a health probe from observing a partially-ready server.
-    health_reporter
-        .set_service_status("", ServingStatus::Serving)
-        .await;
-
     let entry_service_inner_arc = Arc::new(entry_service_inner);
 
     let entry_service = EntryServiceAuthorizor::new(entry_service_inner_arc.clone());
@@ -117,7 +110,14 @@ where
         .clone();
     let identity = Identity::from_pem(cert_pem, key_pem);
 
-    let auth_interceptor = AuthzInterceptor::new(config.authz)?;
+    let auth_interceptor = AuthzInterceptor::new(config.authz).await?;
+
+    // Mark the overall server as SERVING only after all init is complete: both service
+    // init() calls and the JWKS fetch in AuthzInterceptor::new(). This ensures the ""
+    // health entry is never SERVING while the server is still initialising.
+    health_reporter
+        .set_service_status("", ServingStatus::Serving)
+        .await;
 
     let entry_server = EntryServiceServer::new(entry_service);
     let index_server = IndexServiceServer::new(index_service);
