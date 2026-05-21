@@ -70,7 +70,9 @@ where
 
     tracing::info!("Initializing services");
 
-    let datastore_arc = Arc::new(datastore);
+    // Shadow the parameter with the Arc-wrapped value — the original D is consumed
+    // here and the rest of the function works exclusively through the Arc.
+    let datastore = Arc::new(datastore);
 
     let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -92,11 +94,10 @@ where
         .set_service_status("udex.entry.v1.EntryService", ServingStatus::NotServing)
         .await;
 
-    let index_service_inner =
-        IndexService::new(Arc::clone(&datastore_arc), health_reporter.clone());
+    let index_service_inner = IndexService::new(Arc::clone(&datastore), health_reporter.clone());
 
-    let entry_service_inner =
-        EntryService::new(Arc::clone(&datastore_arc), health_reporter.clone());
+    // Last use of datastore — move it rather than cloning the Arc.
+    let entry_service_inner = EntryService::new(datastore, health_reporter.clone());
 
     index_service_inner
         .init(config.init_indexes.clone())
@@ -147,7 +148,7 @@ where
         .tls_config(ServerTlsConfig::new().identity(identity))
         .map_err(|e| Error::ServerError(format!("TLS configuration error: {}", e)))?
         .add_service(InterceptorFor::new(index_server, auth_interceptor.clone()))
-        .add_service(InterceptorFor::new(entry_server, auth_interceptor.clone()))
+        .add_service(InterceptorFor::new(entry_server, auth_interceptor))
         .add_service(health_service)
         .serve(addr)
         .await
