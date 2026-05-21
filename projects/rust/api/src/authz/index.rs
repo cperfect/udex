@@ -136,6 +136,9 @@ impl Permissable<DescribeRequest> for DescribeRequest {
 
 impl Permissable<CreateIndexRequest> for CreateIndexRequest {
     fn required_permissions(&self) -> Vec<String> {
+        // Create is a global/admin permission: the index does not exist at
+        // authorization time so per-resource scoping is not meaningful. A
+        // token either has blanket create authority or it does not.
         vec!["udex:index:v1:create".to_string()]
     }
 }
