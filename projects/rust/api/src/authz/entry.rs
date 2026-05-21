@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::authz::{
     claims::Claims,
     permissions::{is_permitted, Permissable},
@@ -20,14 +18,18 @@ pub struct EntryServiceAuthorizor<E>
 where
     E: EntryService + Send + Sync + 'static,
 {
-    inner: Arc<E>,
+    // Owned directly — the authorizor never shares, clones, or transfers the
+    // inner service. Tonic wraps the authorizor in its own Arc<Inner> to serve
+    // concurrent requests; adding Arc here would be a redundant extra allocation
+    // and an extra pointer dereference on every request.
+    inner: E,
 }
 
 impl<E> EntryServiceAuthorizor<E>
 where
     E: EntryService + Send + Sync + 'static,
 {
-    pub fn new(inner: Arc<E>) -> Self {
+    pub fn new(inner: E) -> Self {
         EntryServiceAuthorizor { inner }
     }
 }
@@ -362,7 +364,7 @@ mod tests {
             }))
         });
 
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:entry:v1:{}:create",
             "test-index"
@@ -383,7 +385,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_entry_without_permissions() {
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_without_permissions();
 
         let mut request = Request::new(CreateEntryRequest {
@@ -400,7 +402,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_entry_without_claims() {
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
 
         let request = Request::new(CreateEntryRequest {
             index_name: "test-index".to_string(),
@@ -420,7 +422,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(Response::new(DeleteEntryResponse {})));
 
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:entry:v1:{}:delete",
             "test-index"
@@ -440,7 +442,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_entry_without_permissions() {
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec!["udex:entry:v1:read"]); // wrong permission
 
         let mut request = Request::new(DeleteEntryRequest {
@@ -467,7 +469,7 @@ mod tests {
                 }))
             });
 
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:entry:v1:{}:read",
             "test-index"
@@ -492,7 +494,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(Response::new(LookupKeyByContextResponse { key: None })));
 
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:entry:v1:{}:read",
             "test-index"
@@ -523,7 +525,7 @@ mod tests {
                 }))
             });
 
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec!["udex:entry:v1:test-index:create"]);
 
         let mut request = Request::new(BulkWriteEntryOperationRequest {
@@ -555,7 +557,7 @@ mod tests {
                 }))
             });
 
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec!["udex:entry:v1:test-index:delete"]);
 
         let mut request = Request::new(BulkWriteEntryOperationRequest {
@@ -587,7 +589,7 @@ mod tests {
                 }))
             });
 
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![
             "udex:entry:v1:test-index:read",
             "udex:entry:v1:test-index:write",
@@ -625,7 +627,7 @@ mod tests {
                 }))
             });
 
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         // Mixed: create + delete + lookup_or_create → needs create, delete, read, write
         let claims = create_test_claims_with_permissions(vec![
             "udex:entry:v1:test-index:create",
@@ -671,7 +673,7 @@ mod tests {
         use crate::entry::{bulk_write_entry_operation::Operation, BulkWriteEntryOperation};
 
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         // Has create + delete but missing read + write for the LookupOrCreate op
         let claims = create_test_claims_with_permissions(vec![
             "udex:entry:v1:test-index:create",
@@ -713,7 +715,7 @@ mod tests {
         use crate::entry::{bulk_write_entry_operation::Operation, BulkWriteEntryOperation};
 
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         // Token grants create on the attacker's own index, not the victim index.
         let claims =
             create_test_claims_with_permissions(vec!["udex:entry:v1:attacker-index:create"]);
@@ -748,7 +750,7 @@ mod tests {
                 }))
             });
 
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec!["udex:entry:v1:test-index:read"]);
 
         let mut request = Request::new(BulkReadEntryOperationRequest {
@@ -771,7 +773,7 @@ mod tests {
         // Auth must be checked before validation — unauthenticated callers must not learn
         // about request shape (e.g. whether ops is empty) from the error code.
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
 
         let request = Request::new(BulkWriteEntryOperationRequest {
             index_name: "test-index".to_string(),
@@ -787,7 +789,7 @@ mod tests {
     #[tokio::test]
     async fn test_bulk_write_empty_operations_invalid_argument() {
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec!["udex:entry:v1:test-index:write"]);
 
         let mut request = Request::new(BulkWriteEntryOperationRequest {
@@ -806,7 +808,7 @@ mod tests {
         use crate::entry::BulkWriteEntryOperation;
 
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec!["udex:entry:v1:test-index:write"]);
 
         let mut request = Request::new(BulkWriteEntryOperationRequest {
@@ -823,7 +825,7 @@ mod tests {
     #[tokio::test]
     async fn test_bulk_read_unauthenticated_returns_unauthenticated_not_invalid_argument() {
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
 
         let request = Request::new(BulkReadEntryOperationRequest {
             index_name: "test-index".to_string(),
@@ -839,7 +841,7 @@ mod tests {
     #[tokio::test]
     async fn test_bulk_read_empty_operations_invalid_argument() {
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec!["udex:entry:v1:test-index:read"]);
 
         let mut request = Request::new(BulkReadEntryOperationRequest {
@@ -858,7 +860,7 @@ mod tests {
         use crate::entry::BulkReadEntryOperation;
 
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec!["udex:entry:v1:test-index:read"]);
 
         let mut request = Request::new(BulkReadEntryOperationRequest {
@@ -882,7 +884,7 @@ mod tests {
             }))
         });
 
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![
             format!("udex:entry:v1:{}:read", "test-index").as_str(),
             format!("udex:entry:v1:{}:create", "test-index").as_str(),
@@ -902,7 +904,7 @@ mod tests {
     #[tokio::test]
     async fn test_wrong_permission_type() {
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:index:v1:{}:read",
             "test-index"
@@ -923,7 +925,7 @@ mod tests {
     #[tokio::test]
     async fn test_wrong_index_in_permission() {
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:entry:v1:{}:read",
             "wrong-index"
@@ -955,7 +957,7 @@ mod tests {
                 }))
             });
 
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![
             format!("udex:entry:v1:{}:read", "test-index").as_str(),
             format!("udex:entry:v1:{}:write", "test-index").as_str(),
@@ -978,7 +980,7 @@ mod tests {
     #[tokio::test]
     async fn test_lookup_or_create_write_only_permission_denied() {
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         // write-only is insufficient — read is also required
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:entry:v1:{}:write",
@@ -1001,7 +1003,7 @@ mod tests {
     #[tokio::test]
     async fn test_lookup_or_create_read_permission_denied() {
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
         // read-only is insufficient — write is also required
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:entry:v1:{}:read",
@@ -1024,7 +1026,7 @@ mod tests {
     #[tokio::test]
     async fn test_lookup_or_create_no_claims() {
         let mock_service = MockEntryServiceImpl::new();
-        let authorizor = EntryServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = EntryServiceAuthorizor::new(mock_service);
 
         let request = Request::new(LookupKeyByContextOrCreateRequest {
             index_name: "test-index".to_string(),

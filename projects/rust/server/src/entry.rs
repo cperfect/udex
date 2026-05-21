@@ -51,7 +51,7 @@ where
     }
 
     /// Initializes the EntryService by pre-warming the hasher cache from existing indices.
-    pub async fn init(&self, index_service: Arc<dyn IndexService>) -> Result<(), Error> {
+    pub async fn init(&self, index_service: &dyn IndexService) -> Result<(), Error> {
         let indexes = index_service
             .list_indices(tonic::Request::new(ListIndicesRequest {}))
             .await

@@ -92,25 +92,26 @@ where
         .set_service_status("udex.entry.v1.EntryService", ServingStatus::NotServing)
         .await;
 
-    let index_service_inner = IndexService::new(datastore_arc.clone(), health_reporter.clone());
+    let index_service_inner =
+        IndexService::new(Arc::clone(&datastore_arc), health_reporter.clone());
 
-    let entry_service_inner = EntryService::new(datastore_arc.clone(), health_reporter.clone());
+    let entry_service_inner =
+        EntryService::new(Arc::clone(&datastore_arc), health_reporter.clone());
 
     index_service_inner
         .init(config.init_indexes.clone())
         .await?;
 
-    let index_service_inner_arc = Arc::new(index_service_inner);
+    // Pass &dyn IndexService — init only needs a transient reference to list
+    // existing indices; no shared ownership is required.
+    entry_service_inner.init(&index_service_inner).await?;
 
-    entry_service_inner
-        .init(index_service_inner_arc.clone())
-        .await?;
+    // The authorizors take ownership: they are the sole owners of their inner
+    // service and never share or clone it. Tonic wraps the authorizor itself in
+    // Arc<Inner> to serve concurrent requests.
+    let entry_service = EntryServiceAuthorizor::new(entry_service_inner);
 
-    let entry_service_inner_arc = Arc::new(entry_service_inner);
-
-    let entry_service = EntryServiceAuthorizor::new(entry_service_inner_arc.clone());
-
-    let index_service = IndexServiceAuthorizor::new(index_service_inner_arc.clone());
+    let index_service = IndexServiceAuthorizor::new(index_service_inner);
 
     tracing::info!(addr = %addr, "Starting Udex server with TLS");
 
