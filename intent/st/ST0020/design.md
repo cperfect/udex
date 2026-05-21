@@ -21,6 +21,8 @@ No field number is reused (proto wire compatibility is irrelevant for a pre-rele
 
 **`update_index` handler** removes `hash_algorithm` from the empty-field guard (`update.hash_algorithm.is_none()` check at line ~346). The handler body remains `unimplemented!()`.
 
+**Datastore `update_index`** (not explicitly called out in WP02 originally, but part of the same mechanical cascade): `hash_algorithm` removed from the empty-field guard and from the SQL `UPDATE` query; the `$7` parameter slot is dropped and positions $8–$10 shift down to $7–$9.
+
 ### WP03 — Documentation and FAQ
 
 **`projects/protobuf/README.md`** key design points: add a bullet stating that `Index.hash_algorithm` is immutable after creation and that changing it post-creation is rejected.
