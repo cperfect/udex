@@ -12,7 +12,7 @@ use tonic::transport::{Channel, ClientTlsConfig};
 use tonic_health::pb::{
     health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
 };
-use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
+use udex_api::index::{CreateIndexRequest, HashAlgorithm};
 use udex_datastore::integration_test::init_postgres;
 use udex_server::{config::ServerConfig, logging, server};
 use udex_test_utils::{bind_file_secret, hydra_admin_url};
@@ -64,17 +64,15 @@ async fn init_server() -> MaybeOnceType {
             cert: bind_file_secret("tests/certs/server.crt"),
             key: bind_file_secret("tests/certs/server.key"),
         },
-        init_indexes: vec![UpdateIndexRequest {
+        init_indexes: vec![CreateIndexRequest {
             name: index_name.clone(),
-            update: Some(IndexUpdate {
-                description: Some(index_name.clone()),
-                display_name: Some(index_name.clone()),
-                max_bulk_operations: Some(100),
-                max_key_length: Some(256),
-                max_value_length: Some(1024),
-                max_kv_pairs_per_context: Some(50),
-                hash_algorithm: Some(HashAlgorithm::Xxh3 as i32),
-            }),
+            display_name: index_name.clone(),
+            description: index_name.clone(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
         }],
         authz: udex_server::config::AuthzConfig {
             jwks_url: None,
@@ -175,17 +173,15 @@ async fn init_server_hydra() -> HydraFixtureType {
             cert: bind_file_secret("tests/certs/server.crt"),
             key: bind_file_secret("tests/certs/server.key"),
         },
-        init_indexes: vec![UpdateIndexRequest {
+        init_indexes: vec![CreateIndexRequest {
             name: index_name.clone(),
-            update: Some(IndexUpdate {
-                description: Some(index_name.clone()),
-                display_name: Some(index_name.clone()),
-                max_bulk_operations: Some(100),
-                max_key_length: Some(256),
-                max_value_length: Some(1024),
-                max_kv_pairs_per_context: Some(50),
-                hash_algorithm: Some(HashAlgorithm::Xxh3 as i32),
-            }),
+            display_name: index_name.clone(),
+            description: index_name.clone(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
         }],
         authz: udex_server::config::AuthzConfig {
             jwks_url: Some(jwks_url),

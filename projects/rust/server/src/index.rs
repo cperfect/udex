@@ -76,129 +76,107 @@ where
             .map_err(Error::Datastore)
     }
 
-    pub async fn init(&self, init_indexes: Vec<UpdateIndexRequest>) -> Result<(), Error> {
-        // first list the existing indices
+    pub async fn init(&self, init_indexes: Vec<CreateIndexRequest>) -> Result<(), Error> {
         let existing_indices = self.list_indices_internal().await?;
-        // Initialize the datastore with the provided indices
-        for index_request in init_indexes {
-            let update = match index_request.update {
-                Some(update) => update,
-                None => {
-                    return Err(Error::ServerError(
-                        "Index update request must contain an update".to_string(),
-                    ));
-                }
-            };
 
-            // check all mandatory fields are present
-            if index_request.name.trim().is_empty() {
+        for req in init_indexes {
+            if req.name.trim().is_empty() {
                 return Err(Error::ServerError(
-                    "Index name must be non-empty".to_string(),
+                    "init index name must be non-empty".to_string(),
                 ));
             }
-            if let Some(bad) = invalid_name_char(&index_request.name) {
+            if let Some(bad) = invalid_name_char(&req.name) {
                 return Err(Error::ServerError(format!(
-                    "Index name '{}' contains invalid character {}; allowed: Unicode letters, digits, hyphens, underscores",
-                    index_request.name,
+                    "init index name '{}' contains invalid character {}; \
+                     allowed: Unicode letters, digits, hyphens, underscores",
+                    req.name,
                     format_invalid_name_char(bad)
                 )));
             }
-            if update
-                .display_name
-                .as_deref()
-                .unwrap_or("")
-                .trim()
-                .is_empty()
-            {
+            if req.display_name.trim().is_empty() {
                 return Err(Error::ServerError(
-                    "Index update must contain a non-empty display_name".to_string(),
+                    "init index display_name must be non-empty".to_string(),
                 ));
             }
-            if update.description.is_none() {
+            if req.description.trim().is_empty() {
                 return Err(Error::ServerError(
-                    "Index update must contain a description".to_string(),
+                    "init index description must be non-empty".to_string(),
                 ));
             }
-            if update.max_bulk_operations.is_none() {
+            if req.max_bulk_operations < 1 {
                 return Err(Error::ServerError(
-                    "Index update must contain max_bulk_operations".to_string(),
+                    "init index max_bulk_operations must be >= 1".to_string(),
                 ));
             }
-            if update.max_key_length.is_none() {
+            if req.max_key_length < 1 {
                 return Err(Error::ServerError(
-                    "Index update must contain max_key_length".to_string(),
+                    "init index max_key_length must be >= 1".to_string(),
                 ));
             }
-            if update.max_value_length.is_none() {
+            if req.max_value_length < 1 {
                 return Err(Error::ServerError(
-                    "Index update must contain max_value_length".to_string(),
+                    "init index max_value_length must be >= 1".to_string(),
                 ));
             }
-            if update.max_kv_pairs_per_context.is_none() {
+            if req.max_kv_pairs_per_context < 1 {
                 return Err(Error::ServerError(
-                    "Index update must contain max_kv_pairs_per_context".to_string(),
+                    "init index max_kv_pairs_per_context must be >= 1".to_string(),
                 ));
             }
-            if update.hash_algorithm.is_none() {
-                return Err(Error::ServerError(
-                    "Index update must contain hash_algorithm".to_string(),
-                ));
-            }
+            udex_api::index::HashAlgorithm::try_from(req.hash_algorithm).map_err(|_| {
+                Error::ServerError(format!(
+                    "init index '{}' has unsupported hash_algorithm value: {}",
+                    req.name, req.hash_algorithm
+                ))
+            })?;
 
-            // clone update so we can use it multiple times
-            let update_for_index = update.clone();
-
-            // the mandatory fields are already checked above
-            // so we can safely create the index
-            let index = Index {
-                name: index_request.name.clone(),
-                display_name: update_for_index
-                    .display_name
-                    .expect("Index update must contain a display_name"),
-                description: update_for_index
-                    .description
-                    .expect("Index update must contain a description"),
-                max_bulk_operations: update_for_index
-                    .max_bulk_operations
-                    .expect("Index update must contain max_bulk_operations"),
-                max_key_length: update_for_index
-                    .max_key_length
-                    .expect("Index update must contain max_key_length"),
-                max_value_length: update_for_index
-                    .max_value_length
-                    .expect("Index update must contain max_value_length"),
-                max_kv_pairs_per_context: update_for_index
-                    .max_kv_pairs_per_context
-                    .expect("Index update must contain max_kv_pairs_per_context"),
-                hash_algorithm: update_for_index
-                    .hash_algorithm
-                    .expect("Index update must contain hash_algorithm"),
-                created_at: Some(udex_api::now_timestamp()),
-                created_by: "init".to_string(),
-                updated_at: None,
-                updated_by: None,
-            };
-
-            if let Some(existing) = existing_indices
-                .iter()
-                .find(|i| i.name == index_request.name)
-            {
-                // check if index requested is different from existing
-                if existing.description != index.description
-                    || existing.max_bulk_operations != index.max_bulk_operations
-                    || existing.max_key_length != index.max_key_length
-                    || existing.max_value_length != index.max_value_length
-                    || existing.max_kv_pairs_per_context != index.max_kv_pairs_per_context
-                    || existing.hash_algorithm != index.hash_algorithm
-                {
-                    // update the existing index
-                    self.update_index_internal(&index_request.name, update.clone(), "init")
-                        .await?;
+            if let Some(existing) = existing_indices.iter().find(|i| i.name == req.name) {
+                // hash_algorithm is immutable after creation — error at startup if config disagrees
+                if existing.hash_algorithm != req.hash_algorithm {
+                    return Err(Error::ServerError(format!(
+                        "cannot change hash_algorithm of existing index '{}': \
+                         stored={}, configured={}",
+                        req.name, existing.hash_algorithm, req.hash_algorithm
+                    )));
                 }
-                // else: index already exists and is the same, skip
+                // Update mutable fields if anything changed
+                if existing.description != req.description
+                    || existing.display_name != req.display_name
+                    || existing.max_bulk_operations != req.max_bulk_operations
+                    || existing.max_key_length != req.max_key_length
+                    || existing.max_value_length != req.max_value_length
+                    || existing.max_kv_pairs_per_context != req.max_kv_pairs_per_context
+                {
+                    self.update_index_internal(
+                        &req.name,
+                        IndexUpdate {
+                            description: Some(req.description),
+                            display_name: Some(req.display_name),
+                            max_bulk_operations: Some(req.max_bulk_operations),
+                            max_key_length: Some(req.max_key_length),
+                            max_value_length: Some(req.max_value_length),
+                            max_kv_pairs_per_context: Some(req.max_kv_pairs_per_context),
+                        },
+                        "init",
+                    )
+                    .await?;
+                }
             } else {
-                // create the index
-                self.create_index_internal(index).await?;
+                self.create_index_internal(Index {
+                    name: req.name,
+                    display_name: req.display_name,
+                    description: req.description,
+                    max_bulk_operations: req.max_bulk_operations,
+                    max_key_length: req.max_key_length,
+                    max_value_length: req.max_value_length,
+                    max_kv_pairs_per_context: req.max_kv_pairs_per_context,
+                    hash_algorithm: req.hash_algorithm,
+                    created_at: Some(udex_api::now_timestamp()),
+                    created_by: "init".to_string(),
+                    updated_at: None,
+                    updated_by: None,
+                })
+                .await?;
             }
         }
 
@@ -343,7 +321,6 @@ where
             && update.max_key_length.is_none()
             && update.max_value_length.is_none()
             && update.max_kv_pairs_per_context.is_none()
-            && update.hash_algorithm.is_none()
         {
             return Err(Status::invalid_argument(
                 "at least one field must be provided for update",

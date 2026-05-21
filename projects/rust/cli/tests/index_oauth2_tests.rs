@@ -20,7 +20,7 @@ use rstest::*;
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic_health::pb::{health_client::HealthClient, HealthCheckRequest};
-use udex_api::index::{HashAlgorithm, Index, IndexUpdate, UpdateIndexRequest};
+use udex_api::index::{CreateIndexRequest, HashAlgorithm, Index};
 use udex_datastore::integration_test::init_postgres;
 use udex_datastore::{Datastore, Entry};
 use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, register_hydra_client};
@@ -59,18 +59,6 @@ fn token_url() -> String {
 // ── Fixture ───────────────────────────────────────────────────────────────────
 
 type Fixture = ();
-
-fn index_update(description: &str) -> IndexUpdate {
-    IndexUpdate {
-        description: Some(description.to_string()),
-        display_name: Some(description.to_string()),
-        max_bulk_operations: Some(100),
-        max_key_length: Some(256),
-        max_value_length: Some(1024),
-        max_kv_pairs_per_context: Some(50),
-        hash_algorithm: Some(HashAlgorithm::Xxh3 as i32),
-    }
-}
 
 async fn init_fixture() -> Fixture {
     udex_server::logging::init_test_tracing();
@@ -128,14 +116,26 @@ async fn init_fixture() -> Fixture {
         },
         init_indexes: vec![
             // Empty index — no entries seeded.
-            UpdateIndexRequest {
+            CreateIndexRequest {
                 name: EMPTY_INDEX_NAME.to_string(),
-                update: Some(index_update("empty index for delete test")),
+                display_name: "empty index for delete test".to_string(),
+                description: "empty index for delete test".to_string(),
+                max_bulk_operations: 100,
+                max_key_length: 256,
+                max_value_length: 1024,
+                max_kv_pairs_per_context: 50,
+                hash_algorithm: HashAlgorithm::Xxh3 as i32,
             },
             // Non-empty index already created above; server init will see it exists and skip.
-            UpdateIndexRequest {
+            CreateIndexRequest {
                 name: NON_EMPTY_INDEX_NAME.to_string(),
-                update: Some(index_update("non-empty index for delete test")),
+                display_name: "non-empty index for delete test".to_string(),
+                description: "non-empty index for delete test".to_string(),
+                max_bulk_operations: 100,
+                max_key_length: 256,
+                max_value_length: 1024,
+                max_kv_pairs_per_context: 50,
+                hash_algorithm: HashAlgorithm::Xxh3 as i32,
             },
         ],
         authz: udex_server::config::AuthzConfig {

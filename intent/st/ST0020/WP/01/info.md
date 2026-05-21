@@ -3,7 +3,7 @@ verblock: "21 May 2026:v0.1: Chris Perfect - Initial version"
 wp_id: WP-01
 title: "Proto and generated code"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-01: Proto and generated code

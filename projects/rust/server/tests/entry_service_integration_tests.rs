@@ -34,17 +34,15 @@ async fn init_entry_service() -> MaybeOnceType {
         IndexService::new(datastore.clone(), index_reporter);
 
     // statically define an index for testing
-    let init_index = udex_api::index::UpdateIndexRequest {
+    let init_index = udex_api::index::CreateIndexRequest {
         name: index_name.clone(),
-        update: Some(udex_api::index::IndexUpdate {
-            description: Some("Test entry description".to_string()),
-            display_name: Some("Test Entry Index".to_string()),
-            max_bulk_operations: Some(100),
-            max_key_length: Some(256),
-            max_value_length: Some(1024),
-            max_kv_pairs_per_context: Some(10),
-            hash_algorithm: Some(HashAlgorithm::Xxh3 as i32),
-        }),
+        display_name: "Test Entry Index".to_string(),
+        description: "Test entry description".to_string(),
+        max_bulk_operations: 100,
+        max_key_length: 256,
+        max_value_length: 1024,
+        max_kv_pairs_per_context: 10,
+        hash_algorithm: HashAlgorithm::Xxh3 as i32,
     };
 
     // initialize the index service with the static index
