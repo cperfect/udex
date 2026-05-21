@@ -29,7 +29,7 @@ use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic_health::pb::{health_client::HealthClient, HealthCheckRequest};
 use udex_api::index::{CreateIndexRequest, HashAlgorithm};
 use udex_datastore::integration_test::init_postgres;
-use udex_sdk::{ClientOptions, ContextInput, KeyValuePair, UdexClient, Value};
+use udex_sdk::{ClientOptions, ContextInput, HealthStatus, KeyValuePair, UdexClient, Value};
 use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, register_hydra_client};
 
 // ── Port constants ────────────────────────────────────────────────────────────
@@ -365,6 +365,16 @@ fn context_input(pairs: &[(&str, &str)]) -> ContextInput {
 }
 
 // ── JWT-backed tests (always run) ─────────────────────────────────────────────
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_health_serving() {
+    let d = data(false).await;
+    let client = &d.0;
+
+    let status = client.health().await.expect("health() failed");
+    assert_eq!(status, HealthStatus::Serving);
+}
 
 #[rstest]
 #[tokio_shared_rt::test]
@@ -804,6 +814,16 @@ async fn test_sdk_envelope_encrypted_entry() {
 // These tests mirror the JWT-fixture tests above but drive the full OAuth2
 // client-credentials token lifecycle through Hydra, which is always available
 // in the compose development environment.
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_oauth2_health_serving() {
+    let d = data_hydra(false).await;
+    let client = &d.0;
+
+    let status = client.health().await.expect("health() failed");
+    assert_eq!(status, HealthStatus::Serving);
+}
 
 #[rstest]
 #[tokio_shared_rt::test]
