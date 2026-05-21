@@ -46,7 +46,7 @@ Single `Healthz` RPC that returns server time, health status, and any status mes
 ## Key design points
 
 - **Context identity** — the server computes the context hash over `(key, value)` pairs only; `kek_id` and `dek` envelope-encryption fields on `KeyValuePair` are excluded so that re-encrypting a value does not produce a new identity.
-- **Immutability** — `Context` is immutable after creation; updates require delete and recreate. `Index.name` is also immutable.
+- **Immutability** — `Context` is immutable after creation; updates require delete and recreate. `Index.name` and `Index.hash_algorithm` are also immutable: the algorithm determines how every context hash in the index was computed, so changing it post-creation would silently invalidate all existing hashes. See `FAQ.md` for details.
 - **`CreateEntry` is idempotent** — if the context already exists in the index the existing key is returned, never a duplicate.
 
 ## Code generation
