@@ -120,6 +120,12 @@ where
             ))
         })?;
 
+        // or_insert is intentional: a concurrent request may have populated this
+        // entry between our read-lock drop and this write-lock acquisition. We keep
+        // the existing entry rather than overwriting it. This is safe because the
+        // hash algorithm for an index is immutable after creation — both values
+        // would be identical. If algorithm mutability is ever added, this cache
+        // will need an explicit invalidation path.
         self.index_hasher_fns
             .write()
             .await

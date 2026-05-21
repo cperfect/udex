@@ -136,10 +136,7 @@ impl Permissable<DescribeRequest> for DescribeRequest {
 
 impl Permissable<CreateIndexRequest> for CreateIndexRequest {
     fn required_permissions(&self) -> Vec<String> {
-        vec![
-            format!("udex:index:v1:create"),
-            // format!("udex:index:v1:{}:write", self.name)
-        ]
+        vec!["udex:index:v1:create".to_string()]
     }
 }
 
