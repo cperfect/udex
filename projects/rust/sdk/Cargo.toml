@@ -11,6 +11,7 @@ description = "Rust client SDK for Udex — connection, TLS, OAuth2, and service
 udex-api = { path = "../api" }
 tokio = { workspace = true }
 tonic = { workspace = true }
+tonic-health = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
@@ -34,7 +35,6 @@ name = "envelope_write"
 path = "examples/envelope_write.rs"
 
 [dev-dependencies]
-tonic-health = { workspace = true }
 udex-test-utils = { path = "../test-utils" }
 udex-server = { path = "../server" }
 udex-datastore = { path = "../datastore", features = ["integration_test"] }
