@@ -32,11 +32,13 @@ pub mod auth;
 pub mod client;
 pub mod entry;
 pub mod error;
+pub mod health;
 pub mod index;
 pub mod json;
 
 pub use client::{ClientOptions, ClientOptionsBuilder, UdexClient};
 pub use error::{grpc_code, Error, RpcStatus};
+pub use health::HealthStatus;
 pub use json::context_input_from_json;
 
 // Re-export the proto types callers need to build requests and read responses.

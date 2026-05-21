@@ -56,6 +56,7 @@ The workspace has five crates. New code goes in the crate that owns its layer â€
 | Entry service wrappers | `udex_sdk::entry` | High-level async methods over the entry gRPC stubs |
 | Index service wrappers | `udex_sdk::index` | High-level async methods over the index gRPC stubs |
 | SDK error types | `udex_sdk::error` | `Error` enum with `thiserror`; never exposes raw tonic/reqwest errors |
+| gRPC health check client | `udex_sdk::health` | `UdexClient::health()` + `HealthStatus` enum; wraps `grpc.health.v1.Health/Check`; no auth required |
 
 ### `udex-cli` â€” Command-line interface binary
 
@@ -69,6 +70,7 @@ The workspace has five crates. New code goes in the crate that owns its layer â€
 | `token inspect` | `udex_cli::commands::token::inspect` | Offline JWT decode (no signature check) |
 | `token fetch` (OAuth2 client_credentials) | `udex_cli::commands::token::fetch` | Fetches a JWT from an OAuth2 token endpoint; decodes and displays header + claims |
 | `context hash` | `udex_cli::commands::context` | Offline context hash computation |
+| `health` command | `udex_cli::commands::health` | Checks server health via `grpc.health.v1.Health/Check`; no auth required; exits non-zero if not SERVING |
 
 ### `udex-test-utils` â€” Shared test fixture helpers (dev-only)
 

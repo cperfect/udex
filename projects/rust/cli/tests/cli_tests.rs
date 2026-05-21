@@ -92,7 +92,7 @@ fn test_entry_lookup_or_create_fails_without_server() {
             "user=alice",
         ])
         .assert()
-        .code(8)
+        .code(20)
         .stderr(predicate::str::contains("transport error"));
 }
 
@@ -126,7 +126,7 @@ fn test_index_list_fails_without_server() {
     udex()
         .args(["index", "list"])
         .assert()
-        .code(8)
+        .code(20)
         .stderr(predicate::str::contains("transport error"));
 }
 
@@ -145,7 +145,7 @@ fn test_index_delete_fails_without_server() {
     udex()
         .args(["index", "delete", "some-index"])
         .assert()
-        .code(8)
+        .code(20)
         .stderr(predicate::str::contains("transport error"));
 }
 
