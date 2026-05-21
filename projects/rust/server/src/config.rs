@@ -19,7 +19,7 @@ pub struct ServerConfig {
     /// authz configuration
     pub authz: AuthzConfig,
     /// statically defined indexes
-    pub init_indexes: Vec<udex_api::index::UpdateIndexRequest>,
+    pub init_indexes: Vec<udex_api::index::CreateIndexRequest>,
 }
 
 /// TLS configuration for the gRPC server.

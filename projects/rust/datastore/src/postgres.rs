@@ -530,7 +530,6 @@ impl Datastore for PostgresDatastore {
             && update.max_key_length.is_none()
             && update.max_value_length.is_none()
             && update.max_kv_pairs_per_context.is_none()
-            && update.hash_algorithm.is_none()
         {
             return Err(Error::InvalidIndexUpdate("No fields to update".to_string()));
         }
@@ -547,10 +546,9 @@ impl Datastore for PostgresDatastore {
                 max_key_length = COALESCE($4, max_key_length),
                 max_value_length = COALESCE($5, max_value_length),
                 max_kv_pairs_per_context = COALESCE($6, max_kv_pairs_per_context),
-                hash_algorithm = COALESCE($7, hash_algorithm),
-                updated_at = $8,
-                updated_by = $9
-            WHERE name = $10
+                updated_at = $7,
+                updated_by = $8
+            WHERE name = $9
             "#,
         )
         .bind(&update.display_name)
@@ -559,18 +557,6 @@ impl Datastore for PostgresDatastore {
         .bind(update.max_key_length)
         .bind(update.max_value_length)
         .bind(update.max_kv_pairs_per_context)
-        .bind(match update.hash_algorithm {
-            Some(h) => match HashAlgorithm::try_from(h) {
-                Ok(alg) => Some(alg.as_str_name()),
-                Err(_) => {
-                    return Err(Error::InvalidIndex(format!(
-                        "Invalid hash_algorithm value: {}",
-                        h
-                    )))
-                }
-            },
-            None => None,
-        })
         .bind(now)
         .bind(updated_by)
         .bind(name)

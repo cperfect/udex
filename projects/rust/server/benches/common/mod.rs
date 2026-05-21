@@ -21,7 +21,7 @@ use udex_api::entry::{
     KeyValuePair, LookupKeyByContextOrCreateRequest, Value,
 };
 use udex_api::hash::xxh3_context_hash;
-use udex_api::index::{HashAlgorithm, IndexUpdate, UpdateIndexRequest};
+use udex_api::index::{CreateIndexRequest, HashAlgorithm};
 use udex_datastore::integration_test::init_postgres;
 use udex_server::{config::ServerConfig, server};
 
@@ -275,18 +275,16 @@ async fn start_server_and_connect() -> (
         max_connections: 1000,
         max_message_size: 4 * 1024 * 1024,
         tls: udex_server::config::TlsConfig { cert, key },
-        init_indexes: vec![UpdateIndexRequest {
+        init_indexes: vec![CreateIndexRequest {
             name: index_name.clone(),
-            update: Some(IndexUpdate {
-                description: Some("Benchmark index".to_string()),
-                display_name: Some("Benchmark Index".to_string()),
-                // Allow up to 1000 for bulk operation benchmarks (WP-03).
-                max_bulk_operations: Some(1000),
-                max_key_length: Some(256),
-                max_value_length: Some(1024),
-                max_kv_pairs_per_context: Some(10),
-                hash_algorithm: Some(HashAlgorithm::Xxh3 as i32),
-            }),
+            display_name: "Benchmark Index".to_string(),
+            description: "Benchmark index".to_string(),
+            // Allow up to 1000 for bulk operation benchmarks (WP-03).
+            max_bulk_operations: 1000,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 10,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
         }],
         authz: udex_server::config::AuthzConfig {
             jwks_url: None,

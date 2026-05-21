@@ -62,8 +62,6 @@ pub struct IndexUpdate {
     pub max_value_length: ::core::option::Option<i32>,
     #[prost(int32, optional, tag = "6")]
     pub max_kv_pairs_per_context: ::core::option::Option<i32>,
-    #[prost(enumeration = "HashAlgorithm", optional, tag = "7")]
-    pub hash_algorithm: ::core::option::Option<i32>,
 }
 /// DescribeResponse contains index information
 #[derive(serde::Serialize, serde::Deserialize)]

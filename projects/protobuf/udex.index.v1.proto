@@ -64,7 +64,7 @@ message IndexUpdate {
   optional int32 max_key_length = 4;
   optional int32 max_value_length = 5;
   optional int32 max_kv_pairs_per_context = 6;
-  optional HashAlgorithm hash_algorithm = 7;
+  reserved 7;                                 // hash_algorithm removed: immutable after creation
 }
 
 // DescribeResponse contains index information

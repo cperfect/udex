@@ -506,7 +506,6 @@ async fn test_datastore_update_index(#[context] ctx: Context) {
         max_key_length: None,
         max_value_length: None,
         max_kv_pairs_per_context: None,
-        hash_algorithm: None,
     };
     let updated_index = datastore
         .update_index(&idx_name, update, "test_update_index")
@@ -536,7 +535,6 @@ async fn test_datastore_update_index(#[context] ctx: Context) {
         max_key_length: None,
         max_value_length: None,
         max_kv_pairs_per_context: None,
-        hash_algorithm: None,
     };
     let updated_to_empty = datastore
         .update_index(&idx_name, empty_description_update, "test_update_index")
@@ -552,7 +550,6 @@ async fn test_datastore_update_index(#[context] ctx: Context) {
         max_key_length: Some(512),
         max_value_length: Some(2048),
         max_kv_pairs_per_context: Some(100),
-        hash_algorithm: Some(udex_api::index::HashAlgorithm::Xxh3 as i32),
     };
     let updated_full_index = datastore
         .update_index(&idx_name, full_update, "test_full_update_index")
@@ -578,7 +575,6 @@ async fn test_datastore_update_index(#[context] ctx: Context) {
         max_key_length: None,
         max_value_length: None,
         max_kv_pairs_per_context: None,
-        hash_algorithm: None,
     };
     let no_update_result = datastore
         .update_index(&idx_name, no_update, "test_update_index")
