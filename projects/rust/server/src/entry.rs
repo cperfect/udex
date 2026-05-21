@@ -412,6 +412,11 @@ where
             return Err(Status::invalid_argument("operations cannot be empty"));
         }
 
+        // Hoist index_name before the loop consumes req.operations. Every op clones
+        // from this single local rather than from req.index_name through the struct —
+        // ownership is explicit and the authoritative source is clear.
+        let index_name = req.index_name;
+
         // Convert API operations into (datastore_op, context_hash) pairs kept together
         // so the two can never diverge in length — eliminating the zip-truncation risk.
         let mut ops_with_meta: Vec<(EntryWriteOperation, Option<String>)> = Vec::new();
@@ -427,7 +432,7 @@ where
 
                     // Convert context input to context with hash
                     let context = self
-                        .context_input_to_context(req.index_name.clone(), context_input)
+                        .context_input_to_context(index_name.clone(), context_input)
                         .await?;
 
                     // save this for the response before moving the context below
@@ -437,7 +442,7 @@ where
                     let entry = Entry {
                         key: Uuid::new_v4(),
                         context,
-                        index_name: req.index_name.clone(),
+                        index_name: index_name.clone(),
                     };
 
                     ops_with_meta.push((EntryWriteOperation::Create(entry), Some(context_hash)));
@@ -450,7 +455,7 @@ where
 
                     ops_with_meta.push((
                         EntryWriteOperation::Delete {
-                            index_name: req.index_name.clone(),
+                            index_name: index_name.clone(),
                             key,
                         },
                         None,
@@ -468,7 +473,7 @@ where
                     }
 
                     let context = self
-                        .context_input_to_context(req.index_name.clone(), context_input)
+                        .context_input_to_context(index_name.clone(), context_input)
                         .await?;
                     if context.hash != lookup_op.context_hash {
                         return Err(Status::invalid_argument(format!(
@@ -481,7 +486,7 @@ where
                     let entry = Entry {
                         key: Uuid::new_v4(),
                         context,
-                        index_name: req.index_name.clone(),
+                        index_name: index_name.clone(),
                     };
 
                     ops_with_meta.push((
