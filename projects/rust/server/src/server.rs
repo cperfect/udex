@@ -74,6 +74,24 @@ where
 
     let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
+    // Register all services as NOT_SERVING up front. The gRPC health protocol
+    // distinguishes NOT_FOUND ("unknown service") from NOT_SERVING ("known but not
+    // ready"); a client polling during startup should see the latter. In practice
+    // this window cannot be observed — the gRPC port is not open until serve() is
+    // called, which is after all init — but we register early for protocol
+    // correctness. Each named service transitions to SERVING once its init()
+    // completes; "" transitions to SERVING only after all init (including the JWKS
+    // fetch) is done.
+    health_reporter
+        .set_service_status("", ServingStatus::NotServing)
+        .await;
+    health_reporter
+        .set_service_status("udex.index.v1.IndexService", ServingStatus::NotServing)
+        .await;
+    health_reporter
+        .set_service_status("udex.entry.v1.EntryService", ServingStatus::NotServing)
+        .await;
+
     let index_service_inner = IndexService::new(datastore_arc.clone(), health_reporter.clone());
 
     let entry_service_inner = EntryService::new(datastore_arc.clone(), health_reporter.clone());

@@ -367,6 +367,19 @@ async fn test_server_health_check() {
         );
     }
 
+    // Verify that an unregistered service name returns NOT_FOUND, not NOT_SERVING.
+    // This ensures that registering named services as NOT_SERVING during startup
+    // does not accidentally cause unknown services to appear registered.
+    let unknown = client
+        .check(tonic::Request::new(HealthCheckRequest {
+            service: "udex.unknown.v1.UnknownService".to_string(),
+        }))
+        .await;
+    assert!(
+        matches!(&unknown, Err(s) if s.code() == tonic::Code::NotFound),
+        "unregistered service should return NOT_FOUND, got: {unknown:?}"
+    );
+
     println!("✓ Successfully connected to health service over TLS");
     println!("✓ Server is using certificate from tests/certs/server.crt");
     println!("✓ Client verified server certificate with CA from tests/certs/ca.crt");
