@@ -3,7 +3,7 @@ verblock: "21 May 2026:v0.1: Chris Perfect - Initial version"
 wp_id: WP-01
 title: "SDK: add health() method to UdexClient"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-01: SDK — add health() method to UdexClient

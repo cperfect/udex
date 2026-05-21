@@ -1,7 +1,7 @@
 ---
 verblock: "21 May 2026:v0.1: Chris Perfect - Initial version"
 intent_version: 2.4.0
-status: Not Started
+status: WIP
 slug: grpc-health-check-support-in-sdk-and-cli
 created: 20260521
 completed:
