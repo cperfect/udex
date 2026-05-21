@@ -32,7 +32,7 @@ The workspace has five crates. New code goes in the crate that owns its layer �
 | Server & authz configuration | `udex_server::config` | `AuthzConfig` — loads and validates runtime config; no mutation after init |
 | Entry gRPC service handler | `udex_server::entry` | `EntryService` — thin handler; delegates to datastore |
 | Index gRPC service handler | `udex_server::index` | `IndexService` — thin handler; delegates to datastore |
-| Health check gRPC handler | `udex_server::healthz` | `HealthzService` |
+| gRPC health check | `tonic-health` (external) | Standard [`grpc.health.v1.Health`](https://github.com/grpc/grpc-proto/blob/master/grpc/health/v1/health.proto) service; no Udex-specific module — registered in `serve()` |
 | Tracing / logging initialisation | `udex_server::logging` | `init_tracing()` (production), `init_test_tracing()` (tests) |
 
 ### `udex-datastore` — Data access interface and PostgreSQL implementation

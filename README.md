@@ -83,7 +83,7 @@ The API is three gRPC services (defined in [`projects/protobuf/`](projects/proto
 |---|---|
 | `IndexService` | Create, describe, update, list, delete indices |
 | `EntryService` | Create, delete, lookup by key, lookup by context, lookup-or-create, bulk read/write |
-| `HealthzService` | Server liveness check |
+| [`grpc.health.v1.Health`](https://github.com/grpc/grpc-proto/blob/master/grpc/health/v1/health.proto) | Standard gRPC health check protocol (via `tonic-health`) |
 
 All requests require a JWT (ES256) issued via **OAuth2 Client Credentials** flow. Permissions are scoped per index per operation — a token for one index cannot access another. The [Rust SDK](projects/rust/sdk/) and [`udex` CLI](projects/rust/cli/) are the primary clients.
 

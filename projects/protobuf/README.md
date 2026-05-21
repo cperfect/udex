@@ -8,7 +8,6 @@ This directory is the **source of truth for all Udex API types and service contr
 |---|---|---|
 | `udex.index.v1.proto` | `udex.index.v1` | `IndexService` — index lifecycle management |
 | `udex.entry.v1.proto` | `udex.entry.v1` | `EntryService` — context-key entry operations |
-| `udex.healthz.v1.proto` | `udex.healthz.v1` | `HealthzService` — server health check |
 
 File naming convention: `udex.<domain>.v<n>.proto`.
 
@@ -39,9 +38,9 @@ Manages context-to-key entries within an index. All write operations are transac
 | `BulkWriteEntryOperation` | Transactional batch of create/delete operations |
 | `BulkReadEntryOperation` | Batch of lookup operations |
 
-### HealthzService (`udex.healthz.v1`)
+### Health (`grpc.health.v1`)
 
-Single `Healthz` RPC that returns server time, health status, and any status messages.
+Server health is exposed via the standard [gRPC Health Checking Protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md) (`grpc.health.v1.Health`), provided by the [`tonic-health`](https://docs.rs/tonic-health) crate. There is no Udex-specific proto for health — the standard service is used directly. See [docs/FAQ.md](../../docs/FAQ.md#why-does-udex-use-the-grpc-health-checking-protocol-instead-of-a-custom-healthz-endpoint) for the rationale.
 
 ## Key design points
 
