@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use jsonwebtoken::jwk::JwkSet;
@@ -30,21 +31,29 @@ fn infer_algorithm_from_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> Option<Algorithm> {
     }
 }
 
-#[derive(Clone)]
 enum KeySource {
     Static(DecodingKey),
     /// Each entry stores the decoding key and the algorithm for each `kid`.
     Jwks(HashMap<String, (DecodingKey, Algorithm)>),
 }
 
-#[derive(Clone)]
-pub struct AuthzInterceptor {
+/// All mutable-at-construction state for the interceptor. Kept private behind
+/// an `Arc` so that `AuthzInterceptor::clone()` is a single refcount bump
+/// rather than a deep copy of the JWKS map (which contains `DecodingKey`
+/// values — not cheap to clone). This also future-proofs periodic JWKS
+/// refresh: the inner can become `Arc<RwLock<KeySource>>` without touching
+/// the public API.
+struct AuthzInterceptorInner {
     key_source: KeySource,
     expected_issuer: String,
     expected_audience: String,
     scope_claim_name: String,
     mask_subject_in_logs: bool,
 }
+
+/// Cheap to clone — the `Arc` makes every `.clone()` a single refcount bump.
+#[derive(Clone)]
+pub struct AuthzInterceptor(Arc<AuthzInterceptorInner>);
 
 impl AuthzInterceptor {
     pub async fn new(config: AuthzConfig) -> Result<Self, Error> {
@@ -142,13 +151,13 @@ impl AuthzInterceptor {
             .scope_claim_name
             .unwrap_or_else(|| "scope".to_string());
 
-        Ok(Self {
+        Ok(Self(Arc::new(AuthzInterceptorInner {
             key_source,
             expected_issuer,
             expected_audience,
             scope_claim_name,
             mask_subject_in_logs: config.mask_subject_in_logs,
-        })
+        })))
     }
 
     #[allow(clippy::result_large_err)]
@@ -162,8 +171,10 @@ impl AuthzInterceptor {
     }
 
     #[allow(clippy::result_large_err)]
+    // The returned reference borrows through the Arc (self.0.key_source), so its
+    // lifetime is tied to &self — valid as long as the AuthzInterceptor is alive.
     fn decoding_key_for<'a>(&'a self, token: &str) -> Result<(&'a DecodingKey, Algorithm), Status> {
-        match &self.key_source {
+        match &self.0.key_source {
             KeySource::Static(key) => Ok((key, Algorithm::ES256)),
             KeySource::Jwks(map) => {
                 let header = decode_header(token)
@@ -184,8 +195,8 @@ impl AuthzInterceptor {
         let (key, alg) = self.decoding_key_for(token)?;
 
         let mut validation = Validation::new(alg);
-        validation.set_issuer(&[&self.expected_issuer]);
-        validation.set_audience(&[&self.expected_audience]);
+        validation.set_issuer(&[&self.0.expected_issuer]);
+        validation.set_audience(&[&self.0.expected_audience]);
         // Require sub in addition to the library's default (exp).
         // An empty sub is caught later by custom_validate_public().
         validation.required_spec_claims.insert("sub".to_string());
@@ -203,7 +214,7 @@ impl AuthzInterceptor {
 
         // Extract scope from the configured claim; accept a space-delimited
         // string (RFC 8693) or a JSON array (e.g. Hydra's "scp" claim).
-        let scope = match payload.get(&self.scope_claim_name) {
+        let scope = match payload.get(&self.0.scope_claim_name) {
             Some(serde_json::Value::String(s)) => s.clone(),
             Some(serde_json::Value::Array(arr)) => arr
                 .iter()
@@ -259,7 +270,7 @@ impl RequestInterceptor for AuthzInterceptor {
             Some(auth_header) => {
                 let token = self.extract_bearer_token(auth_header)?;
                 let claims = self.validate_jwt(token)?;
-                let subject = if self.mask_subject_in_logs {
+                let subject = if self.0.mask_subject_in_logs {
                     mask_subject(claims.sub())
                 } else {
                     claims.sub().to_string()

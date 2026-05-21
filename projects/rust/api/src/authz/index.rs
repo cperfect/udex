@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::authz::{
     claims::Claims,
     permissions::{is_permitted, Permissable},
@@ -17,14 +15,18 @@ pub struct IndexServiceAuthorizor<I>
 where
     I: IndexService + Send + Sync + 'static,
 {
-    inner: Arc<I>,
+    // Owned directly — the authorizor never shares, clones, or transfers the
+    // inner service. Tonic wraps the authorizor in its own Arc<Inner> to serve
+    // concurrent requests; adding Arc here would be a redundant extra allocation
+    // and an extra pointer dereference on every request.
+    inner: I,
 }
 
 impl<I> IndexServiceAuthorizor<I>
 where
     I: IndexService + Send + Sync + 'static,
 {
-    pub fn new(inner: Arc<I>) -> Self {
+    pub fn new(inner: I) -> Self {
         IndexServiceAuthorizor { inner }
     }
 }
@@ -134,10 +136,10 @@ impl Permissable<DescribeRequest> for DescribeRequest {
 
 impl Permissable<CreateIndexRequest> for CreateIndexRequest {
     fn required_permissions(&self) -> Vec<String> {
-        vec![
-            format!("udex:index:v1:create"),
-            // format!("udex:index:v1:{}:write", self.name)
-        ]
+        // Create is a global/admin permission: the index does not exist at
+        // authorization time so per-resource scoping is not meaningful. A
+        // token either has blanket create authority or it does not.
+        vec!["udex:index:v1:create".to_string()]
     }
 }
 
@@ -229,7 +231,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(Response::new(DescribeResponse { index: None })));
 
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:index:v1:{}:read",
             "test-index"
@@ -248,7 +250,7 @@ mod tests {
     #[tokio::test]
     async fn test_describe_without_permissions() {
         let mock_service = MockIndexServiceImpl::new();
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_without_permissions();
 
         let mut request = Request::new(DescribeRequest {
@@ -264,7 +266,7 @@ mod tests {
     #[tokio::test]
     async fn test_describe_without_claims() {
         let mock_service = MockIndexServiceImpl::new();
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
 
         let request = Request::new(DescribeRequest {
             name: "test-index".to_string(),
@@ -283,7 +285,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(Response::new(CreateIndexResponse { index: None })));
 
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec!["udex:index:v1:create"]);
 
         let mut request = Request::new(CreateIndexRequest {
@@ -305,7 +307,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_index_without_permissions() {
         let mock_service = MockIndexServiceImpl::new();
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:index:v1:{}:write",
             "test-index"
@@ -337,7 +339,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(Response::new(UpdateIndexResponse { index: None })));
 
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:index:v1:{}:write",
             "test-index"
@@ -362,7 +364,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(Response::new(ListIndicesResponse { indices: vec![] })));
 
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec!["udex:index:v1:list"]);
 
         let mut request = Request::new(ListIndicesRequest {});
@@ -380,7 +382,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(Response::new(CreateIndexResponse { index: None })));
 
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![
             format!("udex:index:v1:{}:read", "test-index").as_str(),
             "udex:index:v1:create",
@@ -406,7 +408,7 @@ mod tests {
     #[tokio::test]
     async fn test_wrong_permission_type() {
         let mock_service = MockIndexServiceImpl::new();
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:entry:v1:{}:read",
             "test-index"
@@ -433,7 +435,7 @@ mod tests {
     #[tokio::test]
     async fn test_wrong_index_in_permissions() {
         let mock_service = MockIndexServiceImpl::new();
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
 
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:index:v1:{}:read",
@@ -459,7 +461,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(Response::new(DeleteIndexResponse {})));
 
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:index:v1:{}:delete",
             "test-index"
@@ -478,7 +480,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_index_without_permissions() {
         let mock_service = MockIndexServiceImpl::new();
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
         let claims = create_test_claims_with_permissions(vec![format!(
             "udex:index:v1:{}:read", // wrong action — read cannot delete
             "test-index"
@@ -498,7 +500,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_index_without_claims() {
         let mock_service = MockIndexServiceImpl::new();
-        let authorizor = IndexServiceAuthorizor::new(Arc::new(mock_service));
+        let authorizor = IndexServiceAuthorizor::new(mock_service);
 
         let request = Request::new(DeleteIndexRequest {
             name: "test-index".to_string(),

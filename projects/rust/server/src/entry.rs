@@ -51,7 +51,7 @@ where
     }
 
     /// Initializes the EntryService by pre-warming the hasher cache from existing indices.
-    pub async fn init(&self, index_service: Arc<dyn IndexService>) -> Result<(), Error> {
+    pub async fn init(&self, index_service: &dyn IndexService) -> Result<(), Error> {
         let indexes = index_service
             .list_indices(tonic::Request::new(ListIndicesRequest {}))
             .await
@@ -120,6 +120,12 @@ where
             ))
         })?;
 
+        // or_insert is intentional: a concurrent request may have populated this
+        // entry between our read-lock drop and this write-lock acquisition. We keep
+        // the existing entry rather than overwriting it. This is safe because the
+        // hash algorithm for an index is immutable after creation — both values
+        // would be identical. If algorithm mutability is ever added, this cache
+        // will need an explicit invalidation path.
         self.index_hasher_fns
             .write()
             .await
@@ -132,11 +138,6 @@ where
             hash,
             pairs: input.pairs,
         })
-    }
-
-    /// Converts a datastore Entry to an API Context.
-    fn datastore_entry_to_context(&self, entry: &Entry) -> Context {
-        entry.context.clone()
     }
 
     /// Converts a datastore error to a tonic Status.
@@ -306,7 +307,7 @@ where
 
         let response = LookupContextByKeyResponse {
             index_name: req.index_name,
-            context: Some(self.datastore_entry_to_context(&entry)),
+            context: Some(entry.context),
         };
 
         Ok(Response::new(response))
@@ -412,6 +413,11 @@ where
             return Err(Status::invalid_argument("operations cannot be empty"));
         }
 
+        // Hoist index_name before the loop consumes req.operations. Every op clones
+        // from this single local rather than from req.index_name through the struct —
+        // ownership is explicit and the authoritative source is clear.
+        let index_name = req.index_name;
+
         // Convert API operations into (datastore_op, context_hash) pairs kept together
         // so the two can never diverge in length — eliminating the zip-truncation risk.
         let mut ops_with_meta: Vec<(EntryWriteOperation, Option<String>)> = Vec::new();
@@ -427,7 +433,7 @@ where
 
                     // Convert context input to context with hash
                     let context = self
-                        .context_input_to_context(req.index_name.clone(), context_input)
+                        .context_input_to_context(index_name.clone(), context_input)
                         .await?;
 
                     // save this for the response before moving the context below
@@ -437,7 +443,7 @@ where
                     let entry = Entry {
                         key: Uuid::new_v4(),
                         context,
-                        index_name: req.index_name.clone(),
+                        index_name: index_name.clone(),
                     };
 
                     ops_with_meta.push((EntryWriteOperation::Create(entry), Some(context_hash)));
@@ -450,7 +456,7 @@ where
 
                     ops_with_meta.push((
                         EntryWriteOperation::Delete {
-                            index_name: req.index_name.clone(),
+                            index_name: index_name.clone(),
                             key,
                         },
                         None,
@@ -468,7 +474,7 @@ where
                     }
 
                     let context = self
-                        .context_input_to_context(req.index_name.clone(), context_input)
+                        .context_input_to_context(index_name.clone(), context_input)
                         .await?;
                     if context.hash != lookup_op.context_hash {
                         return Err(Status::invalid_argument(format!(
@@ -481,7 +487,7 @@ where
                     let entry = Entry {
                         key: Uuid::new_v4(),
                         context,
-                        index_name: req.index_name.clone(),
+                        index_name: index_name.clone(),
                     };
 
                     ops_with_meta.push((
@@ -631,7 +637,7 @@ where
                 EntryReadResult::ByKey(entry) => {
                     let context_response = LookupContextByKeyResponse {
                         index_name: req.index_name.clone(),
-                        context: Some(self.datastore_entry_to_context(&entry)),
+                        context: Some(entry.context),
                     };
 
                     response_results.push(BulkReadEntryOperationResult {

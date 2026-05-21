@@ -59,7 +59,7 @@ async fn init_entry_service() -> MaybeOnceType {
         EntryService::new(datastore.clone(), entry_reporter);
 
     entry_service
-        .init(Arc::new(index_server))
+        .init(&index_server)
         .await
         .expect("Failed to initialize entry service");
 
@@ -418,7 +418,7 @@ async fn test_entry_service_create_entry_after_runtime_create_index() {
     let entry_service: EntryService<PostgresDatastore> =
         EntryService::new(datastore.clone(), entry_reporter);
     entry_service
-        .init(Arc::new(index_service))
+        .init(&index_service)
         .await
         .expect("entry service init must succeed");
 

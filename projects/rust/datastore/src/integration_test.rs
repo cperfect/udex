@@ -183,7 +183,7 @@ pub async fn init_postgres() -> MaybeOnceType {
     // Register database name for cleanup on exit
     register_test_db(test_db_name.clone());
 
-    (*datastore, pool_arc, test_db_name)
+    (datastore, pool_arc, test_db_name)
 }
 
 /// Helper function to replace the database name in a PostgreSQL connection URL

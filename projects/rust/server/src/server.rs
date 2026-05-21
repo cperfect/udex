@@ -28,8 +28,8 @@ pub async fn start(
     let datastore = PostgresDatastore::init(datastore_config)
         .await
         .map_err(Error::Datastore)?;
-    apply_and_check_migrations(&*datastore, apply_migrations).await?;
-    serve(server_config, *datastore).await
+    apply_and_check_migrations(&datastore, apply_migrations).await?;
+    serve(server_config, datastore).await
 }
 
 /// Conditionally runs migrations then enforces the schema version.
@@ -70,29 +70,49 @@ where
 
     tracing::info!("Initializing services");
 
-    let datastore_arc = Arc::new(datastore);
+    // Shadow the parameter with the Arc-wrapped value — the original D is consumed
+    // here and the rest of the function works exclusively through the Arc.
+    let datastore = Arc::new(datastore);
 
     let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
-    let index_service_inner = IndexService::new(datastore_arc.clone(), health_reporter.clone());
+    // Register all services as NOT_SERVING up front. The gRPC health protocol
+    // distinguishes NOT_FOUND ("unknown service") from NOT_SERVING ("known but not
+    // ready"); a client polling during startup should see the latter. In practice
+    // this window cannot be observed — the gRPC port is not open until serve() is
+    // called, which is after all init — but we register early for protocol
+    // correctness. Each named service transitions to SERVING once its init()
+    // completes; "" transitions to SERVING only after all init (including the JWKS
+    // fetch) is done.
+    health_reporter
+        .set_service_status("", ServingStatus::NotServing)
+        .await;
+    health_reporter
+        .set_service_status("udex.index.v1.IndexService", ServingStatus::NotServing)
+        .await;
+    health_reporter
+        .set_service_status("udex.entry.v1.EntryService", ServingStatus::NotServing)
+        .await;
 
-    let entry_service_inner = EntryService::new(datastore_arc.clone(), health_reporter.clone());
+    let index_service_inner = IndexService::new(Arc::clone(&datastore), health_reporter.clone());
+
+    // Last use of datastore — move it rather than cloning the Arc.
+    let entry_service_inner = EntryService::new(datastore, health_reporter.clone());
 
     index_service_inner
         .init(config.init_indexes.clone())
         .await?;
 
-    let index_service_inner_arc = Arc::new(index_service_inner);
+    // Pass &dyn IndexService — init only needs a transient reference to list
+    // existing indices; no shared ownership is required.
+    entry_service_inner.init(&index_service_inner).await?;
 
-    entry_service_inner
-        .init(index_service_inner_arc.clone())
-        .await?;
+    // The authorizors take ownership: they are the sole owners of their inner
+    // service and never share or clone it. Tonic wraps the authorizor itself in
+    // Arc<Inner> to serve concurrent requests.
+    let entry_service = EntryServiceAuthorizor::new(entry_service_inner);
 
-    let entry_service_inner_arc = Arc::new(entry_service_inner);
-
-    let entry_service = EntryServiceAuthorizor::new(entry_service_inner_arc.clone());
-
-    let index_service = IndexServiceAuthorizor::new(index_service_inner_arc.clone());
+    let index_service = IndexServiceAuthorizor::new(index_service_inner);
 
     tracing::info!(addr = %addr, "Starting Udex server with TLS");
 
@@ -128,7 +148,7 @@ where
         .tls_config(ServerTlsConfig::new().identity(identity))
         .map_err(|e| Error::ServerError(format!("TLS configuration error: {}", e)))?
         .add_service(InterceptorFor::new(index_server, auth_interceptor.clone()))
-        .add_service(InterceptorFor::new(entry_server, auth_interceptor.clone()))
+        .add_service(InterceptorFor::new(entry_server, auth_interceptor))
         .add_service(health_service)
         .serve(addr)
         .await

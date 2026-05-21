@@ -331,7 +331,7 @@ fn row_to_entry(row: &sqlx::postgres::PgRow) -> Result<Entry, Error> {
 impl Datastore for PostgresDatastore {
     type Database = sqlx::Postgres;
 
-    async fn init(config: DatastoreConfig) -> Result<Box<Self>, Error> {
+    async fn init(config: DatastoreConfig) -> Result<Self, Error> {
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(config.max_connections)
             .min_connections(config.min_connections)
@@ -369,7 +369,7 @@ impl Datastore for PostgresDatastore {
             }
         }
 
-        Ok(Box::new(PostgresDatastore::new(config, pool)))
+        Ok(PostgresDatastore::new(config, pool))
     }
 
     async fn is_healthy(&self) -> Result<bool, Error> {
