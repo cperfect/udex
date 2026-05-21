@@ -28,8 +28,8 @@ pub async fn start(
     let datastore = PostgresDatastore::init(datastore_config)
         .await
         .map_err(Error::Datastore)?;
-    apply_and_check_migrations(&*datastore, apply_migrations).await?;
-    serve(server_config, *datastore).await
+    apply_and_check_migrations(&datastore, apply_migrations).await?;
+    serve(server_config, datastore).await
 }
 
 /// Conditionally runs migrations then enforces the schema version.

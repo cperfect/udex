@@ -152,7 +152,7 @@ pub enum EntryReadResult {
 #[async_trait::async_trait]
 pub trait Datastore: Send + Sync {
     /// Initialize a datastore with the config and return a new instance.
-    async fn init(config: DatastoreConfig) -> Result<Box<Self>, Error>
+    async fn init(config: DatastoreConfig) -> Result<Self, Error>
     where
         Self: Sized;
 
