@@ -134,11 +134,6 @@ where
         })
     }
 
-    /// Converts a datastore Entry to an API Context.
-    fn datastore_entry_to_context(&self, entry: &Entry) -> Context {
-        entry.context.clone()
-    }
-
     /// Converts a datastore error to a tonic Status.
     ///
     /// Internal errors (Database, Transaction, Serialization, etc.) are logged at error level here,
@@ -306,7 +301,7 @@ where
 
         let response = LookupContextByKeyResponse {
             index_name: req.index_name,
-            context: Some(self.datastore_entry_to_context(&entry)),
+            context: Some(entry.context),
         };
 
         Ok(Response::new(response))
@@ -636,7 +631,7 @@ where
                 EntryReadResult::ByKey(entry) => {
                     let context_response = LookupContextByKeyResponse {
                         index_name: req.index_name.clone(),
-                        context: Some(self.datastore_entry_to_context(&entry)),
+                        context: Some(entry.context),
                     };
 
                     response_results.push(BulkReadEntryOperationResult {
