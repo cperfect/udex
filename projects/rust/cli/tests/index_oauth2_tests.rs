@@ -314,8 +314,8 @@ async fn test_cli_oauth2_index_delete_non_empty() {
 
     assert_eq!(
         output.status.code(),
-        Some(4),
-        "expected exit 4 (FAILED_PRECONDITION) for non-empty index\nstderr: {}",
+        Some(9),
+        "expected exit 9 (FAILED_PRECONDITION) for non-empty index\nstderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 }
@@ -346,8 +346,8 @@ async fn test_cli_oauth2_index_delete_not_found() {
 
     assert_eq!(
         output.status.code(),
-        Some(2),
-        "expected exit 2 (NOT_FOUND) for nonexistent index\nstderr: {}",
+        Some(5),
+        "expected exit 5 (NOT_FOUND) for nonexistent index\nstderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 }

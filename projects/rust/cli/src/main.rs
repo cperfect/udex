@@ -45,16 +45,28 @@ fn main() {
 /// `tonic::transport::Error` (transport-level failures). Falls back to 1 for
 /// anything else.
 ///
+/// gRPC status codes map directly: exit N = gRPC code N (1–16).
+/// Non-gRPC causes use codes ≥ 20 to keep the two ranges distinct.
+///
 /// | Exit | Cause |
 /// |------|-------|
-/// |  1   | unclassified / internal error |
-/// |  2   | gRPC NOT_FOUND |
-/// |  3   | gRPC ALREADY_EXISTS |
-/// |  4   | gRPC INVALID_ARGUMENT / FAILED_PRECONDITION / OUT_OF_RANGE |
-/// |  5   | gRPC UNAUTHENTICATED |
-/// |  6   | gRPC PERMISSION_DENIED |
-/// |  7   | gRPC UNAVAILABLE / DEADLINE_EXCEEDED |
-/// |  8   | transport failure (connection refused, TLS error, DNS failure) |
+/// |  1   | gRPC CANCELLED |
+/// |  2   | gRPC UNKNOWN |
+/// |  3   | gRPC INVALID_ARGUMENT |
+/// |  4   | gRPC DEADLINE_EXCEEDED |
+/// |  5   | gRPC NOT_FOUND |
+/// |  6   | gRPC ALREADY_EXISTS |
+/// |  7   | gRPC PERMISSION_DENIED |
+/// |  8   | gRPC RESOURCE_EXHAUSTED |
+/// |  9   | gRPC FAILED_PRECONDITION |
+/// | 10   | gRPC ABORTED |
+/// | 11   | gRPC OUT_OF_RANGE |
+/// | 12   | gRPC UNIMPLEMENTED |
+/// | 13   | gRPC INTERNAL |
+/// | 14   | gRPC UNAVAILABLE |
+/// | 15   | gRPC DATA_LOSS |
+/// | 16   | gRPC UNAUTHENTICATED |
+/// | 20   | transport failure (connection refused, TLS error, DNS failure) |
 fn grpc_exit_code(e: &anyhow::Error) -> i32 {
     use std::error::Error as StdError;
 
@@ -64,7 +76,7 @@ fn grpc_exit_code(e: &anyhow::Error) -> i32 {
         if let Some(sdk_err) = cause.downcast_ref::<udex_sdk::Error>() {
             return match sdk_err {
                 udex_sdk::Error::Rpc(s) => exit_code_for_rpc(s.code()),
-                udex_sdk::Error::Transport(_) => 8,
+                udex_sdk::Error::Transport(_) => 20,
                 _ => 1,
             };
         }
@@ -72,7 +84,7 @@ fn grpc_exit_code(e: &anyhow::Error) -> i32 {
             return exit_code_for_rpc(i32::from(status.code()) as u32);
         }
         if cause.downcast_ref::<tonic::transport::Error>().is_some() {
-            return 8;
+            return 20;
         }
         src = cause.source();
     }
@@ -80,16 +92,11 @@ fn grpc_exit_code(e: &anyhow::Error) -> i32 {
 }
 
 fn exit_code_for_rpc(code: u32) -> i32 {
-    use udex_sdk::grpc_code;
-    match code {
-        grpc_code::NOT_FOUND => 2,
-        grpc_code::ALREADY_EXISTS => 3,
-        grpc_code::INVALID_ARGUMENT | grpc_code::FAILED_PRECONDITION | grpc_code::OUT_OF_RANGE => 4,
-        grpc_code::UNAUTHENTICATED => 5,
-        grpc_code::PERMISSION_DENIED => 6,
-        grpc_code::UNAVAILABLE | grpc_code::DEADLINE_EXCEEDED => 7,
-        _ => 1,
+    // gRPC status codes 1–16 map directly to exit codes 1–16.
+    if (1..=16).contains(&code) {
+        return code as i32;
     }
+    1
 }
 
 /// Build a `UdexClient` with no authentication — for use by commands that do
@@ -242,7 +249,7 @@ mod tests {
     fn exit_code_not_found() {
         assert_eq!(
             grpc_exit_code(&anyhow_from_status(tonic::Code::NotFound)),
-            2
+            5
         );
     }
 
@@ -250,7 +257,7 @@ mod tests {
     fn exit_code_already_exists() {
         assert_eq!(
             grpc_exit_code(&anyhow_from_status(tonic::Code::AlreadyExists)),
-            3
+            6
         );
     }
 
@@ -258,7 +265,7 @@ mod tests {
     fn exit_code_invalid_argument() {
         assert_eq!(
             grpc_exit_code(&anyhow_from_status(tonic::Code::InvalidArgument)),
-            4
+            3
         );
     }
 
@@ -266,7 +273,7 @@ mod tests {
     fn exit_code_unauthenticated() {
         assert_eq!(
             grpc_exit_code(&anyhow_from_status(tonic::Code::Unauthenticated)),
-            5
+            16
         );
     }
 
@@ -274,7 +281,7 @@ mod tests {
     fn exit_code_permission_denied() {
         assert_eq!(
             grpc_exit_code(&anyhow_from_status(tonic::Code::PermissionDenied)),
-            6
+            7
         );
     }
 
@@ -282,7 +289,7 @@ mod tests {
     fn exit_code_unavailable() {
         assert_eq!(
             grpc_exit_code(&anyhow_from_status(tonic::Code::Unavailable)),
-            7
+            14
         );
     }
 
@@ -290,7 +297,7 @@ mod tests {
     fn exit_code_deadline_exceeded() {
         assert_eq!(
             grpc_exit_code(&anyhow_from_status(tonic::Code::DeadlineExceeded)),
-            7
+            4
         );
     }
 
@@ -303,28 +310,28 @@ mod tests {
     // Bare tonic::Status (no .context() wrapper) — root itself must be matched.
     #[test]
     fn exit_code_bare_status_not_found() {
-        assert_eq!(grpc_exit_code(&bare_status(tonic::Code::NotFound)), 2);
+        assert_eq!(grpc_exit_code(&bare_status(tonic::Code::NotFound)), 5);
     }
 
     #[test]
     fn exit_code_bare_status_unauthenticated() {
         assert_eq!(
             grpc_exit_code(&bare_status(tonic::Code::Unauthenticated)),
-            5
+            16
         );
     }
 
     // SDK-wrapped RPC errors are mapped correctly.
     #[test]
     fn exit_code_sdk_rpc_not_found() {
-        assert_eq!(grpc_exit_code(&sdk_rpc_error(tonic::Code::NotFound)), 2);
+        assert_eq!(grpc_exit_code(&sdk_rpc_error(tonic::Code::NotFound)), 5);
     }
 
     #[test]
     fn exit_code_sdk_rpc_permission_denied() {
         assert_eq!(
             grpc_exit_code(&sdk_rpc_error(tonic::Code::PermissionDenied)),
-            6
+            7
         );
     }
 }

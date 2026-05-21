@@ -11,8 +11,10 @@ pub async fn run(client: &UdexClient) -> Result<()> {
             println!("Server is SERVING");
             Ok(())
         }
-        _ => Err(anyhow::Error::from(tonic::Status::unavailable(format!(
-            "server is {status}"
-        )))),
+        // The server is reachable but not in the required state — distinct from
+        // a transport failure (exit 20). Maps to exit 9 (FAILED_PRECONDITION).
+        _ => Err(anyhow::Error::from(tonic::Status::failed_precondition(
+            format!("server is {status}"),
+        ))),
     }
 }

@@ -4,15 +4,21 @@ use std::fmt;
 ///
 /// See <https://grpc.github.io/grpc/core/md_doc_statuscodes.html>.
 pub mod grpc_code {
+    pub const CANCELLED: u32 = 1;
+    pub const UNKNOWN: u32 = 2;
     pub const INVALID_ARGUMENT: u32 = 3;
     pub const DEADLINE_EXCEEDED: u32 = 4;
     pub const NOT_FOUND: u32 = 5;
     pub const ALREADY_EXISTS: u32 = 6;
     pub const PERMISSION_DENIED: u32 = 7;
+    pub const RESOURCE_EXHAUSTED: u32 = 8;
     pub const FAILED_PRECONDITION: u32 = 9;
+    pub const ABORTED: u32 = 10;
     pub const OUT_OF_RANGE: u32 = 11;
+    pub const UNIMPLEMENTED: u32 = 12;
     pub const INTERNAL: u32 = 13;
     pub const UNAVAILABLE: u32 = 14;
+    pub const DATA_LOSS: u32 = 15;
     pub const UNAUTHENTICATED: u32 = 16;
 }
 

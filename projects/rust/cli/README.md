@@ -38,8 +38,8 @@ udex index get my-index
 udex index update my-index [--description "..."] [--bulk-limit 200]
 
 # Delete an index — the index must have no entries.
-# Exit 4 (FAILED_PRECONDITION) if the index is not empty.
-# Exit 2 (NOT_FOUND) if the index does not exist.
+# Exit 9 (FAILED_PRECONDITION) if the index is not empty.
+# Exit 5 (NOT_FOUND) if the index does not exist.
 udex index delete my-index
 ```
 
@@ -179,17 +179,28 @@ udex entry get my-index --key <uuid> --output yaml
 
 ## Exit codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | success |
-| 1 | unclassified / internal error |
-| 2 | not found (gRPC `NOT_FOUND`) |
-| 3 | already exists (gRPC `ALREADY_EXISTS`) |
-| 4 | invalid input (gRPC `INVALID_ARGUMENT`, `FAILED_PRECONDITION`, or `OUT_OF_RANGE`) |
-| 5 | unauthenticated — missing or invalid token (gRPC `UNAUTHENTICATED`) |
-| 6 | permission denied (gRPC `PERMISSION_DENIED`) |
-| 7 | server unavailable or timed out (gRPC `UNAVAILABLE` / `DEADLINE_EXCEEDED`) |
-| 8 | transport failure — connection refused, TLS error, or DNS failure |
+gRPC status codes map directly: exit N = gRPC code N (1–16). Non-gRPC causes use codes ≥ 20.
+
+| Code | gRPC code | Meaning |
+|------|-----------|---------|
+| 0    | OK        | success |
+| 1    | CANCELLED | operation cancelled |
+| 2    | UNKNOWN   | unknown error |
+| 3    | INVALID_ARGUMENT | invalid input |
+| 4    | DEADLINE_EXCEEDED | request timed out |
+| 5    | NOT_FOUND | resource not found |
+| 6    | ALREADY_EXISTS | resource already exists |
+| 7    | PERMISSION_DENIED | permission denied |
+| 8    | RESOURCE_EXHAUSTED | quota or rate limit exceeded |
+| 9    | FAILED_PRECONDITION | system not in required state |
+| 10   | ABORTED   | operation aborted (concurrency conflict) |
+| 11   | OUT_OF_RANGE | value out of valid range |
+| 12   | UNIMPLEMENTED | operation not supported by server |
+| 13   | INTERNAL  | internal server error |
+| 14   | UNAVAILABLE | server unavailable |
+| 15   | DATA_LOSS | unrecoverable data loss |
+| 16   | UNAUTHENTICATED | missing or invalid token |
+| 20   | —         | transport failure (connection refused, TLS error, DNS failure) |
 
 ## Development
 

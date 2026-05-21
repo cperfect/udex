@@ -172,5 +172,5 @@ fn test_cli_health_unreachable() {
             CA_CERT,
         ])
         .assert()
-        .code(8);
+        .code(20);
 }

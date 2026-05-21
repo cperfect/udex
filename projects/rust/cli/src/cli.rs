@@ -11,7 +11,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 #[command(
     name = "udex",
     about = "Universal lookup directory for entities",
-    after_help = "EXIT CODES\n  0  success\n  1  internal error\n  2  not found\n  3  already exists\n  4  invalid input\n  5  unauthenticated\n  6  permission denied\n  7  server unavailable / timeout\n  8  transport failure (connection refused, TLS, DNS)"
+    after_help = "EXIT CODES\n  gRPC status codes map directly: exit N = gRPC code N\n   0  success\n   1  CANCELLED\n   2  UNKNOWN\n   3  INVALID_ARGUMENT\n   4  DEADLINE_EXCEEDED\n   5  NOT_FOUND\n   6  ALREADY_EXISTS\n   7  PERMISSION_DENIED\n   8  RESOURCE_EXHAUSTED\n   9  FAILED_PRECONDITION\n  10  ABORTED\n  11  OUT_OF_RANGE\n  12  UNIMPLEMENTED\n  13  INTERNAL\n  14  UNAVAILABLE\n  15  DATA_LOSS\n  16  UNAUTHENTICATED\n  20  transport failure (connection refused, TLS, DNS)"
 )]
 pub struct Cli {
     #[command(subcommand)]
