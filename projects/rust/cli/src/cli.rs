@@ -82,6 +82,8 @@ pub enum Commands {
         #[command(subcommand)]
         command: MigrateCommands,
     },
+    /// Check the server health status
+    Health,
     /// Print the CLI version
     Version(VersionArgs),
 }

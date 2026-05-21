@@ -11,6 +11,7 @@ use cli::{
     Cli, Commands, ConfigCommands, ContextCommands, EntryCommands, IndexCommands, MigrateCommands,
     TokenCommands,
 };
+use std::path::PathBuf;
 
 fn main() {
     // Parse args and set RUST_LOG *before* creating the Tokio runtime.
@@ -89,6 +90,23 @@ fn exit_code_for_rpc(code: u32) -> i32 {
         grpc_code::UNAVAILABLE | grpc_code::DEADLINE_EXCEEDED => 7,
         _ => 1,
     }
+}
+
+/// Build a `UdexClient` with no authentication — for use by commands that do
+/// not require a token (e.g. `health`). Avoids an unnecessary OAuth2 token
+/// fetch even when auth env vars are set.
+async fn build_unauthenticated_client(
+    server: &str,
+    ca_cert: &Option<PathBuf>,
+) -> anyhow::Result<UdexClient> {
+    let mut builder = ClientOptions::builder().endpoint(server);
+    if let Some(ca) = ca_cert {
+        builder = builder.ca_cert_pem_file(ca);
+    }
+    if server.starts_with("http://") {
+        builder = builder.danger_allow_non_tls();
+    }
+    Ok(UdexClient::connect(builder.build()?).await?)
 }
 
 /// Build a `UdexClient` from the global CLI flags and environment variables.
@@ -191,6 +209,11 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
                     commands::entry::delete(&client, args, &output).await
                 }
             }
+        }
+
+        Commands::Health => {
+            let client = build_unauthenticated_client(&server, &ca_cert).await?;
+            commands::health::run(&client).await
         }
 
         Commands::Version(args) => commands::version::run(args),

@@ -3,7 +3,7 @@ verblock: "21 May 2026:v0.1: Chris Perfect - Initial version"
 wp_id: WP-02
 title: "CLI: add 'udex health' subcommand"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-02: CLI — add `udex health` subcommand
