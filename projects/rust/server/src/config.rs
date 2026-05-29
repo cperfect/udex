@@ -77,6 +77,21 @@ pub struct AuthzConfig {
     /// Defaults to `false`.
     #[serde(default)]
     pub mask_subject_in_logs: bool,
+    /// Maximum consecutive failed JWKS refresh attempts before refreshing is
+    /// suspended until restart. Only consulted when `jwks_url` is set.
+    /// Defaults to 5 when absent.
+    #[serde(default)]
+    pub jwks_max_failed_refreshes: Option<u32>,
+    /// Exponential backoff base in seconds between failed JWKS refresh attempts.
+    /// Only consulted when `jwks_url` is set. Defaults to 3 when absent.
+    #[serde(default)]
+    pub jwks_backoff_factor_secs: Option<u64>,
+    /// JWKS cache lifetime in seconds; a background task proactively refreshes
+    /// after this interval. Set to 0 to disable time-based refresh (cache-miss
+    /// refresh still applies). Only consulted when `jwks_url` is set.
+    /// Defaults to 86400 (1 day) when absent.
+    #[serde(default)]
+    pub jwks_max_age_secs: Option<u64>,
 }
 
 impl ServerConfig {
@@ -150,6 +165,20 @@ impl AuthzConfig {
                     "jwks_url '{u}' must use HTTPS; set danger_allow_non_tls = true \
                      to permit plain HTTP (local/dev only, never in production)"
                 )));
+            }
+            if self.jwks_max_failed_refreshes == Some(0) {
+                return Err(crate::Error::ConfigValidation(
+                    "jwks_max_failed_refreshes must be at least 1 when set; \
+                     0 would gate all refreshes before any attempt is made"
+                        .to_string(),
+                ));
+            }
+            if self.jwks_backoff_factor_secs == Some(0) {
+                return Err(crate::Error::ConfigValidation(
+                    "jwks_backoff_factor_secs must be at least 1 when set; \
+                     0 produces no backoff between failed refresh attempts"
+                        .to_string(),
+                ));
             }
         }
 
@@ -247,6 +276,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         }
     }
 
@@ -259,6 +291,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         }
     }
 
@@ -339,6 +374,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -357,6 +395,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -375,6 +416,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -393,6 +437,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         assert!(cfg.validate().is_err());
     }
@@ -407,6 +454,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -425,6 +475,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -443,6 +496,9 @@ mod tests {
             danger_allow_non_tls: true,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         assert!(cfg.validate().is_ok());
     }
@@ -457,6 +513,9 @@ mod tests {
             danger_allow_non_tls: true,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         assert!(cfg.validate().is_ok());
     }
@@ -499,5 +558,70 @@ mod tests {
             err.contains("scope_claim_name"),
             "expected 'scope_claim_name' in error: {err}"
         );
+    }
+
+    #[test]
+    fn authz_validate_jwks_max_failed_refreshes_zero_is_err() {
+        let cfg = AuthzConfig {
+            jwks_max_failed_refreshes: Some(0),
+            ..valid_authz_jwks()
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("jwks_max_failed_refreshes"),
+            "expected 'jwks_max_failed_refreshes' in error: {err}"
+        );
+    }
+
+    #[test]
+    fn authz_validate_jwks_max_failed_refreshes_nonzero_ok() {
+        let cfg = AuthzConfig {
+            jwks_max_failed_refreshes: Some(1),
+            ..valid_authz_jwks()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn authz_validate_jwks_backoff_factor_secs_zero_is_err() {
+        let cfg = AuthzConfig {
+            jwks_backoff_factor_secs: Some(0),
+            ..valid_authz_jwks()
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("jwks_backoff_factor_secs"),
+            "expected 'jwks_backoff_factor_secs' in error: {err}"
+        );
+    }
+
+    #[test]
+    fn authz_validate_jwks_backoff_factor_secs_nonzero_ok() {
+        let cfg = AuthzConfig {
+            jwks_backoff_factor_secs: Some(1),
+            ..valid_authz_jwks()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn authz_validate_jwks_max_age_secs_zero_ok() {
+        // 0 is explicitly supported — disables the expiry task.
+        let cfg = AuthzConfig {
+            jwks_max_age_secs: Some(0),
+            ..valid_authz_jwks()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn authz_validate_jwks_refresh_params_ignored_for_static_key() {
+        // Invalid JWKS-specific values are not validated when jwt_public_key is used.
+        let cfg = AuthzConfig {
+            jwks_max_failed_refreshes: Some(0),
+            jwks_backoff_factor_secs: Some(0),
+            ..valid_authz()
+        };
+        assert!(cfg.validate().is_ok());
     }
 }

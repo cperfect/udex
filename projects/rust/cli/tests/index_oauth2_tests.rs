@@ -146,6 +146,9 @@ async fn init_fixture() -> Fixture {
             danger_allow_non_tls: true,
             scope_claim_name: Some("scp".to_string()),
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         },
     };
 

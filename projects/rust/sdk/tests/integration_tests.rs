@@ -134,6 +134,9 @@ async fn init_jwt_fixture() -> JwtFixture {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         },
     };
 
@@ -233,6 +236,9 @@ async fn init_hydra_fixture() -> HydraFixture {
             danger_allow_non_tls: true,
             scope_claim_name: Some("scp".to_string()),
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         },
     };
 

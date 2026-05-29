@@ -82,6 +82,9 @@ async fn init_server() -> MaybeOnceType {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         },
     };
 
@@ -193,6 +196,9 @@ async fn init_server_hydra() -> HydraFixtureType {
             // Hydra uses "scp" (array) instead of the RFC 8693 default "scope".
             scope_claim_name: Some("scp".to_string()),
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         },
     };
 
