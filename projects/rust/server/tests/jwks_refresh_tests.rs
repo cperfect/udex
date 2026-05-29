@@ -19,6 +19,7 @@ use ory_hydra_client::{
 };
 use std::net::SocketAddr;
 use tokio::time::{sleep, Duration};
+use tonic_health::pb::{health_client::HealthClient, HealthCheckRequest};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use udex_api::index::{CreateIndexRequest, HashAlgorithm, ListIndicesRequest};
 use udex_datastore::integration_test::init_postgres;
@@ -144,6 +145,39 @@ fn mint_jwt(key: &EncodingKey, kid: &str) -> String {
     encode(&header, &claims, key).expect("JWT encoding failed")
 }
 
+/// Polls the gRPC health endpoint until the server is SERVING or panics after
+/// 3 seconds. Mirrors the pattern used in `cli/tests/health_tests.rs`.
+async fn wait_for_server(addr: SocketAddr) {
+    let ca = tokio::fs::read_to_string("tests/certs/ca.crt")
+        .await
+        .expect("read CA cert");
+    let tls = ClientTlsConfig::new()
+        .ca_certificate(tonic::transport::Certificate::from_pem(ca))
+        .domain_name("localhost");
+    for _ in 0..30 {
+        sleep(Duration::from_millis(100)).await;
+        let Ok(ch) = Channel::from_shared(format!("https://{addr}"))
+            .unwrap()
+            .tls_config(tls.clone())
+            .unwrap()
+            .connect()
+            .await
+        else {
+            continue;
+        };
+        if HealthClient::new(ch)
+            .check(HealthCheckRequest {
+                service: String::new(),
+            })
+            .await
+            .is_ok()
+        {
+            return;
+        }
+    }
+    panic!("JWKS refresh test server at {addr} did not become ready within 3 s");
+}
+
 /// Starts a udex server whose `jwks_url` points to a Hydra custom key set.
 /// Returns `(bind_address, server_join_handle, db_name_for_cleanup)`.
 async fn start_jwks_server(
@@ -197,7 +231,7 @@ async fn start_jwks_server(
             .await
             .expect("JWKS refresh test server failed");
     });
-    sleep(Duration::from_millis(500)).await;
+    wait_for_server(addr).await;
     (addr, handle, db_name)
 }
 
