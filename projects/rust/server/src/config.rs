@@ -77,6 +77,21 @@ pub struct AuthzConfig {
     /// Defaults to `false`.
     #[serde(default)]
     pub mask_subject_in_logs: bool,
+    /// Maximum consecutive failed JWKS refresh attempts before refreshing is
+    /// suspended until restart. Only consulted when `jwks_url` is set.
+    /// Defaults to 5 when absent.
+    #[serde(default)]
+    pub jwks_max_failed_refreshes: Option<u32>,
+    /// Exponential backoff base in seconds between failed JWKS refresh attempts.
+    /// Only consulted when `jwks_url` is set. Defaults to 3 when absent.
+    #[serde(default)]
+    pub jwks_backoff_factor_secs: Option<u64>,
+    /// JWKS cache lifetime in seconds; a background task proactively refreshes
+    /// after this interval. Set to 0 to disable time-based refresh (cache-miss
+    /// refresh still applies). Only consulted when `jwks_url` is set.
+    /// Defaults to 86400 (1 day) when absent.
+    #[serde(default)]
+    pub jwks_max_age_secs: Option<u64>,
 }
 
 impl ServerConfig {
@@ -247,6 +262,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         }
     }
 
@@ -259,6 +277,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         }
     }
 
@@ -339,6 +360,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -357,6 +381,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -375,6 +402,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -393,6 +423,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         assert!(cfg.validate().is_err());
     }
@@ -407,6 +440,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -425,6 +461,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
@@ -443,6 +482,9 @@ mod tests {
             danger_allow_non_tls: true,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         assert!(cfg.validate().is_ok());
     }
@@ -457,6 +499,9 @@ mod tests {
             danger_allow_non_tls: true,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         };
         assert!(cfg.validate().is_ok());
     }

@@ -34,6 +34,7 @@ tokio-rustls = "0.26.2"
 time = { workspace = true }
 reqwest = { workspace = true }
 secrets-rs = "1.0.0"
+rand = { workspace = true }
 
 [[bench]]
 name = "entry_service"

@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
+use tokio::sync::{Mutex, RwLock};
 use tonic::body::Body;
 use tonic::codegen::http::Request;
 use tonic::Status;
@@ -31,18 +32,90 @@ fn infer_algorithm_from_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> Option<Algorithm> {
     }
 }
 
+/// Parses a [`JwkSet`] into a `kid → (DecodingKey, Algorithm)` map.
+///
+/// RFC 7517 §4.5: keys without a `kid` are skipped — the server cannot
+/// select them per-request. Keys with duplicate kids or an unresolvable
+/// algorithm are rejected.
+fn parse_jwks(
+    jwks: &JwkSet,
+    url: &str,
+) -> Result<HashMap<String, (DecodingKey, Algorithm)>, Error> {
+    let mut key_map = HashMap::new();
+    for jwk in &jwks.keys {
+        if let Some(kid) = &jwk.common.key_id {
+            if key_map.contains_key(kid) {
+                return Err(Error::ConfigValidation(format!(
+                    "JWKS at '{url}' contains duplicate kid '{kid}'"
+                )));
+            }
+            // RFC 7517 §4.4: `alg` is OPTIONAL. Many providers (AWS Cognito,
+            // Azure AD, Keycloak) omit it. Fall back to deriving the algorithm
+            // from kty/crv when absent; error only when neither is available.
+            let alg = jwk
+                .common
+                .key_algorithm
+                .as_ref()
+                .and_then(|ka| Algorithm::from_str(&ka.to_string()).ok())
+                .or_else(|| infer_algorithm_from_jwk(jwk))
+                .ok_or_else(|| {
+                    Error::ConfigValidation(format!(
+                        "JWK (kid='{kid}') at '{url}' has no 'alg' field \
+                         and the key type does not have an unambiguous default \
+                         (EC keys with a known curve are inferred automatically)"
+                    ))
+                })?;
+            let decoding_key = DecodingKey::from_jwk(jwk).map_err(|e| {
+                Error::ConfigValidation(format!("Invalid JWK (kid='{kid}'): {e}"))
+            })?;
+            key_map.insert(kid.clone(), (decoding_key, alg));
+        }
+    }
+    if key_map.is_empty() {
+        return Err(Error::ConfigValidation(format!(
+            "JWKS at '{url}' contains no usable keys with a kid"
+        )));
+    }
+    Ok(key_map)
+}
+
+// Fields are written at construction in WP01 and read starting from WP02/WP03.
+#[allow(dead_code)]
+struct RefreshCtrl {
+    consecutive_failures: u32,
+    backoff_until: Option<Instant>,
+}
+
+// Fields are written at construction in WP01 and read starting from WP02/WP03.
+#[allow(dead_code)]
+struct JwksCache {
+    url: String,
+    client: reqwest::Client,
+    keys: RwLock<HashMap<String, (DecodingKey, Algorithm)>>,
+    refresh_ctrl: Mutex<RefreshCtrl>,
+    max_failed_refreshes: u32,
+    backoff_factor_secs: u64,
+    max_age_secs: u64,
+    expiry_task: OnceLock<tokio::task::AbortHandle>,
+}
+
+impl Drop for JwksCache {
+    fn drop(&mut self) {
+        if let Some(handle) = self.expiry_task.get() {
+            handle.abort();
+        }
+    }
+}
+
 enum KeySource {
     Static(DecodingKey),
-    /// Each entry stores the decoding key and the algorithm for each `kid`.
-    Jwks(HashMap<String, (DecodingKey, Algorithm)>),
+    Jwks(JwksCache),
 }
 
 /// All mutable-at-construction state for the interceptor. Kept private behind
-/// an `Arc` so that `AuthzInterceptor::clone()` is a single refcount bump
-/// rather than a deep copy of the JWKS map (which contains `DecodingKey`
-/// values — not cheap to clone). This also future-proofs periodic JWKS
-/// refresh: the inner can become `Arc<RwLock<KeySource>>` without touching
-/// the public API.
+/// an `Arc` so that `AuthzInterceptor::clone()` is a single refcount bump.
+/// The JWKS map lives behind a `RwLock` inside `JwksCache`, enabling runtime
+/// refresh without touching the public API.
 struct AuthzInterceptorInner {
     key_source: KeySource,
     expected_issuer: String,
@@ -58,10 +131,17 @@ pub struct AuthzInterceptor(Arc<AuthzInterceptorInner>);
 impl AuthzInterceptor {
     pub async fn new(config: AuthzConfig) -> Result<Self, Error> {
         config.validate()?;
-        // TODO If the identity provider rotates signing keys, a server restart would be required to pick up the new JWKS. This is acceptable for test/demo purposes (which is the case for now) but for production use, consider implementing periodic JWKS refresh (e.g., background task with configurable interval, or refresh on kid miss with rate limiting).
         let key_source = match (config.jwks_url, config.jwt_public_key) {
             (Some(url), None) => {
                 let url_for_err = url.clone();
+                let client = reqwest::Client::builder()
+                    .timeout(Duration::from_secs(10))
+                    .build()
+                    .map_err(|e| {
+                        Error::ConfigValidation(format!(
+                            "Failed to build HTTP client for JWKS from '{url_for_err}': {e}"
+                        ))
+                    })?;
                 // Shared reference lets the same Fn closure be passed to multiple
                 // map_err calls: &Fn(E)->T satisfies the FnOnce bound map_err requires.
                 let jwks_err = |e: reqwest::Error| {
@@ -69,10 +149,7 @@ impl AuthzInterceptor {
                         "Failed to fetch JWKS from '{url_for_err}': {e}"
                     ))
                 };
-                let jwks_text = reqwest::Client::builder()
-                    .timeout(Duration::from_secs(10))
-                    .build()
-                    .map_err(&jwks_err)?
+                let jwks_text = client
                     .get(&url)
                     .send()
                     .await
@@ -82,51 +159,25 @@ impl AuthzInterceptor {
                     .text()
                     .await
                     .map_err(&jwks_err)?;
-
                 let jwks: JwkSet = serde_json::from_str(&jwks_text).map_err(|e| {
                     Error::ConfigValidation(format!(
                         "Invalid JWKS response from '{url_for_err}': {e}"
                     ))
                 })?;
-
-                let mut key_map = HashMap::new();
-                for jwk in &jwks.keys {
-                    if let Some(kid) = &jwk.common.key_id {
-                        if key_map.contains_key(kid) {
-                            return Err(Error::ConfigValidation(format!(
-                                "JWKS at '{url_for_err}' contains duplicate kid '{kid}'"
-                            )));
-                        }
-                        // RFC 7517 §4.4: `alg` is OPTIONAL. Many providers (AWS Cognito,
-                        // Azure AD, Keycloak) omit it. Fall back to deriving the algorithm
-                        // from kty/crv when absent; error only when neither is available.
-                        let alg = jwk
-                            .common
-                            .key_algorithm
-                            .as_ref()
-                            .and_then(|ka| Algorithm::from_str(&ka.to_string()).ok())
-                            .or_else(|| infer_algorithm_from_jwk(jwk))
-                            .ok_or_else(|| {
-                                Error::ConfigValidation(format!(
-                                    "JWK (kid='{kid}') at '{url_for_err}' has no 'alg' field \
-                                     and the key type does not have an unambiguous default \
-                                     (EC keys with a known curve are inferred automatically)"
-                                ))
-                            })?;
-                        let decoding_key = DecodingKey::from_jwk(jwk).map_err(|e| {
-                            Error::ConfigValidation(format!("Invalid JWK (kid='{kid}'): {e}"))
-                        })?;
-                        key_map.insert(kid.clone(), (decoding_key, alg));
-                    }
-                }
-
-                if key_map.is_empty() {
-                    return Err(Error::ConfigValidation(format!(
-                        "JWKS at '{url_for_err}' contains no usable keys with a kid"
-                    )));
-                }
-
-                KeySource::Jwks(key_map)
+                let key_map = parse_jwks(&jwks, &url_for_err)?;
+                KeySource::Jwks(JwksCache {
+                    url,
+                    client,
+                    keys: RwLock::new(key_map),
+                    refresh_ctrl: Mutex::new(RefreshCtrl {
+                        consecutive_failures: 0,
+                        backoff_until: None,
+                    }),
+                    max_failed_refreshes: config.jwks_max_failed_refreshes.unwrap_or(5),
+                    backoff_factor_secs: config.jwks_backoff_factor_secs.unwrap_or(3),
+                    max_age_secs: config.jwks_max_age_secs.unwrap_or(86400),
+                    expiry_task: OnceLock::new(),
+                })
             }
             (None, Some(pem_secret)) => {
                 let pem = pem_secret.value().map_err(|_| {
@@ -171,28 +222,32 @@ impl AuthzInterceptor {
     }
 
     #[allow(clippy::result_large_err)]
-    // The returned reference borrows through the Arc (self.0.key_source), so its
-    // lifetime is tied to &self — valid as long as the AuthzInterceptor is alive.
-    fn decoding_key_for<'a>(&'a self, token: &str) -> Result<(&'a DecodingKey, Algorithm), Status> {
+    async fn decoding_key_for(&self, token: &str) -> Result<(DecodingKey, Algorithm), Status> {
         match &self.0.key_source {
-            KeySource::Static(key) => Ok((key, Algorithm::ES256)),
-            KeySource::Jwks(map) => {
+            KeySource::Static(key) => Ok((key.clone(), Algorithm::ES256)),
+            KeySource::Jwks(cache) => {
                 let header = decode_header(token)
                     .map_err(|_| Status::unauthenticated("Invalid JWT header"))?;
                 let kid = header
                     .kid
                     .ok_or_else(|| Status::unauthenticated("JWT missing kid claim"))?;
-                map.get(&kid).map(|(key, alg)| (key, *alg)).ok_or_else(|| {
-                    tracing::warn!(kid = %kid, "JWT kid not found in JWKS");
-                    Status::unauthenticated("Unknown JWT kid")
-                })
+                cache
+                    .keys
+                    .read()
+                    .await
+                    .get(&kid)
+                    .map(|(key, alg)| (key.clone(), *alg))
+                    .ok_or_else(|| {
+                        tracing::warn!(kid = %kid, "JWT kid not found in JWKS");
+                        Status::unauthenticated("Unknown JWT kid")
+                    })
             }
         }
     }
 
     #[allow(clippy::result_large_err)]
-    fn validate_jwt(&self, token: &str) -> Result<Claims, Status> {
-        let (key, alg) = self.decoding_key_for(token)?;
+    async fn validate_jwt(&self, token: &str) -> Result<Claims, Status> {
+        let (key, alg) = self.decoding_key_for(token).await?;
 
         let mut validation = Validation::new(alg);
         validation.set_issuer(&[&self.0.expected_issuer]);
@@ -205,12 +260,13 @@ impl AuthzInterceptor {
         // claim name without being coupled to a fixed field name in Claims.
         // Signature, exp, iss, and aud are all validated by jsonwebtoken before
         // the payload is deserialised.
-        let payload: serde_json::Map<String, serde_json::Value> = decode(token, key, &validation)
-            .map_err(|err| {
-                tracing::warn!(error = ?err, "JWT validation error");
-                Status::unauthenticated("Invalid JWT token")
-            })?
-            .claims;
+        let payload: serde_json::Map<String, serde_json::Value> =
+            decode(token, &key, &validation)
+                .map_err(|err| {
+                    tracing::warn!(error = ?err, "JWT validation error");
+                    Status::unauthenticated("Invalid JWT token")
+                })?
+                .claims;
 
         // Extract scope from the configured claim; accept a space-delimited
         // string (RFC 8693) or a JSON array (e.g. Hydra's "scp" claim).
@@ -269,7 +325,7 @@ impl RequestInterceptor for AuthzInterceptor {
         {
             Some(auth_header) => {
                 let token = self.extract_bearer_token(auth_header)?;
-                let claims = self.validate_jwt(token)?;
+                let claims = self.validate_jwt(token).await?;
                 let subject = if self.0.mask_subject_in_logs {
                     mask_subject(claims.sub())
                 } else {
@@ -316,6 +372,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         })
         .await
         .expect("Failed to create test AuthzInterceptor")
@@ -330,6 +389,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: true,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         })
         .await
         .expect("Failed to create masked test AuthzInterceptor")
@@ -345,6 +407,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         })
         .await
         else {
@@ -366,6 +431,9 @@ mod tests {
             danger_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: None,
         })
         .await
         else {
@@ -524,7 +592,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_jwt_emits_warn() {
         let interceptor = test_interceptor().await;
-        let result = interceptor.validate_jwt("this.is.not.a.valid.jwt");
+        let result = interceptor.validate_jwt("this.is.not.a.valid.jwt").await;
         assert!(result.is_err());
         assert!(logs_contain("JWT validation error"));
     }
@@ -559,7 +627,7 @@ mod tests {
         let token = encode(&header, &claims, &encoding_key).expect("Failed to encode JWT");
 
         let interceptor = test_interceptor().await;
-        let result = interceptor.validate_jwt(&token);
+        let result = interceptor.validate_jwt(&token).await;
         assert!(result.is_err());
         assert!(logs_contain("JWT validation error"));
     }
@@ -587,7 +655,7 @@ mod tests {
         header.typ = Some("JWT".to_string());
         let token = encode(&header, &claims, &encoding_key).expect("encode JWT");
 
-        let result = test_interceptor().await.validate_jwt(&token);
+        let result = test_interceptor().await.validate_jwt(&token).await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
     }
@@ -621,7 +689,7 @@ mod tests {
         header.typ = Some("JWT".to_string());
         let token = encode(&header, &claims, &encoding_key).expect("encode JWT");
 
-        let result = test_interceptor().await.validate_jwt(&token);
+        let result = test_interceptor().await.validate_jwt(&token).await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().code(), tonic::Code::Unauthenticated);
     }

@@ -79,6 +79,7 @@ sqlx-cli = "0.8.6"
 
 secrets-rs = "1.0.0"
 secrets-rs-macros = "1.0.0"
+rand = "0.8"
 dotenvy = "0.15"
 
 # Note: Profile-specific features are not supported in Cargo.toml
