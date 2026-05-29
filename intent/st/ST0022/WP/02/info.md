@@ -3,7 +3,7 @@ verblock: "29 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Cache-miss refresh"
 scope: Medium
-status: Not Started
+status: Done
 ---
 
 # WP-02: Cache-miss refresh
