@@ -66,9 +66,8 @@ fn parse_jwks(
                          (EC keys with a known curve are inferred automatically)"
                     ))
                 })?;
-            let decoding_key = DecodingKey::from_jwk(jwk).map_err(|e| {
-                Error::ConfigValidation(format!("Invalid JWK (kid='{kid}'): {e}"))
-            })?;
+            let decoding_key = DecodingKey::from_jwk(jwk)
+                .map_err(|e| Error::ConfigValidation(format!("Invalid JWK (kid='{kid}'): {e}")))?;
             key_map.insert(kid.clone(), (decoding_key, alg));
         }
     }
@@ -131,7 +130,9 @@ async fn run_expiry_loop(weak: Weak<AuthzInterceptorInner>) {
         // then release it before sleeping.
         let sleep = {
             let Some(inner) = weak.upgrade() else { return };
-            let KeySource::Jwks(cache) = &inner.key_source else { return };
+            let KeySource::Jwks(cache) = &inner.key_source else {
+                return;
+            };
             compute_expiry_deadline(cache.max_age_secs)
         };
 
@@ -139,7 +140,9 @@ async fn run_expiry_loop(weak: Weak<AuthzInterceptorInner>) {
 
         // Re-acquire after sleep; exit if the server has shut down meanwhile.
         let Some(inner) = weak.upgrade() else { return };
-        let KeySource::Jwks(cache) = &inner.key_source else { return };
+        let KeySource::Jwks(cache) = &inner.key_source else {
+            return;
+        };
         // kid = None: expiry-triggered refresh, no per-kid double-check needed.
         let _ = cache.try_refresh(None).await;
     }
@@ -239,8 +242,7 @@ impl JwksCache {
             }
             Err(e) => {
                 ctrl.consecutive_failures += 1;
-                let delay =
-                    compute_backoff(ctrl.consecutive_failures, self.backoff_factor_secs);
+                let delay = compute_backoff(ctrl.consecutive_failures, self.backoff_factor_secs);
                 ctrl.backoff_until = Some(Instant::now() + delay);
                 tracing::error!(
                     url = %self.url,
@@ -447,13 +449,12 @@ impl AuthzInterceptor {
         // claim name without being coupled to a fixed field name in Claims.
         // Signature, exp, iss, and aud are all validated by jsonwebtoken before
         // the payload is deserialised.
-        let payload: serde_json::Map<String, serde_json::Value> =
-            decode(token, &key, &validation)
-                .map_err(|err| {
-                    tracing::warn!(error = ?err, "JWT validation error");
-                    Status::unauthenticated("Invalid JWT token")
-                })?
-                .claims;
+        let payload: serde_json::Map<String, serde_json::Value> = decode(token, &key, &validation)
+            .map_err(|err| {
+                tracing::warn!(error = ?err, "JWT validation error");
+                Status::unauthenticated("Invalid JWT token")
+            })?
+            .claims;
 
         // Extract scope from the configured claim; accept a space-delimited
         // string (RFC 8693) or a JSON array (e.g. Hydra's "scp" claim).
@@ -939,9 +940,7 @@ mod tests {
     /// Spawns a minimal HTTP/1.1 server that serves `body` on every request.
     /// Returns the URL to the server. The server runs for the lifetime of the
     /// returned `JoinHandle`.
-    async fn spawn_test_jwks_server(
-        body: &'static str,
-    ) -> (String, tokio::task::JoinHandle<()>) {
+    async fn spawn_test_jwks_server(body: &'static str) -> (String, tokio::task::JoinHandle<()>) {
         use tokio::io::AsyncWriteExt;
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -977,7 +976,10 @@ mod tests {
             .map(|f| factor.saturating_pow(f).min(CAP) / 2)
             .collect();
         for w in floors.windows(2) {
-            assert!(w[1] >= w[0], "backoff floor should be non-decreasing: {floors:?}");
+            assert!(
+                w[1] >= w[0],
+                "backoff floor should be non-decreasing: {floors:?}"
+            );
         }
     }
 
@@ -1133,7 +1135,10 @@ mod tests {
         let hi = (max_age * 101) / 100;
         for _ in 0..500 {
             let secs = compute_expiry_deadline(max_age).as_secs();
-            assert!(secs >= lo && secs <= hi, "deadline {secs} not in [{lo}, {hi}]");
+            assert!(
+                secs >= lo && secs <= hi,
+                "deadline {secs} not in [{lo}, {hi}]"
+            );
         }
     }
 

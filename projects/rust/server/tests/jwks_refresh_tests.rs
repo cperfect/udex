@@ -19,8 +19,8 @@ use ory_hydra_client::{
 };
 use std::net::SocketAddr;
 use tokio::time::{sleep, Duration};
-use tonic_health::pb::{health_client::HealthClient, HealthCheckRequest};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
+use tonic_health::pb::{health_client::HealthClient, HealthCheckRequest};
 use udex_api::index::{CreateIndexRequest, HashAlgorithm, ListIndicesRequest};
 use udex_datastore::integration_test::init_postgres;
 use udex_server::{
@@ -88,9 +88,7 @@ async fn create_hydra_key(
 /// `EncodingKey`. Constructs a minimal SEC1 ECPrivateKey DER (RFC 5915 §3)
 /// and wraps it in PEM, which `EncodingKey::from_ec_pem` accepts.
 fn ec_d_to_encoding_key(d_b64url: &str) -> EncodingKey {
-    let d = URL_SAFE_NO_PAD
-        .decode(d_b64url)
-        .expect("base64url d field");
+    let d = URL_SAFE_NO_PAD.decode(d_b64url).expect("base64url d field");
     assert_eq!(d.len(), 32, "P-256 private scalar must be 32 bytes");
 
     // P-256 OID: 1.2.840.10045.3.1.7
@@ -250,8 +248,7 @@ async fn call_list_indices(addr: SocketAddr, token: &str) -> tonic::Code {
         .expect("TLS config");
     let channel = endpoint.connect().await.expect("gRPC connect");
 
-    let mut client =
-        udex_api::index::index_service_client::IndexServiceClient::new(channel);
+    let mut client = udex_api::index::index_service_client::IndexServiceClient::new(channel);
     let mut req = tonic::Request::new(ListIndicesRequest {});
     req.metadata_mut()
         .insert("authorization", format!("Bearer {token}").parse().unwrap());
@@ -278,8 +275,7 @@ async fn cache_miss_triggers_refresh_and_validates_new_kid() {
 
     // K1: in cache at startup.
     let k1_jwk = create_hydra_key(&admin, &set_name, k1_kid).await;
-    let k1_key =
-        ec_d_to_encoding_key(k1_jwk.d.as_deref().expect("admin API includes private key"));
+    let k1_key = ec_d_to_encoding_key(k1_jwk.d.as_deref().expect("admin API includes private key"));
 
     let index = format!("jwks-cache-miss-{}", Uuid::new_v4().simple());
     let jwks_url = format!("{}/admin/keys/{}", admin.base_path, set_name);
@@ -288,12 +284,15 @@ async fn cache_miss_triggers_refresh_and_validates_new_kid() {
 
     // K1 token must validate immediately (key was in cache at startup).
     let code = call_list_indices(addr, &mint_jwt(&k1_key, k1_kid)).await;
-    assert_eq!(code, tonic::Code::Ok, "K1 token should validate from startup cache");
+    assert_eq!(
+        code,
+        tonic::Code::Ok,
+        "K1 token should validate from startup cache"
+    );
 
     // Add K2 to the set — server has not seen this kid yet.
     let k2_jwk = create_hydra_key(&admin, &set_name, k2_kid).await;
-    let k2_key =
-        ec_d_to_encoding_key(k2_jwk.d.as_deref().expect("admin API includes private key"));
+    let k2_key = ec_d_to_encoding_key(k2_jwk.d.as_deref().expect("admin API includes private key"));
 
     // K2 token: cache miss → refresh → validates.
     let code = call_list_indices(addr, &mint_jwt(&k2_key, k2_kid)).await;
@@ -305,10 +304,16 @@ async fn cache_miss_triggers_refresh_and_validates_new_kid() {
 
     // K1 token still validates (retained in the refreshed key map).
     let code = call_list_indices(addr, &mint_jwt(&k1_key, k1_kid)).await;
-    assert_eq!(code, tonic::Code::Ok, "K1 token should still validate after refresh");
+    assert_eq!(
+        code,
+        tonic::Code::Ok,
+        "K1 token should still validate after refresh"
+    );
 
     server.abort();
-    jwk_api::delete_json_web_key_set(&admin, &set_name).await.ok();
+    jwk_api::delete_json_web_key_set(&admin, &set_name)
+        .await
+        .ok();
 }
 
 /// When the JWKS endpoint becomes unavailable (key set deleted), the server
@@ -323,8 +328,7 @@ async fn endpoint_failure_retains_cache_and_serves_known_kids() {
     let k1_kid = "refresh-k1";
 
     let k1_jwk = create_hydra_key(&admin, &set_name, k1_kid).await;
-    let k1_key =
-        ec_d_to_encoding_key(k1_jwk.d.as_deref().expect("admin API includes private key"));
+    let k1_key = ec_d_to_encoding_key(k1_jwk.d.as_deref().expect("admin API includes private key"));
 
     let index = format!("jwks-endpoint-fail-{}", Uuid::new_v4().simple());
     let jwks_url = format!("{}/admin/keys/{}", admin.base_path, set_name);
@@ -333,7 +337,11 @@ async fn endpoint_failure_retains_cache_and_serves_known_kids() {
 
     // K1 works before the endpoint goes away.
     let code = call_list_indices(addr, &mint_jwt(&k1_key, k1_kid)).await;
-    assert_eq!(code, tonic::Code::Ok, "K1 should validate before endpoint failure");
+    assert_eq!(
+        code,
+        tonic::Code::Ok,
+        "K1 should validate before endpoint failure"
+    );
 
     // Delete the key set — Hydra will return 404 on all subsequent JWKS fetches.
     jwk_api::delete_json_web_key_set(&admin, &set_name)
@@ -371,25 +379,22 @@ async fn max_failed_refreshes_gate_stops_retries_and_cache_is_retained() {
     let k1_kid = "refresh-k1";
 
     let k1_jwk = create_hydra_key(&admin, &set_name, k1_kid).await;
-    let k1_key =
-        ec_d_to_encoding_key(k1_jwk.d.as_deref().expect("admin API includes private key"));
+    let k1_key = ec_d_to_encoding_key(k1_jwk.d.as_deref().expect("admin API includes private key"));
 
     let index = format!("jwks-gate-{}", Uuid::new_v4().simple());
     let jwks_url = format!("{}/admin/keys/{}", admin.base_path, set_name);
     // max_failed_refreshes = 2, backoff_factor = 2 (≈1 s backoff after first
     // failure so the test waits briefly rather than minutes).
-    let (addr, server, _db) = start_jwks_server(
-        GATE_BIND_ADDR,
-        jwks_url,
-        &index,
-        Some(2),
-        Some(2),
-    )
-    .await;
+    let (addr, server, _db) =
+        start_jwks_server(GATE_BIND_ADDR, jwks_url, &index, Some(2), Some(2)).await;
 
     // K1 is in the startup cache.
     let code = call_list_indices(addr, &mint_jwt(&k1_key, k1_kid)).await;
-    assert_eq!(code, tonic::Code::Ok, "K1 should validate from startup cache");
+    assert_eq!(
+        code,
+        tonic::Code::Ok,
+        "K1 should validate from startup cache"
+    );
 
     // Delete the set so all refresh attempts fail.
     jwk_api::delete_json_web_key_set(&admin, &set_name)
@@ -398,18 +403,30 @@ async fn max_failed_refreshes_gate_stops_retries_and_cache_is_retained() {
 
     // First cache-miss: refresh fails → consecutive_failures = 1, backoff ≈ 1 s.
     let code = call_list_indices(addr, &mint_jwt(&k1_key, "unknown-kid")).await;
-    assert_eq!(code, tonic::Code::Unauthenticated, "first miss: refresh fails");
+    assert_eq!(
+        code,
+        tonic::Code::Unauthenticated,
+        "first miss: refresh fails"
+    );
 
     // Wait for the backoff to expire (factor=2 → temp=2, half=1, delay≈1 s).
     sleep(Duration::from_millis(1500)).await;
 
     // Second cache-miss: refresh fails → consecutive_failures = 2 = max → gate fires.
     let code = call_list_indices(addr, &mint_jwt(&k1_key, "unknown-kid")).await;
-    assert_eq!(code, tonic::Code::Unauthenticated, "second miss: refresh fails, gate fires");
+    assert_eq!(
+        code,
+        tonic::Code::Unauthenticated,
+        "second miss: refresh fails, gate fires"
+    );
 
     // Third attempt: gate immediately blocks without a network call.
     let code = call_list_indices(addr, &mint_jwt(&k1_key, "unknown-kid")).await;
-    assert_eq!(code, tonic::Code::Unauthenticated, "third miss: gate is active");
+    assert_eq!(
+        code,
+        tonic::Code::Unauthenticated,
+        "third miss: gate is active"
+    );
 
     // K1 (cached at startup) must still validate — the gate does not evict the cache.
     let code = call_list_indices(addr, &mint_jwt(&k1_key, k1_kid)).await;
