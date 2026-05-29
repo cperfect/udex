@@ -1,10 +1,10 @@
 ---
 verblock: "29 May 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: WIP
+status: Completed
 slug: jwks-refresh
 created: 20260529
-completed:
+completed: 20260529
 ---
 
 # ST0022: JWKS refresh
