@@ -72,15 +72,43 @@ To rotate the key the server must be restarted.
 ### Key source: JWKS endpoint
 
 Suitable for production and for development against a real OAuth2 server (see
-[Development with Hydra](#development-with-hydra) below). The server fetches the
-JWKS document once at startup, builds an in-memory map of `kid → DecodingKey`,
-and selects the correct key for each token by reading the `kid` header claim.
+[Development with Hydra](#development-with-hydra) below).
+
+At startup the server fetches the JWKS document, builds an in-memory
+`kid → DecodingKey` map, and selects the correct key for each incoming token
+by reading the `kid` JWT header claim. The cache is then kept fresh by two
+complementary mechanisms:
+
+**Cache-miss refresh** — when a token arrives with a `kid` that is not in the
+cache (e.g. after key rotation), the server fetches the JWKS endpoint inline
+before returning an error. If the new key is found after the refresh, the
+request succeeds without any client retry.
+
+**Configured-expiry refresh** — a background task proactively re-fetches the
+JWKS on a configurable schedule (default: once per day) so that the cache
+stays fresh even during quiet periods.
+
+Both mechanisms share the same fetch path and DoS controls:
+
+- **Max failed refreshes** (`jwks_max_failed_refreshes`, default `5`) — after
+  this many consecutive failures the server stops attempting refreshes until
+  restart. Cached keys remain valid; only tokens with an unknown `kid` are
+  rejected.
+- **Exponential backoff with equal jitter** (`jwks_backoff_factor_secs`,
+  default `3`) — successive failures back off exponentially
+  (`factor^attempt`, capped at 300 s) with a random jitter applied to avoid
+  thundering-herd behaviour across a fleet.
 
 ```toml
 [server.authz]
 jwks_url     = "http://localhost:4444/.well-known/jwks.json"
 jwt_issuer   = "http://localhost:4444/"   # must match Hydra's URLS_SELF_ISSUER
 jwt_audience = "udex"
+
+# Optional — shown with their defaults:
+# jwks_max_age_secs          = 86400  # 1 day; set to 0 to disable expiry refresh
+# jwks_max_failed_refreshes  = 5
+# jwks_backoff_factor_secs   = 3
 ```
 
 Exactly one of `jwt_public_key` and `jwks_url` must be set; providing neither
@@ -126,6 +154,9 @@ header and claims, making it easy to verify the token contents before use.
 - `tls.cert` / `tls.key` — `urn:secrets-rs:file:` URNs for the TLS certificate and private key (resolved relative to the config file directory)
 - `authz.jwt_public_key` or `authz.jwks_url` — JWT key source; see [Authorization](#authorization) above
 - `authz.jwt_issuer` / `authz.jwt_audience` — expected `iss` and `aud` claims
+- `authz.jwks_max_age_secs` — (JWKS only) cache lifetime in seconds before a proactive background refresh; default `86400`; `0` disables
+- `authz.jwks_max_failed_refreshes` — (JWKS only) consecutive failures before refresh is suspended until restart; default `5`
+- `authz.jwks_backoff_factor_secs` — (JWKS only) exponential backoff base multiplier between failed refreshes; default `3`
 - `init_indexes` — list of indexes to ensure exist on startup
 
 ## Testing
@@ -149,3 +180,10 @@ service). Just run `cargo test` — no prefix needed.
 Outside the devcontainer the variables default to `localhost:444x`, which is
 correct if you are running Hydra locally or in CI (where Docker publishes the
 Hydra ports to the host).
+
+### JWKS refresh integration tests
+
+`tests/jwks_refresh_tests.rs` tests the cache-miss and DoS-control paths
+against a live Hydra instance. Each test creates a dedicated Hydra key set
+(`/admin/keys/udex-jwks-refresh-{uuid}`) so it is fully isolated from the
+main JWKS tests. Tests skip gracefully when Hydra is not reachable.
