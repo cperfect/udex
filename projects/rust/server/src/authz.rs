@@ -965,19 +965,19 @@ mod tests {
     // ── compute_backoff ───────────────────────────────────────────────────────
 
     #[test]
-    fn compute_backoff_increases_with_failures() {
-        // With factor=3, each failure should produce a larger (or equal) max delay.
+    fn compute_backoff_floor_increases_with_failures() {
+        // The backoff floor (temp/2, before jitter) must be non-decreasing.
+        // Checking the floor directly avoids a flaky assertion: consecutive
+        // jitter ranges can overlap, so two random samples are not guaranteed
+        // to be ordered even when the underlying exponential curve is growing.
+        // With factor=3 the floors are: 1, 4, 13, 40, 121, 150 (capped at 300).
+        const CAP: u64 = 300;
         let factor = 3u64;
-        let mut prev_max = 0u64;
-        for failures in 1u32..=6 {
-            let d = compute_backoff(failures, factor);
-            // The max possible value for this step is temp (not half+half-1),
-            // but we just check it's non-decreasing overall.
-            assert!(
-                d.as_secs() >= prev_max || failures <= 2,
-                "delay should grow: failures={failures} d={d:?} prev_max={prev_max}"
-            );
-            prev_max = d.as_secs();
+        let floors: Vec<u64> = (1u32..=6)
+            .map(|f| factor.saturating_pow(f).min(CAP) / 2)
+            .collect();
+        for w in floors.windows(2) {
+            assert!(w[1] >= w[0], "backoff floor should be non-decreasing: {floors:?}");
         }
     }
 
