@@ -3,7 +3,7 @@ verblock: "29 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-04
 title: "Integration tests"
 scope: Medium
-status: WIP
+status: Done
 ---
 
 # WP-04: Integration tests
