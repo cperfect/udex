@@ -3,7 +3,7 @@ verblock: "29 May 2026:v0.1: vscode - Initial version"
 wp_id: WP-03
 title: "Expiry background task"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: Expiry background task
