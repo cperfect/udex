@@ -57,5 +57,6 @@ tempfile = { workspace = true }
 oauth2 = { workspace = true }
 ory-hydra-client = { version = "26.2", default-features = false, features = ["rustls-tls"] }
 dotenvy = { workspace = true }
+base64 = "0.22"
 
  
