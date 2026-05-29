@@ -4111,6 +4111,7 @@ name = "udex-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "criterion",
  "dotenvy",
  "jsonwebtoken",
@@ -4119,6 +4120,7 @@ dependencies = [
  "oauth2",
  "ory-hydra-client",
  "prost",
+ "rand 0.8.6",
  "reqwest",
  "rstest",
  "rustls",
