@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
 use jsonwebtoken::jwk::JwkSet;
@@ -99,6 +99,52 @@ fn compute_backoff(consecutive_failures: u32, factor_secs: u64) -> Duration {
     Duration::from_secs(half + jitter)
 }
 
+/// Computes the sleep duration before the next proactive JWKS refresh.
+///
+/// Applies ±1% jitter to `max_age_secs` so that a fleet of servers does not
+/// all refresh simultaneously. Output lies in `[0.99 * max_age, 1.01 * max_age]`.
+/// Returns `Duration::ZERO` when `max_age_secs` is 0.
+fn compute_expiry_deadline(max_age_secs: u64) -> Duration {
+    let jitter_range = max_age_secs / 100;
+    let secs = if jitter_range > 0 {
+        let amount = rand::thread_rng().gen_range(0..=jitter_range);
+        if rand::thread_rng().gen::<bool>() {
+            max_age_secs.saturating_add(amount)
+        } else {
+            max_age_secs.saturating_sub(amount)
+        }
+    } else {
+        max_age_secs
+    };
+    Duration::from_secs(secs)
+}
+
+/// Background task that proactively refreshes the JWKS cache on schedule.
+///
+/// Exits when the [`Weak`] reference can no longer be upgraded — i.e. when all
+/// [`AuthzInterceptor`] clones have been dropped (server shutdown). The `Arc`
+/// is released during the sleep so that a shutdown waiting on the refcount
+/// reaching zero is not blocked.
+async fn run_expiry_loop(weak: Weak<AuthzInterceptorInner>) {
+    loop {
+        // Compute the sleep duration while briefly holding a strong reference,
+        // then release it before sleeping.
+        let sleep = {
+            let Some(inner) = weak.upgrade() else { return };
+            let KeySource::Jwks(cache) = &inner.key_source else { return };
+            compute_expiry_deadline(cache.max_age_secs)
+        };
+
+        tokio::time::sleep(sleep).await;
+
+        // Re-acquire after sleep; exit if the server has shut down meanwhile.
+        let Some(inner) = weak.upgrade() else { return };
+        let KeySource::Jwks(cache) = &inner.key_source else { return };
+        // kid = None: expiry-triggered refresh, no per-kid double-check needed.
+        let _ = cache.try_refresh(None).await;
+    }
+}
+
 struct RefreshCtrl {
     consecutive_failures: u32,
     backoff_until: Option<Instant>,
@@ -111,11 +157,7 @@ struct JwksCache {
     refresh_ctrl: Mutex<RefreshCtrl>,
     max_failed_refreshes: u32,
     backoff_factor_secs: u64,
-    // Used in WP03 (expiry background task).
-    #[allow(dead_code)]
     max_age_secs: u64,
-    // Set in WP03 after the Arc<AuthzInterceptorInner> is constructed.
-    #[allow(dead_code)]
     expiry_task: OnceLock<tokio::task::AbortHandle>,
 }
 
@@ -316,13 +358,28 @@ impl AuthzInterceptor {
             .scope_claim_name
             .unwrap_or_else(|| "scope".to_string());
 
-        Ok(Self(Arc::new(AuthzInterceptorInner {
+        let inner = Arc::new(AuthzInterceptorInner {
             key_source,
             expected_issuer,
             expected_audience,
             scope_claim_name,
             mask_subject_in_logs: config.mask_subject_in_logs,
-        })))
+        });
+
+        // Spawn the proactive expiry task after the Arc is constructed so we
+        // can form a Weak reference and store the AbortHandle via OnceLock.
+        if let KeySource::Jwks(cache) = &inner.key_source {
+            if cache.max_age_secs > 0 {
+                let weak = Arc::downgrade(&inner);
+                let abort_handle = tokio::spawn(run_expiry_loop(weak)).abort_handle();
+                cache
+                    .expiry_task
+                    .set(abort_handle)
+                    .expect("expiry_task set once at construction");
+            }
+        }
+
+        Ok(Self(inner))
     }
 
     #[allow(clippy::result_large_err)]
@@ -1031,6 +1088,31 @@ mod tests {
         assert_eq!(cache.refresh_ctrl.lock().await.consecutive_failures, 0);
     }
 
+    fn make_test_inner(url: String, max_age_secs: u64) -> Arc<AuthzInterceptorInner> {
+        Arc::new(AuthzInterceptorInner {
+            key_source: KeySource::Jwks(JwksCache {
+                url,
+                client: reqwest::Client::builder()
+                    .timeout(Duration::from_millis(100))
+                    .build()
+                    .unwrap(),
+                keys: RwLock::new(HashMap::new()),
+                refresh_ctrl: Mutex::new(RefreshCtrl {
+                    consecutive_failures: 0,
+                    backoff_until: None,
+                }),
+                max_failed_refreshes: 5,
+                backoff_factor_secs: 3,
+                max_age_secs,
+                expiry_task: OnceLock::new(),
+            }),
+            expected_issuer: "test-issuer".to_string(),
+            expected_audience: "test-audience".to_string(),
+            scope_claim_name: "scope".to_string(),
+            mask_subject_in_logs: false,
+        })
+    }
+
     #[tokio::test]
     async fn try_refresh_new_kid_visible_after_successful_refresh() {
         let (url, _server) = spawn_test_jwks_server(TEST_JWKS_TWO_KEYS).await;
@@ -1040,5 +1122,99 @@ mod tests {
         let keys = cache.keys.read().await;
         assert!(keys.contains_key(TEST_JWK_KID_1));
         assert!(keys.contains_key(TEST_JWK_KID_2));
+    }
+
+    // ── compute_expiry_deadline ───────────────────────────────────────────────
+
+    #[test]
+    fn compute_expiry_deadline_within_one_percent() {
+        let max_age = 86400u64;
+        let lo = (max_age * 99) / 100;
+        let hi = (max_age * 101) / 100;
+        for _ in 0..500 {
+            let secs = compute_expiry_deadline(max_age).as_secs();
+            assert!(secs >= lo && secs <= hi, "deadline {secs} not in [{lo}, {hi}]");
+        }
+    }
+
+    #[test]
+    fn compute_expiry_deadline_no_jitter_when_range_zero() {
+        // max_age = 50 → jitter_range = 50/100 = 0 → no jitter applied.
+        assert_eq!(compute_expiry_deadline(50), Duration::from_secs(50));
+    }
+
+    #[test]
+    fn compute_expiry_deadline_zero_returns_zero() {
+        assert_eq!(compute_expiry_deadline(0), Duration::ZERO);
+    }
+
+    // ── run_expiry_loop ───────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn expiry_loop_exits_immediately_on_dead_weak() {
+        // Drop the Arc before spawning so the very first upgrade() returns None.
+        let weak = {
+            let inner = make_test_inner(make_dead_url(), 86400);
+            Arc::downgrade(&inner)
+        };
+        let task = tokio::spawn(run_expiry_loop(weak));
+        tokio::time::timeout(Duration::from_millis(200), task)
+            .await
+            .expect("expiry loop should exit promptly when Weak is dead")
+            .expect("task must not panic");
+    }
+
+    // ── expiry task spawn ─────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn no_expiry_task_when_max_age_is_zero() {
+        let (url, _server) = spawn_test_jwks_server(TEST_JWKS_ONE_KEY).await;
+        let interceptor = AuthzInterceptor::new(AuthzConfig {
+            jwks_url: Some(url),
+            jwt_public_key: None,
+            jwt_issuer: Some("test-issuer".to_string()),
+            jwt_audience: Some("test-audience".to_string()),
+            danger_allow_non_tls: true,
+            scope_claim_name: None,
+            mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: Some(0),
+        })
+        .await
+        .expect("interceptor should be created");
+        let KeySource::Jwks(cache) = &interceptor.0.key_source else {
+            panic!("expected Jwks key source");
+        };
+        assert!(
+            cache.expiry_task.get().is_none(),
+            "no task should be spawned when max_age_secs = 0"
+        );
+    }
+
+    #[tokio::test]
+    async fn expiry_task_abort_handle_set_when_max_age_nonzero() {
+        let (url, _server) = spawn_test_jwks_server(TEST_JWKS_ONE_KEY).await;
+        let interceptor = AuthzInterceptor::new(AuthzConfig {
+            jwks_url: Some(url),
+            jwt_public_key: None,
+            jwt_issuer: Some("test-issuer".to_string()),
+            jwt_audience: Some("test-audience".to_string()),
+            danger_allow_non_tls: true,
+            scope_claim_name: None,
+            mask_subject_in_logs: false,
+            jwks_max_failed_refreshes: None,
+            jwks_backoff_factor_secs: None,
+            jwks_max_age_secs: Some(3600),
+        })
+        .await
+        .expect("interceptor should be created");
+        let KeySource::Jwks(cache) = &interceptor.0.key_source else {
+            panic!("expected Jwks key source");
+        };
+        assert!(
+            cache.expiry_task.get().is_some(),
+            "abort handle should be set when max_age_secs > 0"
+        );
     }
 }
