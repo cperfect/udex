@@ -18,7 +18,7 @@ Make the server refresh JWKS information for validation without re-start.
 Currently when a JWKS url is configured for authorization the url is fetched and the keys cached at start-up and never refreshed otherwise.
 
 We want to handle 2 mechanisms of refresh:
-1. **Cache Miss**: When the server attempts to validate JWT with Kid that is not in the cache, rerfresh.
+1. **Cache Miss**: When the server attempts to validate JWT with Kid that is not in the cache, refresh.
 2. **Configured Expiry**: A max-age seconds for the cache can be configured to trigger a regular cache refresh attempt. The default for this will 86400 seconds (1 day) as it is expected that keys won't be rotated often.
 
 In order to avoid a DoS via this mechanism we will support the following controls:
