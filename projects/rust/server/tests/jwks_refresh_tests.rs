@@ -6,7 +6,8 @@
 // Hydra's /.well-known/jwks.json (used by the rest of the suite) so
 // concurrent tests are unaffected. Each test cleans up its key set on exit.
 //
-// These tests skip gracefully when Hydra is not reachable.
+// Hydra is assumed to be always available (devcontainer compose stack).
+// Tests fail hard rather than skipping when Hydra is unreachable.
 
 use base64::{
     engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
@@ -14,7 +15,7 @@ use base64::{
 };
 use jsonwebtoken::{encode, EncodingKey, Header};
 use ory_hydra_client::{
-    apis::{configuration::Configuration, jwk_api, metadata_api},
+    apis::{configuration::Configuration, jwk_api},
     models::CreateJsonWebKeySet,
 };
 use std::net::SocketAddr;
@@ -50,21 +51,6 @@ fn admin_config() -> Configuration {
     }
 }
 
-/// Returns `Some(config)` if Hydra is reachable, `None` otherwise.
-async fn try_hydra() -> Option<Configuration> {
-    let cfg = admin_config();
-    match metadata_api::get_version(&cfg).await {
-        Ok(_) => Some(cfg),
-        Err(_) => {
-            eprintln!(
-                "Hydra not reachable at {}; skipping JWKS refresh integration tests",
-                cfg.base_path
-            );
-            None
-        }
-    }
-}
-
 /// Asks Hydra to generate an ES256 key with `kid` in the key set `set_name`.
 /// Returns the `JsonWebKey` including the private `d` scalar (admin API always
 /// includes private key material).
@@ -85,42 +71,78 @@ async fn create_hydra_key(
 }
 
 /// Converts the base64url-encoded private scalar `d` of a P-256 JWK into an
-/// `EncodingKey`. Constructs a minimal SEC1 ECPrivateKey DER (RFC 5915 §3)
-/// and wraps it in PEM, which `EncodingKey::from_ec_pem` accepts.
+/// `EncodingKey` via a PKCS8 PrivateKeyInfo DER (RFC 5958), which is the
+/// format `EncodingKey::from_ec_pem` (and the underlying aws-lc-rs backend)
+/// requires. The PEM header is `-----BEGIN PRIVATE KEY-----`.
+///
+/// Structure (67 bytes total):
+/// ```text
+/// SEQUENCE {                           -- outer PrivateKeyInfo
+///   INTEGER 0                          -- version
+///   SEQUENCE {                         -- AlgorithmIdentifier
+///     OID 1.2.840.10045.2.1            -- ecPublicKey
+///     OID 1.2.840.10045.3.1.7          -- P-256
+///   }
+///   OCTET STRING {
+///     SEQUENCE {                       -- ECPrivateKey (RFC 5915 minimal)
+///       INTEGER 1                      -- version
+///       OCTET STRING <d: 32 bytes>     -- private key scalar
+///     }
+///   }
+/// }
+/// ```
 fn ec_d_to_encoding_key(d_b64url: &str) -> EncodingKey {
     let d = URL_SAFE_NO_PAD.decode(d_b64url).expect("base64url d field");
     assert_eq!(d.len(), 32, "P-256 private scalar must be 32 bytes");
 
-    // P-256 OID: 1.2.840.10045.3.1.7
+    // ecPublicKey OID: 1.2.840.10045.2.1 (7 bytes)
+    const EC_OID: &[u8] = &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01];
+    // P-256 OID: 1.2.840.10045.3.1.7 (8 bytes)
     const P256_OID: &[u8] = &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07];
 
-    // SEC1 inner content (49 bytes):
-    //   02 01 01          version = 1                (3 bytes)
-    //   04 20 <d>         OCTET STRING, 32 bytes      (34 bytes)
-    //   a0 0a 06 08 <oid> explicit curve parameters  (12 bytes)
-    let mut inner = Vec::with_capacity(49);
-    inner.extend_from_slice(&[0x02, 0x01, 0x01]);
-    inner.extend_from_slice(&[0x04, 0x20]);
-    inner.extend_from_slice(&d);
-    inner.extend_from_slice(&[0xa0, 0x0a, 0x06, 0x08]);
-    inner.extend_from_slice(P256_OID);
+    // Minimal ECPrivateKey (RFC 5915): SEQUENCE { INTEGER 1, OCTET STRING d }
+    // Content: 3 + 34 = 37 bytes  →  header + content = 39 bytes
+    let mut ec_key = Vec::with_capacity(39);
+    ec_key.extend_from_slice(&[0x30, 0x25]); // SEQUENCE, 37 bytes
+    ec_key.extend_from_slice(&[0x02, 0x01, 0x01]); // INTEGER 1
+    ec_key.extend_from_slice(&[0x04, 0x20]); // OCTET STRING, 32 bytes
+    ec_key.extend_from_slice(&d);
 
-    let mut der = Vec::with_capacity(2 + inner.len());
-    der.push(0x30);
-    der.push(inner.len() as u8);
-    der.extend_from_slice(&inner);
+    // AlgorithmIdentifier: SEQUENCE { OID ecPublicKey, OID P-256 }
+    // Content: 9 + 10 = 19 bytes  →  header + content = 21 bytes
+    let mut alg_id = Vec::with_capacity(21);
+    alg_id.extend_from_slice(&[0x30, 0x13]); // SEQUENCE, 19 bytes
+    alg_id.push(0x06);
+    alg_id.push(EC_OID.len() as u8);
+    alg_id.extend_from_slice(EC_OID);
+    alg_id.push(0x06);
+    alg_id.push(P256_OID.len() as u8);
+    alg_id.extend_from_slice(P256_OID);
 
-    let b64 = STANDARD.encode(&der);
+    // OCTET STRING wrapping the ECPrivateKey (39 bytes)
+    let mut octet_str = Vec::with_capacity(41);
+    octet_str.extend_from_slice(&[0x04, 0x27]); // OCTET STRING, 39 bytes
+    octet_str.extend_from_slice(&ec_key);
+
+    // Outer PrivateKeyInfo SEQUENCE: INTEGER 0 + AlgorithmIdentifier + OCTET STRING
+    // Content: 3 + 21 + 41 = 65 bytes
+    let mut pkcs8 = Vec::with_capacity(67);
+    pkcs8.extend_from_slice(&[0x30, 0x41]); // SEQUENCE, 65 bytes
+    pkcs8.extend_from_slice(&[0x02, 0x01, 0x00]); // INTEGER 0 (version)
+    pkcs8.extend_from_slice(&alg_id);
+    pkcs8.extend_from_slice(&octet_str);
+
+    let b64 = STANDARD.encode(&pkcs8);
     let body = b64
         .as_bytes()
         .chunks(64)
         .map(|c| std::str::from_utf8(c).unwrap())
         .collect::<Vec<_>>()
         .join("\n");
-    let pem = format!("-----BEGIN EC PRIVATE KEY-----\n{body}\n-----END EC PRIVATE KEY-----\n");
+    let pem = format!("-----BEGIN PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n");
 
     EncodingKey::from_ec_pem(pem.as_bytes())
-        .expect("valid EC private key PEM constructed from Hydra JWK d field")
+        .expect("valid PKCS8 private key PEM constructed from Hydra JWK d field")
 }
 
 /// Mints a JWT signed with `key`, carrying `kid` in the header and the test
@@ -264,11 +286,8 @@ async fn call_list_indices(addr: SocketAddr, token: &str) -> tonic::Code {
 /// A token signed with a new key (unknown `kid`) triggers an inline JWKS
 /// refresh; the server validates the token after refreshing.
 #[tokio::test]
-async fn cache_miss_triggers_refresh_and_validates_new_kid() {
-    let Some(admin) = try_hydra().await else {
-        return;
-    };
-
+async fn test_server_oauth2_cache_miss_triggers_refresh_and_validates_new_kid() {
+    let admin = admin_config();
     let set_name = format!("udex-jwks-refresh-{}", Uuid::new_v4().simple());
     let k1_kid = "refresh-k1";
     let k2_kid = "refresh-k2";
@@ -319,11 +338,8 @@ async fn cache_miss_triggers_refresh_and_validates_new_kid() {
 /// When the JWKS endpoint becomes unavailable (key set deleted), the server
 /// retains its cached keys and continues to serve tokens for known kids.
 #[tokio::test]
-async fn endpoint_failure_retains_cache_and_serves_known_kids() {
-    let Some(admin) = try_hydra().await else {
-        return;
-    };
-
+async fn test_server_oauth2_endpoint_failure_retains_cache_and_serves_known_kids() {
+    let admin = admin_config();
     let set_name = format!("udex-jwks-refresh-{}", Uuid::new_v4().simple());
     let k1_kid = "refresh-k1";
 
@@ -370,11 +386,8 @@ async fn endpoint_failure_retains_cache_and_serves_known_kids() {
 /// Once the max-failed-refreshes gate fires the server stops attempting
 /// refreshes but continues to serve tokens for keys still in the cache.
 #[tokio::test]
-async fn max_failed_refreshes_gate_stops_retries_and_cache_is_retained() {
-    let Some(admin) = try_hydra().await else {
-        return;
-    };
-
+async fn test_server_oauth2_max_failed_refreshes_gate_stops_retries_and_cache_is_retained() {
+    let admin = admin_config();
     let set_name = format!("udex-jwks-refresh-{}", Uuid::new_v4().simple());
     let k1_kid = "refresh-k1";
 
@@ -437,4 +450,22 @@ async fn max_failed_refreshes_gate_stops_retries_and_cache_is_retained() {
     );
 
     server.abort();
+}
+
+// ── unit tests (no Hydra required) ────────────────────────────────────────────
+
+#[cfg(test)]
+mod unit {
+    use super::*;
+
+    /// Verifies ec_d_to_encoding_key produces a key accepted by jsonwebtoken
+    /// using the RFC 7515 Appendix A.3 P-256 test vector. Catches DER format
+    /// bugs without requiring a live Hydra instance.
+    #[test]
+    fn ec_d_to_encoding_key_accepts_known_p256_vector() {
+        // RFC 7515 §A.3 private key scalar d (P-256, base64url).
+        let d = "jpsQnnGQmL-YBIffH1136cspYG6-0iY7X1fCE9-E9LI";
+        // Panics with InvalidKeyFormat if the PKCS8 DER construction is wrong.
+        let _key = ec_d_to_encoding_key(d);
+    }
 }
