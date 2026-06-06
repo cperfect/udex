@@ -186,4 +186,5 @@ Hydra ports to the host).
 `tests/jwks_refresh_tests.rs` tests the cache-miss and DoS-control paths
 against a live Hydra instance. Each test creates a dedicated Hydra key set
 (`/admin/keys/udex-jwks-refresh-{uuid}`) so it is fully isolated from the
-main JWKS tests. Tests skip gracefully when Hydra is not reachable.
+main JWKS tests. Hydra is assumed to be running; these tests fail hard if it
+is unreachable — they are never skipped.

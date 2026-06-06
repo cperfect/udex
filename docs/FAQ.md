@@ -116,7 +116,7 @@ udex entry lookup-or-create customers --context id=alice --context version=1
 # → key: 550e8400-..., context_hash: abc123, created: false
 ```
 
-**Permission requirement**: `lookup-or-create` requires the `udex:entry:v1:{index_name}:write` permission because it may write. A token with only `read` permission will be rejected. In bulk operations it must appear in `BulkWriteEntryOperation`, not `BulkReadEntryOperation`.
+**Permission requirement**: `lookup-or-create` requires **both** the `udex:entry:v1:{index_name}:read` and `udex:entry:v1:{index_name}:write` permissions, because it both reads and writes. A token missing either is rejected. In bulk operations it must appear in `BulkWriteEntryOperation`, not `BulkReadEntryOperation`.
 
 **Hash verification**: the client must supply a pre-computed `context_hash` alongside the full context pairs. The server recomputes the hash and returns `INVALID_ARGUMENT` if they disagree — even before touching the database. Always use the SDK to compute the hash; it guarantees algorithm stability.
 

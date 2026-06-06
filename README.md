@@ -73,7 +73,7 @@ See [the FAQ](docs/FAQ.md#why-are-keyscontexts-11) for the reasoning behind this
 
 `create_entry` is idempotent: submitting the same context twice returns the same key both times. No duplicates accumulate. For the rationale behind this design and how to handle key migrations, see [the FAQ](docs/FAQ.md#why-are-contexts-immutable).
 
-`lookup_key_by_context_or_create` combines the lookup and create into a single round trip: if an entry already exists for the context it is returned (`created=false`); if not, a new entry is created and returned (`created=true`). This is the recommended operation for scenarios where the Indexer cannot know in advance whether an entry exists and wants to avoid an explicit read-before-write. It requires **write** permission and may appear in bulk write operations but not bulk read operations. See [the FAQ](docs/FAQ.md#when-should-i-use-lookup-or-create-instead-of-lookup--create) for guidance on when to use it.
+`lookup_key_by_context_or_create` combines the lookup and create into a single round trip: if an entry already exists for the context it is returned (`created=false`); if not, a new entry is created and returned (`created=true`). This is the recommended operation for scenarios where the Indexer cannot know in advance whether an entry exists and wants to avoid an explicit read-before-write. It requires both **read** and **write** permission and may appear in bulk write operations but not bulk read operations. See [the FAQ](docs/FAQ.md#when-should-i-use-lookup-or-create-instead-of-lookup--create) for guidance on when to use it.
 
 ### Access
 
