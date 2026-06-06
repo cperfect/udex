@@ -171,7 +171,7 @@ Integration tests use `RUST_LOG` filtering and run with a real PostgreSQL instan
 
 ### Hydra integration tests
 
-Tests prefixed with `test_hydra_` require a live Hydra instance.
+Tests with the `_oauth2_` infix (e.g. `test_server_oauth2_*`, `test_sdk_oauth2_*`) require a live Hydra instance.
 
 In the devcontainer `HYDRA_PUBLIC_URL` and `HYDRA_ADMIN_URL` are set
 automatically by the devcontainer compose file (pointing at the `hydra` Docker
