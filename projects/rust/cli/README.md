@@ -55,6 +55,9 @@ udex entry get my-index --key 550e8400-e29b-41d4-a716-446655440000
 # Reverse-lookup: find all keys that match a context
 udex entry lookup my-index --context name=alice --context role=admin
 
+# Look up the key for a context, creating the entry if it doesn't exist
+udex entry lookup-or-create my-index --context name=alice --context role=admin
+
 # Delete an entry
 udex entry delete my-index --key 550e8400-e29b-41d4-a716-446655440000
 ```
