@@ -29,7 +29,7 @@ For common questions, see the [FAQs](docs/FAQ.md).
 
 There are four core domain concepts:
 
-- **Index** — a named, configured namespace for entries. Indices are independent: the same context can appear in multiple indices with different keys. Index names are lowercase strings and are immutable once set.
+- **Index** — a named, configured namespace for entries. Indices are independent: the same context can appear in multiple indices with different keys. Index names may contain Unicode letters, digits, hyphens and underscores, and are immutable once set.
 - **Context** — a set of key-value pairs that uniquely identifies an entity. Udex hashes the pairs to produce a stable **context fingerprint**. Contexts are immutable — they cannot be updated, only deleted and recreated.
 - **Key** — a server-generated UUIDv4 assigned to a context within an index. Keys are globally unique across all indices and permanent for the lifetime of the entry.
 - **Entry** — the binding of a key to a context within an index. The 1:1 invariant ensures that one context fingerprint maps to exactly one key within any given index (see [The 1:1 Entry–Context Model](#the-11-entrycontext-model) below).
@@ -69,11 +69,11 @@ A **context** is a set of key-value pairs that uniquely describes an entity at a
 
 > **One context fingerprint maps to exactly one entry key — always.**
 
-See [the FAQ](docs/FAQ.md#why-are-keyscontexts-11) for the reasoning behind this.
+See [Design Decisions](docs/DESIGN_DECISIONS.md#why-are-keyscontexts-11) for the reasoning behind this.
 
-`create_entry` is idempotent: submitting the same context twice returns the same key both times. No duplicates accumulate. For the rationale behind this design and how to handle key migrations, see [the FAQ](docs/FAQ.md#why-are-contexts-immutable).
+`create_entry` is idempotent: submitting the same context twice returns the same key both times. No duplicates accumulate. For the rationale behind this design see [Design Decisions](docs/DESIGN_DECISIONS.md#why-are-contexts-immutable), and for how to handle key migrations see [the FAQ](docs/FAQ.md#how-do-i-handle-key-migrations).
 
-`lookup_key_by_context_or_create` combines the lookup and create into a single round trip: if an entry already exists for the context it is returned (`created=false`); if not, a new entry is created and returned (`created=true`). This is the recommended operation for scenarios where the Indexer cannot know in advance whether an entry exists and wants to avoid an explicit read-before-write. It requires **write** permission and may appear in bulk write operations but not bulk read operations. See [the FAQ](docs/FAQ.md#when-should-i-use-lookup-or-create-instead-of-lookup--create) for guidance on when to use it.
+`lookup_key_by_context_or_create` combines the lookup and create into a single round trip: if an entry already exists for the context it is returned (`created=false`); if not, a new entry is created and returned (`created=true`). This is the recommended operation for scenarios where the Indexer cannot know in advance whether an entry exists and wants to avoid an explicit read-before-write. It requires both **read** and **write** permission and may appear in bulk write operations but not bulk read operations. See [the FAQ](docs/FAQ.md#when-should-i-use-lookup-or-create-instead-of-lookup--create) for guidance on when to use it.
 
 ### Access
 
@@ -179,7 +179,8 @@ This project is developed using [Claude Code](https://claude.ai/code) (Anthropic
 | Document | Description |
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Data model, operations, security model, and design principles |
-| [docs/FAQ.md](docs/FAQ.md) | Design rationale and common questions |
+| [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md) | Rationale behind core design choices |
+| [docs/FAQ.md](docs/FAQ.md) | Operational how-tos, usage guidance, and troubleshooting |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Getting started, development guidelines, and testing standards |
 | [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md) | Rust-specific coding standards and conventions |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting policy |

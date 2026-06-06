@@ -118,10 +118,12 @@ helm/udex/
 ├── Chart.yaml          # name, version, appVersion
 ├── values.yaml         # all configurable fields with defaults
 └── templates/
-    ├── configmap.yaml  # server config.toml rendered from values
-    ├── secret.yaml     # DATABASE_URL + TLS cert/key
-    ├── deployment.yaml # single-replica pod; mounts ConfigMap and Secret
-    └── service.yaml    # LoadBalancer on port 443
+    ├── _helpers.tpl          # named template helpers (names, labels)
+    ├── configmap.yaml        # server config.toml rendered from values
+    ├── secret.yaml           # DATABASE_URL + TLS cert/key
+    ├── deployment.yaml       # single-replica pod; mounts ConfigMap and Secret
+    ├── service.yaml          # LoadBalancer on port 443
+    └── ingressroutetcp.yaml  # Traefik IngressRouteTCP for TLS passthrough
 ```
 
 ## Health probes

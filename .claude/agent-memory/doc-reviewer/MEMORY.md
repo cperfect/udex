@@ -1,0 +1,2 @@
+- [Doc ownership map](doc_ownership.md) — which doc is the Highlander source of truth for each topic in this repo
+- [Staleness hotspots](staleness_hotspots.md) — version refs and code-derived facts that drift; where to verify each

@@ -40,7 +40,7 @@ Manages context-to-key entries within an index. All write operations are transac
 
 ### Health (`grpc.health.v1`)
 
-Server health is exposed via the standard [gRPC Health Checking Protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md) (`grpc.health.v1.Health`), provided by the [`tonic-health`](https://docs.rs/tonic-health) crate. There is no Udex-specific proto for health — the standard service is used directly. See [docs/FAQ.md](../../docs/FAQ.md#why-does-udex-use-the-grpc-health-checking-protocol-instead-of-a-custom-healthz-endpoint) for the rationale.
+Server health is exposed via the standard [gRPC Health Checking Protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md) (`grpc.health.v1.Health`), provided by the [`tonic-health`](https://docs.rs/tonic-health) crate. There is no Udex-specific proto for health — the standard service is used directly. See [docs/DESIGN_DECISIONS.md](../../docs/DESIGN_DECISIONS.md#why-does-udex-use-the-grpc-health-checking-protocol-instead-of-a-custom-healthz-endpoint) for the rationale.
 
 ## Key design points
 
@@ -50,7 +50,7 @@ Server health is exposed via the standard [gRPC Health Checking Protocol](https:
 
 ## Code generation
 
-`projects/rust/api/build.rs` compiles all three files using [`tonic-build`](https://docs.rs/tonic-build) and writes the generated Rust into `projects/rust/api/src/generated/`. The build script also derives `serde::Serialize` / `serde::Deserialize` on every generated type.
+`projects/rust/api/build.rs` compiles both files using [`tonic-build`](https://docs.rs/tonic-build) and writes the generated Rust into `projects/rust/api/src/generated/`. The build script also derives `serde::Serialize` / `serde::Deserialize` on every generated type.
 
 To regenerate after editing a `.proto` file, run `cargo build` from `projects/rust/`.
 

@@ -1,7 +1,7 @@
 # Udex Architecture Intent
 > **Prerequisites**: Read [Core Concepts](../README.md#core-concepts) in the README before this document. The architecture assumes familiarity with Index, Context, Key, Entry, and the 1:1 invariant.
 
-> See the [FAQs](FAQ.md) for some key decisions
+> See [Design Decisions](DESIGN_DECISIONS.md) for the rationale behind key decisions, and the [FAQs](FAQ.md) for common questions.
 
 ## Overview
 
@@ -56,7 +56,7 @@ Admin operations are exposed as the `IndexService` gRPC API (defined in [`udex.i
 
 * Create a new index
 * Describe an index (name, configuration, metadata)
-* Update an index's mutable fields (description, limits, hash algorithm)
+* Update an index's mutable fields (description, limits)
 * Delete an index — only permitted when the index has no entries
 * List all indices
 
@@ -66,7 +66,7 @@ See [Client Usage](../README.md#client-usage) in the README for client roles, ro
 
 ## What Udex Is Not
 
-Udex is not an entity store, a graph database, or a general-purpose query engine. It holds the minimum context required to resolve entities across boundaries, not the entities themselves. Clients must know the key or context they are looking for; search is not supported. It is not intended to be used directly by humans apart from specific admin operations. For the design rationale, see the [FAQ](FAQ.md).
+Udex is not an entity store, a graph database, or a general-purpose query engine. It holds the minimum context required to resolve entities across boundaries, not the entities themselves. Clients must know the key or context they are looking for; search is not supported. It is not intended to be used directly by humans apart from specific admin operations. For the design rationale, see [Design Decisions](DESIGN_DECISIONS.md#what-wont-udex-support).
 
 ## Security Model
 
@@ -76,7 +76,7 @@ Udex initially only supports [OAuth 2.0 Client Credentials Flow](https://oauth.n
 
 Tokens are Json Web Tokens (JWTs) with the standard set of claims plus additional ones that map to the permissions model. Udex validates the token for every operation and will fail bulk transactions if any operation cannot be validated.
 
-The `grpc.health.v1.Health` service is the only unauthenticated endpoint. It exposes status for three registered services: `""` (overall server), `"udex.entry.v1.EntryService"`, and `"udex.index.v1.IndexService"`. See the [FAQ](FAQ.md#why-does-udex-use-the-grpc-health-checking-protocol-instead-of-a-custom-healthz-endpoint) for the rationale behind the standard protocol choice.
+The `grpc.health.v1.Health` service is the only unauthenticated endpoint. It exposes status for three registered services: `""` (overall server), `"udex.entry.v1.EntryService"`, and `"udex.index.v1.IndexService"`. See [Design Decisions](DESIGN_DECISIONS.md#why-does-udex-use-the-grpc-health-checking-protocol-instead-of-a-custom-healthz-endpoint) for the rationale behind the standard protocol choice.
 
 ### Permissions
 

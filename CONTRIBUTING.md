@@ -208,7 +208,7 @@ The API definitions in `projects/protobuf/` drive code generation for the server
 
 
 #### Docs
-* Keep general docs at the top level and keep other docs closest to where they are used.
+* Docs at the top level should be general and keep other docs specific and close to what they relate to. Top level docs can provide summaries/simplifications of what is in lower level docs if that context is useful.
 * Each code project should have its own `README.md`. If there are supporting docs specific to a project rather than general documentation, these can go in that project as well, in a `docs/` subdirectory if necessary.
 * Tech-specific contribution guidance should live with the relevant project or technology.
 * Unless there is a specific need or standard for a Markdown or similar document to be elsewhere (for example `README.md` files or `SECURITY.md`), put it in `docs/`.
