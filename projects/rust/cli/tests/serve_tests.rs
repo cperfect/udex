@@ -32,27 +32,24 @@ fn write_config_with_bind_address(path: &std::path::Path, bind_address: &str) {
     let jwt_key = server_fixture_urn("tests/jwt/signing_public_key.pem");
 
     let content = format!(
-        r#"[server]
-bind_address = "{bind_address}"
-request_timeout_secs = 30
-max_connections = 1000
-max_message_size_bytes = 4194304
-
-[server.tls]
-cert = "{cert}"
-key = "{key}"
-
-[server.authz]
-jwt_public_key = "{jwt_key}"
-jwt_issuer = "https://auth.example.com"
-jwt_audience = "udex"
-
-[datastore]
-connection_url = "urn:secrets-rs:env:DATABASE_URL"
-max_connections = 10
-min_connections = 1
-connection_timeout_secs = 10
-query_timeout_secs = 30
+        r#"server:
+  bind_address: "{bind_address}"
+  request_timeout_secs: 30
+  max_connections: 1000
+  max_message_size_bytes: 4194304
+  tls:
+    cert: "{cert}"
+    key: "{key}"
+  authz:
+    jwt_public_key: "{jwt_key}"
+    jwt_issuer: "https://auth.example.com"
+    jwt_audience: "udex"
+datastore:
+  connection_url: "urn:secrets-rs:env:DATABASE_URL"
+  max_connections: 10
+  min_connections: 1
+  connection_timeout_secs: 10
+  query_timeout_secs: 30
 "#
     );
     std::fs::write(path, content).unwrap();
@@ -61,7 +58,7 @@ query_timeout_secs = 30
 #[test]
 fn test_serve_fails_with_missing_config() {
     udex()
-        .args(["serve", "--config", "/nonexistent/udex.toml"])
+        .args(["serve", "--config", "/nonexistent/udex.yaml"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("failed to read config file"));
@@ -70,8 +67,8 @@ fn test_serve_fails_with_missing_config() {
 #[test]
 fn test_serve_fails_with_invalid_config() {
     let dir = TempDir::new().unwrap();
-    let config_path = dir.path().join("udex.toml");
-    std::fs::write(&config_path, "not valid toml [[[").unwrap();
+    let config_path = dir.path().join("udex.yaml");
+    std::fs::write(&config_path, "server: [ unclosed flow sequence").unwrap();
 
     udex()
         .args(["serve", "--config", config_path.to_str().unwrap()])
@@ -83,7 +80,7 @@ fn test_serve_fails_with_invalid_config() {
 #[test]
 fn test_serve_fails_with_invalid_bind_address() {
     let dir = TempDir::new().unwrap();
-    let config_path = dir.path().join("udex.toml");
+    let config_path = dir.path().join("udex.yaml");
     write_config_with_bind_address(&config_path, "not-an-address");
 
     udex()

@@ -60,28 +60,25 @@ const TEST_DB_URL_VAR: &str = "SERVE_TEST_DATABASE_URL";
 
 fn make_config() -> String {
     format!(
-        r#"[server]
-bind_address = "{BIND_ADDR}"
-request_timeout_secs = 30
-max_connections = 100
-max_message_size_bytes = 4194304
-
-[server.tls]
-cert = "urn:secrets-rs:file:{SERVER_CERT}"
-key = "urn:secrets-rs:file:{SERVER_KEY}"
-
-[server.authz]
-jwt_public_key = "urn:secrets-rs:file:{JWT_PUBLIC_KEY}"
-jwt_issuer = "https://cli-serve-test-issuer.example.com"
-jwt_audience = "udex-cli-serve-test"
-
-[datastore]
-connection_url = "urn:secrets-rs:env:{TEST_DB_URL_VAR}"
-max_connections = 5
-min_connections = 1
-connection_timeout_secs = 10
-query_timeout_secs = 30
-dangerous_allow_non_tls = true
+        r#"server:
+  bind_address: "{BIND_ADDR}"
+  request_timeout_secs: 30
+  max_connections: 100
+  max_message_size_bytes: 4194304
+  tls:
+    cert: "urn:secrets-rs:file:{SERVER_CERT}"
+    key: "urn:secrets-rs:file:{SERVER_KEY}"
+  authz:
+    jwt_public_key: "urn:secrets-rs:file:{JWT_PUBLIC_KEY}"
+    jwt_issuer: "https://cli-serve-test-issuer.example.com"
+    jwt_audience: "udex-cli-serve-test"
+datastore:
+  connection_url: "urn:secrets-rs:env:{TEST_DB_URL_VAR}"
+  max_connections: 5
+  min_connections: 1
+  connection_timeout_secs: 10
+  query_timeout_secs: 30
+  dangerous_allow_non_tls: true
 "#
     )
 }
@@ -117,7 +114,7 @@ async fn wait_for_ready(ca_pem: &str) -> bool {
 
 /// Verifies that `udex serve` starts correctly and the gRPC health service reports SERVING over TLS.
 ///
-/// The test writes a complete `udex.toml`, spawns the binary, waits for the
+/// The test writes a complete `udex.yaml`, spawns the binary, waits for the
 /// server to become ready, then asserts the health check response is SERVING.
 #[tokio::test]
 async fn test_serve_health_check_over_tls() {
@@ -128,9 +125,9 @@ async fn test_serve_health_check_over_tls() {
     let base_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let db_url = replace_db_name(&base_url, &db_name);
 
-    // Write a udex.toml that exercises the full CLI config path.
+    // Write a udex.yaml that exercises the full CLI config path.
     let dir = tempfile::tempdir().expect("tempdir");
-    let config_path = dir.path().join("udex.toml");
+    let config_path = dir.path().join("udex.yaml");
     std::fs::write(&config_path, make_config()).expect("write config");
 
     // Spawn the real binary — this exercises config loading and the serve handler.

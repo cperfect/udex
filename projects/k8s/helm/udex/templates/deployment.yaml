@@ -63,21 +63,21 @@ spec:
           env:
             # Inject DATABASE_URL from the Secret as an environment variable.
             # The server reads it via the "urn:secrets-rs:env:DATABASE_URL" URI
-            # in config.toml — the actual URL string never appears in the ConfigMap.
+            # in config.yaml — the actual URL string never appears in the ConfigMap.
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: {{ include "udex.fullname" . }}
                   key: DATABASE_URL
           volumeMounts:
-            # Mount config.toml from the ConfigMap at the path the server expects.
+            # Mount config.yaml from the ConfigMap at the path the server expects.
             # subPath mounts a single file rather than the whole ConfigMap directory.
             - name: config
-              mountPath: /etc/udex/config.toml
-              subPath: config.toml
+              mountPath: /etc/udex/config.yaml
+              subPath: config.yaml
               readOnly: true
             # Mount the TLS cert and key from the Secret into /etc/udex/tls/.
-            # The server reads them via the file URNs in config.toml.
+            # The server reads them via the file URNs in config.yaml.
             - name: tls
               mountPath: /etc/udex/tls
               readOnly: true
@@ -104,7 +104,7 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
       volumes:
-        # ConfigMap volume: exposes config.toml as a file inside the pod.
+        # ConfigMap volume: exposes config.yaml as a file inside the pod.
         - name: config
           configMap:
             name: {{ include "udex.fullname" . }}

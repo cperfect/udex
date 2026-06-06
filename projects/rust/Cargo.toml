@@ -41,7 +41,7 @@ tower-http = { version = "0.6", features = ["trace"] }
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_yaml = "0.9"
+serde-saphyr = "0.0.27"
 
 # Database
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "time"] }
@@ -55,7 +55,6 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 
 # CLI
 clap = { version = "4", features = ["derive", "env"] }
-toml = "0.8"
 tempfile = "3"
 
 # Build dependencies

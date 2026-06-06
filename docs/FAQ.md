@@ -40,19 +40,19 @@ Use the `udex migrate` subcommands to inspect and advance the database schema in
 ```bash
 # Check whether the database is at the expected schema version.
 # Exits 0 if up to date; exits non-zero with a descriptive message if behind.
-udex migrate check --config udex.toml
+udex migrate check --config udex.yaml
 
 # Apply all outstanding migrations, then confirm the version.
-udex migrate apply --config udex.toml
+udex migrate apply --config udex.yaml
 ```
 
-Both commands read only the `[datastore]` section of the config file — TLS certificate files are not required. The recommended approach for production is to run `udex migrate apply` as a pre-deploy step before starting the new server binary.
+Both commands read only the `datastore` section of the config file — TLS certificate files are not required. The recommended approach for production is to run `udex migrate apply` as a pre-deploy step before starting the new server binary.
 
-If you want the server to apply migrations automatically on startup (e.g. in development or CI), set `apply_migrations = true` in `[datastore]`:
+If you want the server to apply migrations automatically on startup (e.g. in development or CI), set `apply_migrations: true` under `datastore`:
 
-```toml
-[datastore]
-apply_migrations = true
+```yaml
+datastore:
+  apply_migrations: true
 ```
 
 See [Database migrations](../README.md#database-migrations) in the README for the full deployment workflow.
@@ -68,7 +68,32 @@ ERROR Database schema version mismatch — server cannot start; run `udex migrat
   error: Database not initialized: Current version 0 does not match latest version 1
 ```
 
-To resolve, run `udex migrate apply --config udex.toml` to bring the schema up to date, then restart the server. Alternatively, set `apply_migrations = true` in `[datastore]` to allow the server to migrate automatically on startup (not recommended for production).
+To resolve, run `udex migrate apply --config udex.yaml` to bring the schema up to date, then restart the server. Alternatively, set `apply_migrations: true` under `datastore` to allow the server to migrate automatically on startup (not recommended for production).
+
+## How do I migrate my config from TOML to YAML?
+
+Udex configuration is now YAML (previously TOML) — see [Why YAML for configuration (not TOML)?](DESIGN_DECISIONS.md#why-yaml-for-configuration-not-toml). This is a breaking change: an existing `udex.toml` will not load. The conversion is mechanical because **the field names and secret URNs are unchanged** — only the syntax differs:
+
+- Rename the file `udex.toml` → `udex.yaml` (the default config path and the container mount are now `config.yaml`).
+- TOML tables become nested YAML mappings: `[server]` → `server:`, `[server.tls]` → `tls:` under `server`, `[server.authz]` → `authz:` under `server`, `[datastore]` → `datastore:`.
+- `key = value` becomes `key: value`; indent nested keys two spaces.
+
+For example:
+
+```toml
+[server.tls]
+cert = "urn:secrets-rs:file:certs/server.crt"
+```
+
+becomes:
+
+```yaml
+server:
+  tls:
+    cert: "urn:secrets-rs:file:certs/server.crt"
+```
+
+If you prefer to start fresh, `udex config init` writes a fully commented `udex.yaml` template; run `udex config validate` to check it.
 
 ## When should I use `lookup-or-create` instead of `lookup` + `create`?
 

@@ -101,7 +101,7 @@ pub async fn create(
             println!("{}", serde_json::to_string_pretty(&resp)?);
         }
         OutputFormat::Yaml => {
-            print!("{}", serde_yaml::to_string(&resp)?);
+            print!("{}", serde_saphyr::to_string(&resp)?);
         }
     }
     Ok(())
@@ -130,7 +130,7 @@ pub async fn get(client: &UdexClient, args: EntryGetArgs, output: &OutputFormat)
             println!("{}", serde_json::to_string_pretty(&ctx)?);
         }
         OutputFormat::Yaml => {
-            print!("{}", serde_yaml::to_string(&ctx)?);
+            print!("{}", serde_saphyr::to_string(&ctx)?);
         }
     }
     Ok(())
@@ -164,7 +164,7 @@ pub async fn lookup(
                 println!("{}", serde_json::to_string_pretty(&key)?);
             }
             OutputFormat::Yaml => {
-                print!("{}", serde_yaml::to_string(&key)?);
+                print!("{}", serde_saphyr::to_string(&key)?);
             }
         },
     }
@@ -205,7 +205,7 @@ pub async fn lookup_or_create(
             println!("{}", serde_json::to_string_pretty(&resp)?);
         }
         OutputFormat::Yaml => {
-            print!("{}", serde_yaml::to_string(&resp)?);
+            print!("{}", serde_saphyr::to_string(&resp)?);
         }
     }
     Ok(())

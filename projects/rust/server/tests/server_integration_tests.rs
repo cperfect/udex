@@ -7,6 +7,7 @@ use maybe_once::tokio::{Data, MaybeOnceAsync};
 use std::net::SocketAddr;
 use std::sync::OnceLock;
 use time::OffsetDateTime;
+use tokio::net::TcpListener;
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Channel, ClientTlsConfig};
 use tonic_health::pb::{
@@ -17,11 +18,56 @@ use udex_datastore::integration_test::init_postgres;
 use udex_server::{config::ServerConfig, logging, server};
 use udex_test_utils::{bind_file_secret, hydra_admin_url};
 
-const SERVER_BIND_ADDR: &str = "127.0.0.1:50052"; // different from default to avoid conflicts
 const ID_PREFIX: &str = "server-integration-test";
 
-const SERVER_USING_HYDRA_BIND_ADDR: &str = "127.0.0.1:15053";
 const ID_USING_HYDRA_PREFIX: &str = "hydra-integration-test";
+
+/// Binds an OS-assigned ephemeral port on localhost and returns the listener
+/// plus its actual address. Using port 0 avoids hardcoded ports that collide
+/// across concurrent runs or with leftover processes.
+async fn bind_ephemeral() -> (TcpListener, SocketAddr) {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind ephemeral port");
+    let addr = listener
+        .local_addr()
+        .expect("listener has no local address");
+    (listener, addr)
+}
+
+/// Polls the gRPC health endpoint over TLS until the server reports SERVING,
+/// or panics after ~3 s. Replaces fixed startup sleeps so the fixtures are not
+/// sensitive to how long startup takes under load.
+async fn wait_for_server(addr: SocketAddr) {
+    let ca = tokio::fs::read_to_string("tests/certs/ca.crt")
+        .await
+        .expect("read CA cert");
+    let tls = ClientTlsConfig::new()
+        .ca_certificate(tonic::transport::Certificate::from_pem(ca))
+        .domain_name("localhost");
+    for _ in 0..30 {
+        sleep(Duration::from_millis(100)).await;
+        let Ok(channel) = Channel::from_shared(format!("https://{addr}"))
+            .unwrap()
+            .tls_config(tls.clone())
+            .unwrap()
+            .connect()
+            .await
+        else {
+            continue;
+        };
+        if HealthClient::new(channel)
+            .check(HealthCheckRequest {
+                service: String::new(),
+            })
+            .await
+            .is_ok()
+        {
+            return;
+        }
+    }
+    panic!("server at {addr} did not become ready within 3 s");
+}
 
 // See https://github.com/ufoscout/maybe-once for the MaybeOnceAsync pattern used here.
 type MaybeOnceType = (
@@ -51,7 +97,7 @@ async fn init_server() -> MaybeOnceType {
     let db_name = datastore_fixtures.2;
 
     let index_name = format!("{}-index", ID_PREFIX);
-    let bind_address: SocketAddr = SERVER_BIND_ADDR.parse().expect("Invalid bind address");
+    let (listener, bind_address) = bind_ephemeral().await;
     let jwt_issuer = format!("{ID_PREFIX}-issuer");
     let jwt_audience = format!("{ID_PREFIX}-audience");
 
@@ -89,13 +135,13 @@ async fn init_server() -> MaybeOnceType {
     };
 
     let server_handle = tokio::spawn(async move {
-        server::serve(server_config, datastore)
+        server::serve_with_listener(server_config, datastore, listener)
             .await
             .expect("Server failed to start");
     });
 
-    // Give server time to start
-    sleep(Duration::from_millis(200)).await;
+    // Wait until the server reports SERVING rather than sleeping a fixed time.
+    wait_for_server(bind_address).await;
 
     let jwt_private_key = tokio::fs::read_to_string("tests/jwt/signing_private_key.pem")
         .await
@@ -163,9 +209,7 @@ async fn init_server_hydra() -> HydraFixtureType {
     let db_name = datastore_fixtures.2;
 
     let index_name = format!("{ID_USING_HYDRA_PREFIX}-index");
-    let bind_address: SocketAddr = SERVER_USING_HYDRA_BIND_ADDR
-        .parse()
-        .expect("Invalid bind address");
+    let (listener, bind_address) = bind_ephemeral().await;
 
     let server_config = ServerConfig {
         bind_address,
@@ -203,13 +247,14 @@ async fn init_server_hydra() -> HydraFixtureType {
     };
 
     let server_handle = tokio::spawn(async move {
-        server::serve(server_config, datastore)
+        server::serve_with_listener(server_config, datastore, listener)
             .await
             .expect("Hydra-backed server failed to start");
     });
 
-    // Extra startup time: AuthzInterceptor fetches the JWKS on startup.
-    sleep(Duration::from_millis(500)).await;
+    // Wait until the server reports SERVING. This also covers the extra startup
+    // time the AuthzInterceptor needs to fetch the JWKS on startup.
+    wait_for_server(bind_address).await;
 
     // One shared Hydra client for all Hydra integration tests.
     // Scopes cover all operations tested across the Hydra test suite.

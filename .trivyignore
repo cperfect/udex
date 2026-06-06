@@ -72,6 +72,19 @@ GHSA-cq8v-f236-94qc  # Not exploitable: aliased mutable references in ThreadRng
                      # Advisory: https://github.com/advisories/GHSA-cq8v-f236-94qc
                      # RUSTSEC: https://rustsec.org/advisories/RUSTSEC-2026-0097.html
 
+# Kubernetes / Helm chart suppressions (deployment.yaml + configmap.yaml below).
+#
+# DORMANT as of Trivy 0.71.0 (verified 2026-06-06): none of the four KSV checks
+# below currently fire against the rendered chart. They went dormant once the
+# chart began rendering for misconfig scanning (see misconfiguration.helm.set in
+# .trivy.yaml) — scanning with no ignorefile at all severities triggers only
+# KSV-0011/0015/0016/0018/0110, and no check covers latest-tag, NET_BIND_SERVICE,
+# privileged-port, or the URN values under any ID. The underlying chart
+# properties they describe ARE still present, so these entries are retained as
+# guards (and as design rationale) in case a future Trivy/bundle reintroduces the
+# checks under the same IDs. Re-evaluate — and prune — if they stay dormant
+# across Trivy upgrades, or re-triage properly if one resurfaces.
+
 # projects/k8s/helm/udex/templates/deployment.yaml
 KSV-0013   # By design: image tag is "latest" — this is a local k3d development chart.
            # image-load.sh imports udex:latest directly into the cluster; there is no

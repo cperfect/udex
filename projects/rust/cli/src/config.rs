@@ -103,16 +103,16 @@ impl Default for UdexConfig {
 }
 
 impl UdexConfig {
-    /// Load a [`UdexConfig`] from a TOML file and bind all secrets from
+    /// Load a [`UdexConfig`] from a YAML file and bind all secrets from
     /// their declared sources.
     ///
-    /// Returns an error if the file cannot be read, the TOML is malformed, or
+    /// Returns an error if the file cannot be read, the YAML is malformed, or
     /// any secret URN cannot be resolved from its declared source (e.g.
     /// `DATABASE_URL` is not set).
     pub fn load(path: &std::path::Path) -> Result<Self> {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("failed to read config file: {}", path.display()))?;
-        let mut cfg: Self = toml::from_str(&content)
+        let mut cfg: Self = serde_saphyr::from_str(&content)
             .with_context(|| format!("failed to parse config file: {}", path.display()))?;
 
         // EnvSource is pre-registered under "env" by SourceRegistry::new().
@@ -273,7 +273,7 @@ impl UdexConfig {
             datastore: DatastoreConfig,
         }
 
-        let wrapper: Wrapper = toml::from_str(&content)
+        let wrapper: Wrapper = serde_saphyr::from_str(&content)
             .with_context(|| format!("failed to parse config file: {}", path.display()))?;
         let ds = wrapper.datastore;
 
@@ -470,45 +470,42 @@ mod tests {
     fn test_config_serializes_without_panicking() {
         // Verify that serialization succeeds. Note: Secret<String> serializes as
         // a masked string (not a bare URN), so the output is not suitable for
-        // round-tripping through toml::from_str — config files must always be
+        // round-tripping through serde_saphyr::from_str — config files must always be
         // hand-authored with bare URN strings such as "urn:secrets-rs:env:DATABASE_URL".
         let cfg = UdexConfig::default();
-        let toml_str = toml::to_string_pretty(&cfg).expect("serialization should succeed");
-        assert!(toml_str.contains("bind_address"));
-        assert!(toml_str.contains("max_connections"));
+        let yaml_str = serde_saphyr::to_string(&cfg).expect("serialization should succeed");
+        assert!(yaml_str.contains("bind_address"));
+        assert!(yaml_str.contains("max_connections"));
     }
 
     // WP-05: Verify that Secret<String> deserialization acts as a file-injection guard.
     // Secret<T>::Deserialize only accepts a bare URN — plain secret values are rejected
-    // at parse time, so a misconfigured TOML file with a raw connection string cannot
+    // at parse time, so a misconfigured YAML file with a raw connection string cannot
     // reach the application.
 
     #[test]
     fn test_plain_url_rejected_by_deserializer() {
-        let toml = r#"
-[server]
-bind_address = "0.0.0.0:50051"
-request_timeout_secs = 30
-max_connections = 1000
-max_message_size_bytes = 4194304
-
-[server.tls]
-cert = "urn:secrets-rs:file:certs/server.crt"
-key = "urn:secrets-rs:file:certs/server.key"
-
-[server.authz]
-jwt_public_key = "urn:secrets-rs:file:certs/jwt_public_key.pem"
-jwt_issuer = "https://auth.example.com"
-jwt_audience = "udex"
-
-[datastore]
-connection_url = "postgres://user:password@localhost:5432/db"
-max_connections = 10
-min_connections = 1
-connection_timeout_secs = 10
-query_timeout_secs = 30
+        let yaml = r#"
+server:
+  bind_address: "0.0.0.0:50051"
+  request_timeout_secs: 30
+  max_connections: 1000
+  max_message_size_bytes: 4194304
+  tls:
+    cert: "urn:secrets-rs:file:certs/server.crt"
+    key: "urn:secrets-rs:file:certs/server.key"
+  authz:
+    jwt_public_key: "urn:secrets-rs:file:certs/jwt_public_key.pem"
+    jwt_issuer: "https://auth.example.com"
+    jwt_audience: "udex"
+datastore:
+  connection_url: "postgres://user:password@localhost:5432/db"
+  max_connections: 10
+  min_connections: 1
+  connection_timeout_secs: 10
+  query_timeout_secs: 30
 "#;
-        let result = toml::from_str::<UdexConfig>(toml);
+        let result = serde_saphyr::from_str::<UdexConfig>(yaml);
         assert!(
             result.is_err(),
             "plain connection URL must be rejected at deserialization"
@@ -517,30 +514,27 @@ query_timeout_secs = 30
 
     #[test]
     fn test_valid_urn_accepted_by_deserializer() {
-        let toml = r#"
-[server]
-bind_address = "0.0.0.0:50051"
-request_timeout_secs = 30
-max_connections = 1000
-max_message_size_bytes = 4194304
-
-[server.tls]
-cert = "urn:secrets-rs:file:certs/server.crt"
-key = "urn:secrets-rs:file:certs/server.key"
-
-[server.authz]
-jwt_public_key = "urn:secrets-rs:file:certs/jwt_public_key.pem"
-jwt_issuer = "https://auth.example.com"
-jwt_audience = "udex"
-
-[datastore]
-connection_url = "urn:secrets-rs:env:DATABASE_URL"
-max_connections = 10
-min_connections = 1
-connection_timeout_secs = 10
-query_timeout_secs = 30
+        let yaml = r#"
+server:
+  bind_address: "0.0.0.0:50051"
+  request_timeout_secs: 30
+  max_connections: 1000
+  max_message_size_bytes: 4194304
+  tls:
+    cert: "urn:secrets-rs:file:certs/server.crt"
+    key: "urn:secrets-rs:file:certs/server.key"
+  authz:
+    jwt_public_key: "urn:secrets-rs:file:certs/jwt_public_key.pem"
+    jwt_issuer: "https://auth.example.com"
+    jwt_audience: "udex"
+datastore:
+  connection_url: "urn:secrets-rs:env:DATABASE_URL"
+  max_connections: 10
+  min_connections: 1
+  connection_timeout_secs: 10
+  query_timeout_secs: 30
 "#;
-        let result = toml::from_str::<UdexConfig>(toml);
+        let result = serde_saphyr::from_str::<UdexConfig>(yaml);
         assert!(
             result.is_ok(),
             "valid URN must deserialize successfully: {:?}",

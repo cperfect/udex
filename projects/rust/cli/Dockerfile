@@ -76,4 +76,4 @@ COPY --from=builder /build/udex /usr/local/bin/udex
 
 EXPOSE 443
 
-ENTRYPOINT ["udex", "serve", "--config", "/etc/udex/config.toml"]
+ENTRYPOINT ["udex", "serve", "--config", "/etc/udex/config.yaml"]

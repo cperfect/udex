@@ -24,7 +24,6 @@ uuid = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
 time = { workspace = true }
-serde_yaml = { workspace = true }
 
 secrets-rs = { workspace = true }
 secrets-rs-macros = { workspace = true }
