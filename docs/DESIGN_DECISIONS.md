@@ -29,6 +29,9 @@ I think the RPC model suits Udex better than REST, especially for the bulk scena
 ### Why is this all driven by a CLI?
 The CLI serves two purposes: operational control (starting and stopping the server, managing indices and entries) and a scriptable, auditable client surface for development and testing that does not require building a custom client.
 
+### Why YAML for configuration (not TOML)?
+Udex uses YAML for its configuration file. YAML is effectively a universal configuration standard and is the default format in Kubernetes, where Udex is deployed — the Helm chart and k8s manifests are already YAML. Using YAML for the application config as well means operators work in a single syntax end-to-end and removes the format mismatch between Udex's config and the manifests that surround it. This is a deliberate replacement of the original TOML format, not an additional option: there is one config format and one parser.
+
 ### Why does Udex use the gRPC Health Checking Protocol instead of a custom healthz endpoint?
 
 Udex implements the [standard gRPC Health Checking Protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md) (`grpc.health.v1.Health`) rather than a bespoke healthz service for four reasons:
