@@ -3,7 +3,7 @@ verblock: "06 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-01
 title: "Adopt serde-saphyr and retire serde_yaml"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-01: Adopt serde-saphyr and retire serde_yaml
@@ -20,9 +20,9 @@ Make `serde-saphyr` the single YAML library for the project, retiring the archiv
 
 ## Acceptance Criteria
 
-- [ ] `serde_yaml` no longer appears anywhere in `Cargo.toml`/`Cargo.lock`.
-- [ ] `udex index get … -o yaml` (and entry/token equivalents) produce clean, idiomatic YAML (unquoted keys, no odd scalar/sequence wrapping) — verified against snapshot or example output.
-- [ ] `cargo fmt --check`, `cargo clippy`, `cargo test` all pass.
+- [x] `serde_yaml` no longer appears anywhere in `Cargo.toml`/`Cargo.lock`.
+- [x] `udex index get … -o yaml` (and entry/token equivalents) produce clean, idiomatic YAML (unquoted keys, no odd scalar/sequence wrapping) — verified against snapshot or example output.
+- [x] `cargo fmt --check`, `cargo clippy`, `cargo test` all pass.
 
 ## Dependencies
 

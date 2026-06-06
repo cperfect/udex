@@ -49,7 +49,7 @@ fn print_index(index: Index, output: &OutputFormat) -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&index)?);
         }
         OutputFormat::Yaml => {
-            print!("{}", serde_yaml::to_string(&index)?);
+            print!("{}", serde_saphyr::to_string(&index)?);
         }
     }
     Ok(())
@@ -65,7 +65,7 @@ fn print_indices(indices: Vec<Index>, output: &OutputFormat) -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&indices)?);
         }
         OutputFormat::Yaml => {
-            print!("{}", serde_yaml::to_string(&indices)?);
+            print!("{}", serde_saphyr::to_string(&indices)?);
         }
     }
     Ok(())

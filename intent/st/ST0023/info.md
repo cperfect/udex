@@ -1,7 +1,7 @@
 ---
 verblock: "06 Jun 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: Not Started
+status: WIP
 slug: move-to-yaml-config
 created: 20260606
 completed:
