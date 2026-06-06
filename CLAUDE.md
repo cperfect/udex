@@ -88,6 +88,23 @@ Full guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md) and [projects/rust/CON
 
 - Every fenced code block MUST have a language identifier (e.g. ` ```rust `, ` ```bash `, ` ```yaml `, ` ```text `). Never write a bare ` ``` ` fence.
 
+## Project structure
+> Orientation map for AI agents — work in the narrowest project that fits the task to avoid context bloat. The canonical tree lives in [CONTRIBUTING.md](CONTRIBUTING.md) under "Repo Structure"; treat that as the source of truth if this drifts.
+
+- `projects/protobuf/` — `.proto` definitions; **source of truth for all API types**. Changing an API starts here; it drives code generation for the server, SDK, and CLI.
+- `projects/rust/` — Rust workspace. Dependency order is `api` → `datastore` / `server` / `sdk` → `cli`. See [projects/rust/CONTRIBUTING.md](projects/rust/CONTRIBUTING.md).
+  - `api/` — `udex-api`: generated types, authz, hashing; no I/O.
+  - `server/` — `udex-server`: gRPC handlers, authn, config, logging.
+  - `datastore/` — `udex-datastore`: `Datastore` / `Migrator` traits + PostgreSQL impl.
+  - `sdk/` — `udex-sdk`: client SDK.
+  - `cli/` — `udex-cli`: CLI binary.
+  - `test-utils/` — `udex-test-utils`: shared integration test fixtures (dev-only).
+- `projects/compose/` — Docker Compose for local dev (PostgreSQL + Hydra).
+- `projects/k8s/` — Helm chart and scripts for local k3d Kubernetes dev.
+- `scripts/` — setup and diagnostics: `gen-env.sh`, `gen-keys-and-certs.sh`, `hydra-create-client.sh`, `dev-doctor.sh`.
+- `docs/` — project documentation: `ARCHITECTURE.md`, `FAQ.md`, `SECRETS.md`.
+- `intent/` — Intent project tracking (steel threads, work packages, LLM guidelines).
+
 ## Directives
 -- Ignore [THOUGHTS.md](./THOUGHTS.md) unless specificially told otherwise
 -- Use the intent wp commands to create/start/finish work packages 
