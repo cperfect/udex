@@ -119,7 +119,7 @@ pub async fn fetch(args: TokenFetchArgs, output: &OutputFormat) -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&obj)?);
         }
         OutputFormat::Yaml => {
-            println!("{}", serde_saphyr::to_string(&obj)?);
+            print!("{}", serde_saphyr::to_string(&obj)?);
         }
         OutputFormat::Table => {
             println!("=== Token (encoded) ===");
