@@ -8,7 +8,8 @@ metadata:
 Udex repo doc ownership (Highlander). Cross-reference these rather than duplicate:
 
 - Data model / operations / security model / design principles → `docs/ARCHITECTURE.md`
-- Design rationale / "why" questions → `docs/FAQ.md` (project-wide) and `projects/protobuf/FAQ.md` (API-specific, e.g. why hash_algorithm immutable)
+- Design rationale / "why" decisions → `docs/DESIGN_DECISIONS.md` (project-wide, grouped: data-model invariants, tech/interface choices, scope/non-goals) and `projects/protobuf/FAQ.md` (API-specific, e.g. why hash_algorithm immutable)
+- Operational how-tos / usage guidance / troubleshooting / roadmap → `docs/FAQ.md` (split from DESIGN_DECISIONS.md; FAQ no longer holds "why" rationale)
 - Secrets/keys/cert inventory → `docs/SECRETS.md` (must update same commit as any credential change)
 - Core domain concepts (Index/Context/Key/Entry, 1:1 invariant) → top-level `README.md#core-concepts`
 - API/proto contract → `projects/protobuf/README.md` + the `.proto` files (source of truth for all API types). Only 2 protos exist: udex.index.v1, udex.entry.v1 (a healthz proto was removed).
