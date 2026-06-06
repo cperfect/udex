@@ -32,7 +32,7 @@ udex config validate --config /etc/udex/udex.toml
 
 ```bash
 udex index list
-udex index create my-index [--description "..."] [--bulk-limit 100] \
+udex index create my-index --description "..." [--bulk-limit 100] \
     [--max-key-length 256] [--max-value-length 1024] [--max-context-pairs 32]
 udex index get my-index
 udex index update my-index [--description "..."] [--bulk-limit 200]
