@@ -106,7 +106,7 @@ Full guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md) and [projects/rust/CON
 - `intent/` — Intent project tracking (steel threads, work packages, LLM guidelines).
 
 ## Directives
--- Ignore [THOUGHTS.md](./THOUGHTS.md) unless specificially told otherwise
+-- Ignore [THOUGHTS.md](./THOUGHTS.md) and [META.md](/docs/META.md) unless specificially told otherwise
 -- Use the intent wp commands to create/start/finish work packages 
 -- When committing on intent Work Packages make sure the updates to the steel thread docs are committed with the changes to the work packages
 -- When updating a binary dependency, generated fixture, or service dependency: also update `scripts/dev-doctor.sh` and the relevant docs. Ask the user whether the check should be an exact version or major-version-only before making the change.
