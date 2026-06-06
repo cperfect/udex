@@ -34,7 +34,7 @@ graph LR
         subgraph k8s["Kubernetes resources"]
             svc["Service · :443"]
             pod["Pod: udex\n:443 gRPC + TLS"]
-            cm["ConfigMap\nconfig.toml"]
+            cm["ConfigMap\nconfig.yaml"]
             secret["Secret\nDATABASE_URL · tls.crt · tls.key"]
         end
     end
@@ -53,7 +53,7 @@ graph LR
     dev     -->|"deploy.sh · helm upgrade"| k8s
 
     %% ── Config injection (dashed = mounted/injected at startup) ───────────
-    cm      -.->|"mounted: /etc/udex/config.toml"| pod
+    cm      -.->|"mounted: /etc/udex/config.yaml"| pod
     secret  -.->|"env: DATABASE_URL\nvolume: tls.crt/key"| pod
 ```
 
@@ -61,7 +61,7 @@ graph LR
 
 **Cluster management** (solid lines, bottom): `image-build.sh` builds the Docker image locally; `image-load.sh` imports it into the k3d cluster so pods can use `imagePullPolicy: Never`. `deploy.sh` runs `helm upgrade --install`, which creates or updates all Kubernetes resources.
 
-**Config injection** (dashed lines): the ConfigMap is mounted as a file at `/etc/udex/config.toml`; the Secret is projected as both an environment variable (`DATABASE_URL`) and a volume (`tls.crt`, `tls.key`).
+**Config injection** (dashed lines): the ConfigMap is mounted as a file at `/etc/udex/config.yaml`; the Secret is projected as both an environment variable (`DATABASE_URL`) and a volume (`tls.crt`, `tls.key`).
 
 ## Quickstart
 
@@ -119,7 +119,7 @@ helm/udex/
 ├── values.yaml         # all configurable fields with defaults
 └── templates/
     ├── _helpers.tpl          # named template helpers (names, labels)
-    ├── configmap.yaml        # server config.toml rendered from values
+    ├── configmap.yaml        # server config.yaml rendered from values
     ├── secret.yaml           # DATABASE_URL + TLS cert/key
     ├── deployment.yaml       # single-replica pod; mounts ConfigMap and Secret
     ├── service.yaml          # LoadBalancer on port 443

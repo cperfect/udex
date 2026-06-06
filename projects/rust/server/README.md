@@ -18,7 +18,7 @@ gRPC server crate for Udex. Implements the `IndexService` and `EntryService` han
 The server is started via the `udex` CLI:
 
 ```bash
-udex config init          # generate udex.toml
+udex config init          # generate udex.yaml
 udex serve                # start the server
 ```
 
@@ -57,11 +57,12 @@ Requests with a valid token but insufficient scope receive `PERMISSION_DENIED`.
 Suitable for development and test environments where tokens are self-signed (e.g.
 by the integration test suite or `cargo test`).
 
-```toml
-[server.authz]
-jwt_public_key = "urn:secrets-rs:file:certs/signing_public_key.pem"  # EC P-256 public key, PEM format
-jwt_issuer     = "https://auth.example.com"
-jwt_audience   = "udex"
+```yaml
+server:
+  authz:
+    jwt_public_key: "urn:secrets-rs:file:certs/signing_public_key.pem"  # EC P-256 public key, PEM format
+    jwt_issuer: "https://auth.example.com"
+    jwt_audience: "udex"
 ```
 
 The key is loaded once at startup (resolved relative to the config file directory).
@@ -97,16 +98,17 @@ Both mechanisms share the same fetch path and DoS controls:
   (`factor^attempt`, capped at 300 s) with a random jitter applied to avoid
   thundering-herd behaviour across a fleet.
 
-```toml
-[server.authz]
-jwks_url     = "http://localhost:4444/.well-known/jwks.json"
-jwt_issuer   = "http://localhost:4444/"   # must match Hydra's URLS_SELF_ISSUER
-jwt_audience = "udex"
+```yaml
+server:
+  authz:
+    jwks_url: "http://localhost:4444/.well-known/jwks.json"
+    jwt_issuer: "http://localhost:4444/"   # must match Hydra's URLS_SELF_ISSUER
+    jwt_audience: "udex"
 
-# Optional — shown with their defaults:
-# jwks_max_age_secs          = 86400  # 1 day; set to 0 to disable expiry refresh
-# jwks_max_failed_refreshes  = 5
-# jwks_backoff_factor_secs   = 3
+    # Optional — shown with their defaults:
+    # jwks_max_age_secs: 86400  # 1 day; set to 0 to disable expiry refresh
+    # jwks_max_failed_refreshes: 5
+    # jwks_backoff_factor_secs: 3
 ```
 
 Exactly one of `jwt_public_key` and `jwks_url` must be set; providing neither
@@ -146,7 +148,7 @@ header and claims, making it easy to verify the token contents before use.
 
 ## Configuration
 
-`ServerConfig` is loaded from a TOML file by the CLI. Key fields:
+`ServerConfig` is loaded from a YAML file by the CLI. Key fields:
 
 - `bind_address` — socket address (e.g. `127.0.0.1:50051`)
 - `tls.cert` / `tls.key` — `urn:secrets-rs:file:` URNs for the TLS certificate and private key (resolved relative to the config file directory)

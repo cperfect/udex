@@ -48,9 +48,9 @@ by URN and the server resolves them at startup via the
 
 **Environment variable source** — used for string secrets such as database URLs:
 
-```toml
-[datastore]
-connection_url = "urn:secrets-rs:env:DATABASE_URL"
+```yaml
+datastore:
+  connection_url: "urn:secrets-rs:env:DATABASE_URL"
 ```
 
 `UdexConfig::load()` calls `bind_all()` after deserialisation; startup fails with a clear
@@ -59,13 +59,13 @@ error if the named environment variable is absent.
 **File source** — used for multi-line PEM material (TLS certificate, TLS private key, JWT
 public key). Paths are resolved relative to the config file's directory:
 
-```toml
-[server.tls]
-cert = "urn:secrets-rs:file:certs/server.crt"
-key  = "urn:secrets-rs:file:certs/server.key"
-
-[server.authz]
-jwt_public_key = "urn:secrets-rs:file:certs/jwt_public_key.pem"
+```yaml
+server:
+  tls:
+    cert: "urn:secrets-rs:file:certs/server.crt"
+    key: "urn:secrets-rs:file:certs/server.key"
+  authz:
+    jwt_public_key: "urn:secrets-rs:file:certs/jwt_public_key.pem"
 ```
 
 Both URN types produce a `Secret<String>` whose value is masked in all `Debug`/`Display`
@@ -78,8 +78,8 @@ The devcontainer runs this automatically on first start.
 
 `Secret<T>` from `secrets-rs` enforces the URN contract at the serde layer:
 `Secret<T>::Deserialize` only accepts a valid URN string. A config file containing a
-raw secret value (e.g. `connection_url = "postgres://user:pass@host/db"`) is rejected
-at TOML parse time with a clear error — it never reaches application code.
+raw secret value (e.g. `connection_url: "postgres://user:pass@host/db"`) is rejected
+at YAML parse time with a clear error — it never reaches application code.
 
 ### CLI argument restriction
 

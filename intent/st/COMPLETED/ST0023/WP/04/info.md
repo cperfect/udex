@@ -3,7 +3,7 @@ verblock: "06 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-04
 title: "Update docs and add TOML to YAML migration note"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-04: Update docs and add TOML to YAML migration note
@@ -21,9 +21,9 @@ Update all documentation to YAML config and provide a TOML→YAML migration note
 
 ## Acceptance Criteria
 
-- [ ] No remaining `config.toml` / `udex.toml` / `[datastore]` / `[server]` TOML references in non-`intent/` docs (grep-clean).
-- [ ] Migration note exists and is linked from the appropriate doc.
-- [ ] Every fenced config block uses a language identifier (`yaml`).
+- [x] No remaining `config.toml` / `udex.toml` / `[datastore]` / `[server]` TOML references in non-`intent/` docs — except inside the migration note itself, which intentionally shows the old format (Cargo-manifest `toml` snippets are unrelated and left as-is).
+- [x] Migration note exists ("How do I migrate my config from TOML to YAML?" in `docs/FAQ.md`) and links to the `DESIGN_DECISIONS.md` rationale.
+- [x] Every fenced config block uses a language identifier (`yaml`); `DESIGN_DECISIONS.md` entry in sync with shipped state; `dev-doctor.sh` reviewed (no config refs).
 
 ## Dependencies
 

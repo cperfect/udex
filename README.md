@@ -140,11 +140,11 @@ On every startup the server checks that the database schema version matches the 
 
 The `apply_migrations` config option (default `false`) controls whether the server is also permitted to apply outstanding migrations before that check runs:
 
-```toml
-[datastore]
-# false (default) — server checks version but will not migrate; use `udex migrate apply` instead.
-# true  — server applies any outstanding migrations on startup, then checks.
-apply_migrations = false
+```yaml
+datastore:
+  # false (default) — server checks version but will not migrate; use `udex migrate apply` instead.
+  # true  — server applies any outstanding migrations on startup, then checks.
+  apply_migrations: false
 ```
 
 #### Recommended workflow
@@ -153,16 +153,16 @@ Run migrations as a dedicated pre-deploy step, before starting the new server bi
 
 ```bash
 # 1. Confirm what will be applied (exits non-zero if behind)
-udex migrate check --config udex.toml
+udex migrate check --config udex.yaml
 
 # 2. Apply outstanding migrations
-udex migrate apply --config udex.toml
+udex migrate apply --config udex.yaml
 
 # 3. Start the server (will refuse to start if schema is still wrong)
-udex serve --config udex.toml
+udex serve --config udex.yaml
 ```
 
-Both commands read only the `[datastore]` section of the config file, so TLS certificate files do not need to be present when running migrations.
+Both commands read only the `datastore` section of the config file, so TLS certificate files do not need to be present when running migrations.
 
 Setting `apply_migrations = true` is convenient for local development and CI environments where the server process is authorised to modify the schema. It is **not recommended for production** because it couples schema changes to server restarts and removes the explicit pre-deploy step.
 

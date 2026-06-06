@@ -33,6 +33,17 @@ As-built:
 - **`projects/rust/cli/Dockerfile` `ENTRYPOINT`** changed `--config /etc/udex/config.toml` → `…/config.yaml` — a third path seam beyond the WP deliverable list; without it the container would look for the removed `config.toml`.
 - Verified: `bash scripts/validate-lint-helm.sh` passes; rendered `config.yaml` parses as valid YAML with the correct struct shape (`helm template` + parse check). **Full k3d e2e** (image-build → image-load → deploy → `scripts/validate-k8s-test.sh`): deployment rolled out successfully (pod loaded the mounted `config.yaml`) and all 6 `test_sdk_k8s_*` SDK tests passed over TLS.
 
+### WP-04 — Docs + TOML→YAML migration note (done)
+
+As-built:
+
+- Config snippets converted TOML → YAML across `README.md`, `SECURITY.md`, `docs/ARCHITECTURE.md`, `docs/FAQ.md`, `projects/k8s/README.md`, `projects/rust/server/README.md`, `projects/rust/cli/README.md` (`[table]` blocks → nested mappings, `udex.toml`/`config.toml` → `.yaml`, `[datastore]` prose → `datastore`).
+- Cargo-manifest `toml` snippets in `datastore`/`sdk`/`test-utils` READMEs left untouched (those are real TOML).
+- **Migration note** added as a FAQ entry ("How do I migrate my config from TOML to YAML?") with a before/after example, linked to the `DESIGN_DECISIONS.md` rationale. The `DESIGN_DECISIONS.md` entry now reads as shipped state (deliberate replacement; no "in progress" wording).
+- `scripts/dev-doctor.sh` reviewed — it has **no** config-file references, so no change needed.
+- Fixed a stale `code-reviewer` agent memory (`project_secrets_pattern.md`) that described "TOML config files" — now YAML, URN scheme noted unchanged.
+- Note: the only remaining TOML references in docs are inside the migration note itself (intentional — it shows the old format and a before/after example).
+
 ## Code Examples
 
 [Key code snippets and examples]

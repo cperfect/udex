@@ -7,23 +7,23 @@ Command-line interface for Udex — manages server lifecycle, configuration, ind
 ### Server
 
 ```bash
-# Start the server (reads ./udex.toml by default)
+# Start the server (reads ./udex.yaml by default)
 udex serve
 
 # Use a specific config file [env: UDEX_CONFIG]
-udex serve --config /etc/udex/udex.toml
+udex serve --config /etc/udex/udex.yaml
 ```
 
 ### Configuration
 
 ```bash
 # Generate a default configuration file
-udex config init                         # writes ./udex.toml
-udex config init --path /etc/udex/udex.toml
+udex config init                         # writes ./udex.yaml
+udex config init --path /etc/udex/udex.yaml
 
 # Validate an existing configuration file
-udex config validate                     # reads ./udex.toml
-udex config validate --config /etc/udex/udex.toml
+udex config validate                     # reads ./udex.yaml
+udex config validate --config /etc/udex/udex.yaml
 ```
 
 ### Index operations

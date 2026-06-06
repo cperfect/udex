@@ -15,10 +15,11 @@ and prod with no per-environment branching.
   `Secret<T>` masks the value in `Debug`/`Display`/serde and forces explicit `.value()`
   access. The type itself is the audit signal — there is no `_secret` field-name
   convention (it was explicitly rejected in WP-04 — see `intent/st/ST0008/design.md`).
-- TOML config files reference secrets by URN: `urn:secrets-rs:env:VAR_NAME`. The loader
+- YAML config files reference secrets by URN: `urn:secrets-rs:env:VAR_NAME`. The loader
   calls `bind_all()` after deserialisation; missing env vars must be a hard startup error.
+  (Config format moved TOML -> YAML in ST0023; URN scheme unchanged.)
 - `Secret<T>::Deserialize` is the file-injection guard: it only accepts a bare URN, so
-  raw secret values in TOML fail at parse time. Do not add a separate guard layer.
+  raw secret values in the config fail at parse time. Do not add a separate guard layer.
 - CLI flags must NOT accept secret values (they leak into `ps` output and shell history).
   Bearer tokens come from `UDEX_TOKEN`; OAuth2 client secret comes from `UDEX_CLIENT_SECRET`;
   `--token` and `--client-secret` flags must not exist on the CLI.

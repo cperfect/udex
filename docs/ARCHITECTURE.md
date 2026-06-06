@@ -12,11 +12,11 @@ This document describes the system components, deployment model, operations, sec
 ## Components
 
 * **API definitions** ([`projects/protobuf/`](../projects/protobuf/README.md)): Protobuf v3 service and message definitions — the source of truth for all API types. Server, SDK, and CLI code is generated from these files.
-* **Server** ([`udex-server`](../projects/rust/server/README.md)): a stateless gRPC application component that provides the API and business logic for Udex. Designed to be horizontally scaled. Consumes a TOML configuration file at startup.
+* **Server** ([`udex-server`](../projects/rust/server/README.md)): a stateless gRPC application component that provides the API and business logic for Udex. Designed to be horizontally scaled. Consumes a YAML configuration file at startup.
 * **Datastore** ([`udex-datastore`](../projects/rust/datastore/README.md)): holds the Udex index state. Transactions, distribution, and scaling are handled by the datastore implementation and are opaque to the application. Currently implemented on PostgreSQL 16+.
 * **SDK** ([`udex-sdk`](../projects/rust/sdk/README.md)): a Rust client SDK for building systems that interact with Udex. Handles token acquisition and all RPC calls.
 * **CLI** ([`udex-cli`](../projects/rust/cli/README.md)): the `udex` binary for server lifecycle management, index and entry operations, JWT inspection, and context hashing. Also serves as the reference client for integration testing.
-* **Configuration**: a TOML file consumed at startup that specifies the datastore connection, TLS material, auth server endpoints, and the initial index set. Configuration is static — it is not mutated at runtime.
+* **Configuration**: a YAML file consumed at startup that specifies the datastore connection, TLS material, auth server endpoints, and the initial index set. Configuration is static — it is not mutated at runtime.
 
 ### Development Components
 
