@@ -24,6 +24,15 @@ As-built:
 - Note: `server/tests/server_integration_tests.rs` build config structs directly in Rust (no file parsing) and are unaffected; one flaky port-binding blip on those fixed-address tests under back-to-back full-suite load passed cleanly in isolation (pre-existing, unrelated to this WP).
 - Verified: `cargo fmt --check`, `cargo clippy --all-targets`, full suite via `scripts/validate-test-rust.sh` green; no `toml` / `udex.toml` references remain in the Rust tree.
 
+### WP-03 — Update k8s deploy path to config.yaml (done)
+
+As-built:
+
+- Helm `configmap.yaml` rewritten: `data` key `config.toml` → `config.yaml`, body from TOML `[tables]` to nested YAML mappings (`server` → `tls`/`authz`, `datastore`). All `urn:secrets-rs:…` references and Go-template value interpolation preserved.
+- `deployment.yaml`: mount `mountPath`/`subPath` and the ConfigMap-volume/`DATABASE_URL` comments updated `config.toml` → `config.yaml`.
+- **`projects/rust/cli/Dockerfile` `ENTRYPOINT`** changed `--config /etc/udex/config.toml` → `…/config.yaml` — a third path seam beyond the WP deliverable list; without it the container would look for the removed `config.toml`.
+- Verified: `bash scripts/validate-lint-helm.sh` passes; rendered `config.yaml` parses as valid YAML with the correct struct shape (`helm template` + parse check). **Full k3d e2e** (image-build → image-load → deploy → `scripts/validate-k8s-test.sh`): deployment rolled out successfully (pod loaded the mounted `config.yaml`) and all 6 `test_sdk_k8s_*` SDK tests passed over TLS.
+
 ## Code Examples
 
 [Key code snippets and examples]
