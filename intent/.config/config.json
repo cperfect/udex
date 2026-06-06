@@ -1,8 +1,11 @@
 {
-  "intent_version": "2.10.0",
+  "intent_version": "2.11.11",
   "project_name": "workspace",
   "author": "vscode",
   "created": "2026-04-05",
   "st_prefix": "ST",
-  "intent_dir": "intent"
+  "intent_dir": "intent",
+  "languages": [
+    "shell"
+  ]
 }

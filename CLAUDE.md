@@ -1,6 +1,6 @@
 # workspace
 
-This project uses Intent v2.11.6. The primary config file for AI coding agents is `AGENTS.md` at the project root -- read that first. `CLAUDE.md` is a Claude Code-specific overlay that adds directives beyond the tool-agnostic contract.
+This project uses Intent v2.11.11. The primary config file for AI coding agents is `AGENTS.md` at the project root -- read that first. `CLAUDE.md` is a Claude Code-specific overlay that adds directives beyond the tool-agnostic contract.
 
 ## Required on every session
 
@@ -33,7 +33,7 @@ Four cross-language principles govern all Intent projects:
 - **Thin Coordinator** (`IN-AG-THIN-COORD-001`) -- coordinators parse to call to render; business logic lives elsewhere.
 - **No Silent Errors** (`IN-AG-NO-SILENT-001`) -- every failure surfaces; rescue-and-swallow is forbidden.
 
-Full rule files live at `intent/plugins/claude/rules/agnostic/`. The terse DO / NEVER contract for this project lives in `usage-rules.md`. Language-specific concretisations at `intent/plugins/claude/rules/<lang>/`.
+Rule files are served by the installed Intent tool, not vendored into this project -- read them with `intent claude rules show <id>` (`intent claude rules list` to enumerate, `--lang <lang>` to filter). The terse DO / NEVER contract for this project lives in `usage-rules.md`.
 
 ## Critic dispatch
 
@@ -99,4 +99,4 @@ Full guidelines are in [CONTRIBUTING.md](CONTRIBUTING.md) and [projects/rust/CON
 
 ---
 
-_Generated from `lib/templates/llm/_CLAUDE.md` on 2026-05-17 for Intent v2.11.6._
+_Generated from `lib/templates/llm/_CLAUDE.md` on 2026-06-06 for Intent v2.11.11._
