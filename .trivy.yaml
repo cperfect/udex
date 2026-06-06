@@ -15,3 +15,15 @@ scan:
   # We have no control over their dependency versions and do not ship them in production.
   skip-dirs:
     - .devcontainer/home/.claude
+
+# Render the Helm chart for misconfig scanning. The chart's secret.yaml uses
+# `required` on secrets.databaseUrl / tlsCrt / tlsKey, so without values Trivy
+# cannot template it and silently skips the whole chart. These are throwaway
+# stubs used only to let the templates render — they are never deployed and
+# carry no real secret material.
+misconfiguration:
+  helm:
+    set:
+      - secrets.databaseUrl=stub
+      - secrets.tlsCrt=stub
+      - secrets.tlsKey=stub
