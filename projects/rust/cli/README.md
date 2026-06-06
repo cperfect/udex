@@ -52,7 +52,7 @@ udex entry create my-index --context name=alice --context role=admin
 # Retrieve the context for a known key (UUID)
 udex entry get my-index --key 550e8400-e29b-41d4-a716-446655440000
 
-# Reverse-lookup: find all keys that match a context
+# Reverse-lookup: find the key that matches a context (at most one)
 udex entry lookup my-index --context name=alice --context role=admin
 
 # Look up the key for a context, creating the entry if it doesn't exist
