@@ -138,18 +138,19 @@ fi
 
 # intent (required when Claude Code is present)
 if [[ "${CLAUDE_PRESENT}" == true ]]; then
-  REQUIRED_INTENT="2.11.6"
+  REQUIRED_INTENT_MINOR="2.11"
   if command -v intent &>/dev/null; then
     INTENT_VER=$(intent --version 2>/dev/null | awk '{print $3}')
-    if [[ "$INTENT_VER" == "$REQUIRED_INTENT" ]]; then
-      pass "intent $INTENT_VER (need $REQUIRED_INTENT)"
+    INTENT_MINOR="${INTENT_VER%.*}"
+    if [[ "$INTENT_MINOR" == "$REQUIRED_INTENT_MINOR" ]]; then
+      pass "intent $INTENT_VER (need minor $REQUIRED_INTENT_MINOR)"
     else
-      fail "intent $INTENT_VER (need $REQUIRED_INTENT)" \
-        "Install intent $REQUIRED_INTENT: https://github.com/matthewsinclair/intent"
+      fail "intent $INTENT_VER (need minor $REQUIRED_INTENT_MINOR)" \
+        "Install intent $REQUIRED_INTENT_MINOR.x: https://github.com/matthewsinclair/intent"
     fi
   else
     fail "intent not found (required when Claude Code is present)" \
-      "Install intent $REQUIRED_INTENT: https://github.com/matthewsinclair/intent"
+      "Install intent $REQUIRED_INTENT_MINOR.x: https://github.com/matthewsinclair/intent"
   fi
 fi
 
