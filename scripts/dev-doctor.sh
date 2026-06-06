@@ -194,8 +194,8 @@ if [[ "${K3D_PRESENT}" == true ]]; then
   REQUIRED_KUBECTL_MAJOR="1"
   if command -v kubectl &>/dev/null; then
     if KUBECTL_VER=$(
-      kubectl version --client --output=jsonpath='{.clientVersion.gitVersion}' 2>/dev/null |
-        tr -d 'v'
+      kubectl version --client 2>/dev/null |
+        awk '/Client Version/{print $3}' | tr -d 'v'
     ); then
       if [[ -n "${KUBECTL_VER}" ]]; then
         KUBECTL_MAJOR="${KUBECTL_VER%%.*}"
