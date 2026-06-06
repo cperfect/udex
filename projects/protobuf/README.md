@@ -50,7 +50,7 @@ Server health is exposed via the standard [gRPC Health Checking Protocol](https:
 
 ## Code generation
 
-`projects/rust/api/build.rs` compiles all three files using [`tonic-build`](https://docs.rs/tonic-build) and writes the generated Rust into `projects/rust/api/src/generated/`. The build script also derives `serde::Serialize` / `serde::Deserialize` on every generated type.
+`projects/rust/api/build.rs` compiles both files using [`tonic-build`](https://docs.rs/tonic-build) and writes the generated Rust into `projects/rust/api/src/generated/`. The build script also derives `serde::Serialize` / `serde::Deserialize` on every generated type.
 
 To regenerate after editing a `.proto` file, run `cargo build` from `projects/rust/`.
 
