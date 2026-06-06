@@ -31,11 +31,6 @@ use udex_server::{
 use udex_test_utils::{bind_file_secret, hydra_admin_url};
 use uuid::Uuid;
 
-// Distinct from all other test ports (see server_integration_tests.rs and SDK tests).
-const CACHE_MISS_BIND_ADDR: &str = "127.0.0.1:15060";
-const ENDPOINT_FAIL_BIND_ADDR: &str = "127.0.0.1:15061";
-const GATE_BIND_ADDR: &str = "127.0.0.1:15062";
-
 const TEST_ISSUER: &str = "jwks-refresh-test-issuer";
 const TEST_AUDIENCE: &str = "jwks-refresh-test-audience";
 // list_indices requires "udex:index:v1:list"; include it so authenticated
@@ -201,7 +196,6 @@ async fn wait_for_server(addr: SocketAddr) {
 /// Starts a udex server whose `jwks_url` points to a Hydra custom key set.
 /// Returns `(bind_address, server_join_handle, db_name_for_cleanup)`.
 async fn start_jwks_server(
-    bind_addr: &str,
     jwks_url: String,
     index_name: &str,
     max_failed_refreshes: Option<u32>,
@@ -211,7 +205,12 @@ async fn start_jwks_server(
     logging::init_test_tracing();
 
     let (datastore, _, db_name) = init_postgres().await;
-    let addr: SocketAddr = bind_addr.parse().expect("valid bind address");
+    // OS-assigned ephemeral port — avoids hardcoded ports that collide across
+    // concurrent runs or with leftover processes.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind ephemeral port");
+    let addr: SocketAddr = listener.local_addr().expect("listener local address");
 
     let config = ServerConfig {
         bind_address: addr,
@@ -247,7 +246,7 @@ async fn start_jwks_server(
     };
 
     let handle = tokio::spawn(async move {
-        server::serve(config, datastore)
+        server::serve_with_listener(config, datastore, listener)
             .await
             .expect("JWKS refresh test server failed");
     });
@@ -298,8 +297,7 @@ async fn test_server_oauth2_cache_miss_triggers_refresh_and_validates_new_kid() 
 
     let index = format!("jwks-cache-miss-{}", Uuid::new_v4().simple());
     let jwks_url = format!("{}/admin/keys/{}", admin.base_path, set_name);
-    let (addr, server, _db) =
-        start_jwks_server(CACHE_MISS_BIND_ADDR, jwks_url, &index, None, None).await;
+    let (addr, server, _db) = start_jwks_server(jwks_url, &index, None, None).await;
 
     // K1 token must validate immediately (key was in cache at startup).
     let code = call_list_indices(addr, &mint_jwt(&k1_key, k1_kid)).await;
@@ -348,8 +346,7 @@ async fn test_server_oauth2_endpoint_failure_retains_cache_and_serves_known_kids
 
     let index = format!("jwks-endpoint-fail-{}", Uuid::new_v4().simple());
     let jwks_url = format!("{}/admin/keys/{}", admin.base_path, set_name);
-    let (addr, server, _db) =
-        start_jwks_server(ENDPOINT_FAIL_BIND_ADDR, jwks_url, &index, None, None).await;
+    let (addr, server, _db) = start_jwks_server(jwks_url, &index, None, None).await;
 
     // K1 works before the endpoint goes away.
     let code = call_list_indices(addr, &mint_jwt(&k1_key, k1_kid)).await;
@@ -398,8 +395,7 @@ async fn test_server_oauth2_max_failed_refreshes_gate_stops_retries_and_cache_is
     let jwks_url = format!("{}/admin/keys/{}", admin.base_path, set_name);
     // max_failed_refreshes = 2, backoff_factor = 2 (≈1 s backoff after first
     // failure so the test waits briefly rather than minutes).
-    let (addr, server, _db) =
-        start_jwks_server(GATE_BIND_ADDR, jwks_url, &index, Some(2), Some(2)).await;
+    let (addr, server, _db) = start_jwks_server(jwks_url, &index, Some(2), Some(2)).await;
 
     // K1 is in the startup cache.
     let code = call_list_indices(addr, &mint_jwt(&k1_key, k1_kid)).await;

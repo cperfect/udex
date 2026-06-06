@@ -2,6 +2,8 @@ use crate::{
     authz::AuthzInterceptor, config::ServerConfig, logging, EntryService, Error, IndexService,
 };
 use std::sync::Arc;
+use tokio::net::TcpListener;
+use tonic::transport::server::TcpIncoming;
 use tonic::transport::Server as TonicServer;
 use tonic::transport::{Identity, ServerTlsConfig};
 use tonic_health::ServingStatus;
@@ -57,7 +59,33 @@ async fn apply_and_check_migrations(
 }
 
 /// Starts the Udex server with the provided configuration and datastore.
+///
+/// Binds `config.bind_address` and serves until the task is dropped. Tests that
+/// need an OS-assigned ephemeral port should bind a [`TcpListener`] (e.g. to
+/// `127.0.0.1:0`), read its `local_addr()`, and call [`serve_with_listener`]
+/// instead — this avoids hardcoded ports that can collide across concurrent
+/// runs or leftover processes.
 pub async fn serve<D>(config: ServerConfig, datastore: D) -> Result<(), Error>
+where
+    D: Datastore + Send + Sync + 'static,
+{
+    let listener = TcpListener::bind(config.bind_address)
+        .await
+        .map_err(|e| Error::ServerError(format!("failed to bind {}: {e}", config.bind_address)))?;
+    serve_with_listener(config, datastore, listener).await
+}
+
+/// Like [`serve`], but serves on an already-bound listener.
+///
+/// Lets the caller choose the bind address — including an ephemeral port via
+/// `127.0.0.1:0` — and discover the actual address from `listener.local_addr()`
+/// before this future is awaited. The server listens on the provided listener;
+/// `config.bind_address` is ignored for binding (it is already bound).
+pub async fn serve_with_listener<D>(
+    config: ServerConfig,
+    datastore: D,
+    listener: TcpListener,
+) -> Result<(), Error>
 where
     D: Datastore + Send + Sync + 'static,
 {
@@ -66,7 +94,9 @@ where
     // validate the server configuration
     config.validate()?;
 
-    let addr = config.bind_address;
+    let addr = listener
+        .local_addr()
+        .map_err(|e| Error::ServerError(format!("listener has no local address: {e}")))?;
 
     tracing::info!("Initializing services");
 
@@ -142,7 +172,8 @@ where
     let entry_server = EntryServiceServer::new(entry_service);
     let index_server = IndexServiceServer::new(index_service);
 
-    // Build and start the server with TLS
+    // Build and start the server with TLS, serving on the pre-bound listener.
+    let incoming = TcpIncoming::from(listener);
     TonicServer::builder()
         .layer(TraceLayer::new_for_grpc())
         .tls_config(ServerTlsConfig::new().identity(identity))
@@ -150,7 +181,7 @@ where
         .add_service(InterceptorFor::new(index_server, auth_interceptor.clone()))
         .add_service(InterceptorFor::new(entry_server, auth_interceptor))
         .add_service(health_service)
-        .serve(addr)
+        .serve_with_incoming(incoming)
         .await
         .map_err(|e| Error::ServerError(format!("Server error: {e:?}")))?;
 
