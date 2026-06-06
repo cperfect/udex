@@ -56,7 +56,7 @@ Admin operations are exposed as the `IndexService` gRPC API (defined in [`udex.i
 
 * Create a new index
 * Describe an index (name, configuration, metadata)
-* Update an index's mutable fields (description, limits, hash algorithm)
+* Update an index's mutable fields (description, limits)
 * Delete an index — only permitted when the index has no entries
 * List all indices
 
