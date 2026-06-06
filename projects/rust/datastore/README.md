@@ -119,7 +119,7 @@ docker run -d \
   --name postgres-test \
   -e POSTGRES_PASSWORD=postgres \
   -p 5432:5432 \
-  postgres:13-alpine
+  postgres:16-alpine
 
 export DATABASE_URL="postgres://postgres:postgres@localhost:5432/postgres"
 ```
