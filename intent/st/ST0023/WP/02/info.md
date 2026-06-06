@@ -3,7 +3,7 @@ verblock: "06 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Convert config parsing from TOML to YAML"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-02: Convert config parsing from TOML to YAML
@@ -21,9 +21,9 @@ Replace the TOML config format with YAML in the CLI config loader — a replacem
 
 ## Acceptance Criteria
 
-- [ ] A valid `udex.yaml` loads, validates, and binds all `secrets-rs` URNs (file + env) exactly as the old TOML did — URNs unchanged.
-- [ ] `toml` no longer appears anywhere in `Cargo.toml`/`Cargo.lock`.
-- [ ] `cargo fmt --check`, `cargo clippy`, `cargo test` all pass.
+- [x] A valid `udex.yaml` loads, validates, and binds all `secrets-rs` URNs (file + env) exactly as the old TOML did — URNs unchanged. (Verified by `cli/tests/config_tests.rs` + `serve_live_tests.rs` which load a real YAML config and bind file/env secrets.)
+- [x] `toml` no longer appears anywhere in `Cargo.toml`/`Cargo.lock`.
+- [x] `cargo fmt --check`, `cargo clippy`, `cargo test` all pass (full suite via `scripts/validate-test-rust.sh`, incl. Postgres + Hydra/OAuth2).
 
 ## Dependencies
 

@@ -24,7 +24,7 @@ fn server_fixture_urn(relative: &str) -> String {
     format!("urn:secrets-rs:file:{}", path.display())
 }
 
-/// Write a minimal valid TOML config that can be fully loaded (all secrets resolve).
+/// Write a minimal valid YAML config that can be fully loaded (all secrets resolve).
 ///
 /// Uses absolute file URNs for TLS and JWT secrets (so `load()` can bind them),
 /// and a dummy DATABASE_URL URN. Call `Command::env("DATABASE_URL", ...)` before
@@ -35,27 +35,24 @@ fn write_valid_config(path: &std::path::Path) {
     let jwt_key = server_fixture_urn("tests/jwt/signing_public_key.pem");
 
     let content = format!(
-        r#"[server]
-bind_address = "127.0.0.1:50051"
-request_timeout_secs = 30
-max_connections = 1000
-max_message_size_bytes = 4194304
-
-[server.tls]
-cert = "{cert}"
-key = "{key}"
-
-[server.authz]
-jwt_public_key = "{jwt_key}"
-jwt_issuer = "https://auth.example.com"
-jwt_audience = "udex"
-
-[datastore]
-connection_url = "urn:secrets-rs:env:DATABASE_URL"
-max_connections = 10
-min_connections = 1
-connection_timeout_secs = 10
-query_timeout_secs = 30
+        r#"server:
+  bind_address: "127.0.0.1:50051"
+  request_timeout_secs: 30
+  max_connections: 1000
+  max_message_size_bytes: 4194304
+  tls:
+    cert: "{cert}"
+    key: "{key}"
+  authz:
+    jwt_public_key: "{jwt_key}"
+    jwt_issuer: "https://auth.example.com"
+    jwt_audience: "udex"
+datastore:
+  connection_url: "urn:secrets-rs:env:DATABASE_URL"
+  max_connections: 10
+  min_connections: 1
+  connection_timeout_secs: 10
+  query_timeout_secs: 30
 "#
     );
     std::fs::write(path, content).unwrap();
@@ -66,7 +63,7 @@ query_timeout_secs = 30
 #[test]
 fn test_config_init_creates_file() {
     let dir = TempDir::new().unwrap();
-    let config_path = dir.path().join("udex.toml");
+    let config_path = dir.path().join("udex.yaml");
 
     udex()
         .args(["config", "init", "--path", config_path.to_str().unwrap()])
@@ -93,7 +90,7 @@ fn test_config_init_creates_file() {
 #[test]
 fn test_config_init_fails_if_file_exists() {
     let dir = TempDir::new().unwrap();
-    let config_path = dir.path().join("udex.toml");
+    let config_path = dir.path().join("udex.yaml");
     std::fs::write(&config_path, "# existing").unwrap();
 
     udex()
@@ -104,13 +101,13 @@ fn test_config_init_fails_if_file_exists() {
 }
 
 #[test]
-fn test_config_init_default_path_is_udex_toml() {
+fn test_config_init_default_path_is_udex_yaml() {
     // Verify --help shows the default path
     udex()
         .args(["config", "init", "--help"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("udex.toml"));
+        .stdout(predicate::str::contains("udex.yaml"));
 }
 
 // --- config validate ---
@@ -118,7 +115,7 @@ fn test_config_init_default_path_is_udex_toml() {
 #[test]
 fn test_config_validate_accepts_valid_config() {
     let dir = TempDir::new().unwrap();
-    let config_path = dir.path().join("udex.toml");
+    let config_path = dir.path().join("udex.yaml");
     write_valid_config(&config_path);
 
     udex()
@@ -137,17 +134,17 @@ fn test_config_validate_accepts_valid_config() {
 #[test]
 fn test_config_validate_fails_for_missing_file() {
     udex()
-        .args(["config", "validate", "--config", "/nonexistent/udex.toml"])
+        .args(["config", "validate", "--config", "/nonexistent/udex.yaml"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("failed to read config file"));
 }
 
 #[test]
-fn test_config_validate_fails_for_invalid_toml() {
+fn test_config_validate_fails_for_invalid_yaml() {
     let dir = TempDir::new().unwrap();
-    let config_path = dir.path().join("udex.toml");
-    std::fs::write(&config_path, "this is not [ valid toml").unwrap();
+    let config_path = dir.path().join("udex.yaml");
+    std::fs::write(&config_path, "server: [ unclosed flow sequence").unwrap();
 
     udex()
         .args([
@@ -164,7 +161,7 @@ fn test_config_validate_fails_for_invalid_toml() {
 #[test]
 fn test_config_validate_fails_when_no_key_source_set() {
     let dir = TempDir::new().unwrap();
-    let config_path = dir.path().join("udex.toml");
+    let config_path = dir.path().join("udex.yaml");
 
     // Neither jwt_public_key nor jwks_url is set — exactly one is required.
     // Use absolute cert URNs so load() can bind TLS secrets.
@@ -172,26 +169,23 @@ fn test_config_validate_fails_when_no_key_source_set() {
     let key = server_fixture_urn("tests/certs/server.key");
 
     let content = format!(
-        r#"[server]
-bind_address = "127.0.0.1:50051"
-request_timeout_secs = 30
-max_connections = 1000
-max_message_size_bytes = 4194304
-
-[server.tls]
-cert = "{cert}"
-key = "{key}"
-
-[server.authz]
-jwt_issuer = "https://auth.example.com"
-jwt_audience = "udex"
-
-[datastore]
-connection_url = "urn:secrets-rs:env:DATABASE_URL"
-max_connections = 10
-min_connections = 1
-connection_timeout_secs = 10
-query_timeout_secs = 30
+        r#"server:
+  bind_address: "127.0.0.1:50051"
+  request_timeout_secs: 30
+  max_connections: 1000
+  max_message_size_bytes: 4194304
+  tls:
+    cert: "{cert}"
+    key: "{key}"
+  authz:
+    jwt_issuer: "https://auth.example.com"
+    jwt_audience: "udex"
+datastore:
+  connection_url: "urn:secrets-rs:env:DATABASE_URL"
+  max_connections: 10
+  min_connections: 1
+  connection_timeout_secs: 10
+  query_timeout_secs: 30
 "#
     );
     std::fs::write(&config_path, content).unwrap();

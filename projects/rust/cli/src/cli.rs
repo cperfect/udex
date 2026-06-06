@@ -94,7 +94,7 @@ pub enum Commands {
 #[derive(Parser)]
 pub struct ServeArgs {
     /// Path to configuration file [env: UDEX_CONFIG]
-    #[arg(long, env = "UDEX_CONFIG", default_value = "udex.toml")]
+    #[arg(long, env = "UDEX_CONFIG", default_value = "udex.yaml")]
     pub config: PathBuf,
 }
 
@@ -112,7 +112,7 @@ pub enum ConfigCommands {
 #[derive(Parser)]
 pub struct ConfigInitArgs {
     /// Path to write the configuration file
-    #[arg(long, default_value = "udex.toml")]
+    #[arg(long, default_value = "udex.yaml")]
     pub path: PathBuf,
 }
 
@@ -120,7 +120,7 @@ pub struct ConfigInitArgs {
 #[derive(Parser)]
 pub struct ConfigValidateArgs {
     /// Path to configuration file [env: UDEX_CONFIG]
-    #[arg(long, env = "UDEX_CONFIG", default_value = "udex.toml")]
+    #[arg(long, env = "UDEX_CONFIG", default_value = "udex.yaml")]
     pub config: PathBuf,
 }
 
@@ -322,7 +322,7 @@ pub enum MigrateCommands {
 #[derive(Parser)]
 pub struct MigrateArgs {
     /// Path to configuration file [env: UDEX_CONFIG]
-    #[arg(long, env = "UDEX_CONFIG", default_value = "udex.toml")]
+    #[arg(long, env = "UDEX_CONFIG", default_value = "udex.yaml")]
     pub config: PathBuf,
 }
 

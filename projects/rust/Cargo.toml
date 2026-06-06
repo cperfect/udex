@@ -55,7 +55,6 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 
 # CLI
 clap = { version = "4", features = ["derive", "env"] }
-toml = "0.8"
 tempfile = "3"
 
 # Build dependencies
