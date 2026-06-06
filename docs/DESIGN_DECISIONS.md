@@ -43,3 +43,4 @@ Udex implements the [standard gRPC Health Checking Protocol](https://github.com/
 ### What won't Udex support?
 * Non-transactional datastores
 * Complex/aggregate cross-context queries
+
