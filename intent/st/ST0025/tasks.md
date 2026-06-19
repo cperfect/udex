@@ -10,11 +10,11 @@
 
 ### WP02 — Test harness: direct pod addressing
 
-- [ ] Pod discovery helper (`kubectl get pods -l app.kubernetes.io/name=udex -o name`)
-- [ ] `kubectl port-forward pod/<name> <localport>:443` per pod, with readiness poll
-- [ ] RAII guard that kills the port-forward child on drop (no zombies)
-- [ ] Per-pod SDK client builder: trust server CA, SNI `localhost`
-- [ ] Fix `redeploy_k8s_server` rollout wait: "exactly replicaCount pods Ready" (not ≤1)
+- [x] Pod discovery helper (`discover_udex_pods` via `kubectl get pods -l app.kubernetes.io/name=udex`)
+- [x] `kubectl port-forward pod/<name> <localport>:443` per pod, with gRPC-health readiness poll
+- [x] RAII guard that kills the port-forward child on drop (verified no leaks)
+- [x] Direct hops trust server CA, SNI `localhost` (pod cert) — proven by the smoke test
+- [x] Fix `redeploy_k8s_server` rollout wait: total == replicaCount AND all Ready (not ≤1) — fixes stale-pod cascade
 
 ### WP03 — Multi-instance integration tests
 

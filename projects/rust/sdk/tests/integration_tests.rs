@@ -42,6 +42,11 @@ const ID_PREFIX: &str = "sdk-integration-test";
 const ID_HYDRA_PREFIX: &str = "sdk-hydra-integration-test";
 const ID_K8S_PREFIX: &str = "sdk-k8s-integration-test";
 
+// The dev Helm chart defaults to 2 server replicas (values.yaml replicaCount).
+// The multi-instance k8s tests rely on there being exactly this many addressable
+// pods so they can pin requests to specific instances. See ST0025.
+const K8S_REPLICAS: usize = 2;
+
 // ── Cert / JWT key paths ──────────────────────────────────────────────────────
 // CARGO_MANIFEST_DIR points to the sdk/ package root at compile time.
 // The server's test fixtures live one level up under server/tests/.
@@ -1483,32 +1488,136 @@ async fn redeploy_k8s_server(k8s_db_url: &str, server_url: &str, ca_pem: &[u8]) 
         "kubectl rollout status returned non-zero exit code"
     );
 
-    // kubectl rollout status returns when the new pod is Ready, but the old pod
-    // may still be Terminating and Traefik may still route traffic to it.
-    // Wait until exactly one pod exists before polling healthz.
-    for _ in 0..60u32 {
-        let out = tokio::process::Command::new("kubectl")
-            .args([
-                "get",
-                "pods",
-                "-l",
-                "app.kubernetes.io/name=udex",
-                "--no-headers",
-            ])
-            .output()
-            .await
-            .expect("kubectl get pods: command failed to start");
-        let count = String::from_utf8_lossy(&out.stdout)
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .count();
-        if count <= 1 {
+    // kubectl rollout status returns when the new pods are Ready, but old pods
+    // from the previous revision (pointing at the previous DATABASE_URL — which
+    // a prior test run may even have dropped) can still be Running/Terminating
+    // and in the LB rotation. Wait until exactly K8S_REPLICAS pods exist AND all
+    // are Ready, so no stale pod is left to serve a request, before polling.
+    for _ in 0..120u32 {
+        let (total, ready) = udex_pod_counts().await;
+        if total == K8S_REPLICAS && ready == K8S_REPLICAS {
             break;
         }
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
 
     wait_for_k8s_server(server_url, ca_pem).await;
+}
+
+// Returns (total udex pods, fully-Ready udex pods). A pod counts as Ready when
+// its STATUS is Running and the READY column is "n/n" (n > 0). Total includes
+// Pending/Terminating pods so callers can wait for stale pods to fully clear.
+// `kubectl get pods --no-headers` columns are: NAME READY STATUS RESTARTS AGE.
+async fn udex_pod_counts() -> (usize, usize) {
+    let out = tokio::process::Command::new("kubectl")
+        .args([
+            "get",
+            "pods",
+            "-l",
+            "app.kubernetes.io/name=udex",
+            "--no-headers",
+        ])
+        .output()
+        .await
+        .expect("kubectl get pods: command failed to start");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let lines: Vec<&str> = stdout.lines().filter(|l| !l.trim().is_empty()).collect();
+    let ready = lines
+        .iter()
+        .filter(|line| {
+            let mut cols = line.split_whitespace();
+            let ready = cols.nth(1).unwrap_or(""); // READY, e.g. "1/1"
+            let status = cols.next().unwrap_or(""); // STATUS, e.g. "Running"
+            status == "Running"
+                && matches!(ready.split_once('/'), Some((a, b)) if a == b && a != "0")
+        })
+        .count();
+    (lines.len(), ready)
+}
+
+// Returns the names of the Running udex pods (one per server replica).
+async fn discover_udex_pods() -> Vec<String> {
+    let out = tokio::process::Command::new("kubectl")
+        .args([
+            "get",
+            "pods",
+            "-l",
+            "app.kubernetes.io/name=udex",
+            "--field-selector=status.phase=Running",
+            "-o",
+            "jsonpath={.items[*].metadata.name}",
+        ])
+        .output()
+        .await
+        .expect("kubectl get pods: command failed to start");
+    String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .map(str::to_string)
+        .collect()
+}
+
+// A live `kubectl port-forward localhost:<local_port> -> pod/<pod>:443`, killed
+// on drop so tests never leak forwards. This addresses a single server instance
+// directly, bypassing Traefik: the hop terminates against the POD's own cert
+// (trusted via the server CA, SNI "localhost" — a SAN on the pod cert), not the
+// edge cert used on the load-balanced path. See ST0025.
+struct PortForward {
+    child: std::process::Child,
+    local_port: u16,
+}
+
+impl PortForward {
+    // Spawns the forward and polls until the local port serves gRPC health.
+    async fn start(pod: &str, local_port: u16, ca_pem: &[u8]) -> PortForward {
+        let child = std::process::Command::new("kubectl")
+            .args([
+                "port-forward",
+                &format!("pod/{pod}"),
+                &format!("{local_port}:443"),
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("spawn kubectl port-forward");
+        let pf = PortForward { child, local_port };
+
+        let tls = ClientTlsConfig::new()
+            .ca_certificate(Certificate::from_pem(ca_pem))
+            .domain_name("localhost");
+        for _ in 0..40 {
+            sleep(Duration::from_millis(250)).await;
+            let Ok(ch) = Channel::from_shared(pf.endpoint())
+                .unwrap()
+                .tls_config(tls.clone())
+                .unwrap()
+                .connect()
+                .await
+            else {
+                continue;
+            };
+            if HealthClient::new(ch)
+                .check(HealthCheckRequest {
+                    service: "".to_string(),
+                })
+                .await
+                .is_ok()
+            {
+                return pf;
+            }
+        }
+        panic!("port-forward to pod {pod} on :{local_port} did not become ready within 10s");
+    }
+
+    fn endpoint(&self) -> String {
+        format!("https://localhost:{}", self.local_port)
+    }
+}
+
+impl Drop for PortForward {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
 }
 
 async fn init_k8s_fixture() -> Option<K8sFixture> {
@@ -1758,4 +1867,69 @@ async fn test_sdk_k8s_lookup_or_create_entry() {
 
     assert_eq!(second.key, first.key);
     assert!(!second.created, "second call must not create a new entry");
+}
+
+// ── Multi-instance (cluster) tests ──────────────────────────────────────────────
+//
+// These verify the server behaves correctly with >1 replica (ST0025). They reuse
+// the data_k8s() deployment (2 replicas, shared DB) and address each pod directly
+// via `kubectl port-forward`, bypassing the round-robin load balancer so a request
+// can be pinned to a specific instance. Direct hops trust the pod cert (server CA,
+// SNI "localhost"). Skipped (with the rest of the k8s suite) when K8S_SERVER_URL
+// is unset.
+
+// Proof-of-life for the direct-addressing harness: both replicas are discoverable
+// and each serves gRPC health when addressed directly (not via the LB).
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_multi_direct_health() {
+    // Guarantees the 2-replica deployment is up (and skips when k8s is disabled).
+    if data_k8s().await.is_none() {
+        return;
+    }
+
+    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
+        .await
+        .expect("read server CA for direct pod addressing");
+
+    let pods = discover_udex_pods().await;
+    assert_eq!(
+        pods.len(),
+        K8S_REPLICAS,
+        "expected {K8S_REPLICAS} running udex pods, got {pods:?}"
+    );
+
+    // Forward each pod to a distinct local port. The guards live until the end of
+    // the test, then RAII-drop kills the kubectl port-forward children.
+    let mut forwards = Vec::new();
+    for (i, pod) in pods.iter().enumerate() {
+        let pf = PortForward::start(pod, 18443 + i as u16, &ca_pem).await;
+        forwards.push((pod.clone(), pf));
+    }
+
+    for (pod, pf) in &forwards {
+        let tls = ClientTlsConfig::new()
+            .ca_certificate(Certificate::from_pem(ca_pem.clone()))
+            .domain_name("localhost");
+        let ch = Channel::from_shared(pf.endpoint())
+            .unwrap()
+            .tls_config(tls)
+            .unwrap()
+            .connect()
+            .await
+            .unwrap_or_else(|e| panic!("direct connect to pod {pod} failed: {e}"));
+        let status = HealthClient::new(ch)
+            .check(HealthCheckRequest {
+                service: "".to_string(),
+            })
+            .await
+            .unwrap_or_else(|e| panic!("direct health check on pod {pod} failed: {e}"))
+            .into_inner()
+            .status;
+        assert_eq!(
+            status,
+            tonic_health::pb::health_check_response::ServingStatus::Serving as i32,
+            "pod {pod} not SERVING when addressed directly"
+        );
+    }
 }
