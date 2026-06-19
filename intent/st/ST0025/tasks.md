@@ -18,11 +18,11 @@
 
 ### WP03 — Multi-instance integration tests
 
-- [ ] `test_sdk_k8s_multi_*` (own ID prefix), fresh DB fixture, skipped when `K8S_SERVER_URL` unset
-- [ ] Index visibility: CreateIndex via A → List/Describe via B
-- [ ] Entry write-through A→B and B→A (Create via one, Lookup via the other)
-- [ ] Delete propagation: DeleteEntry/DeleteIndex via A → confirmed gone via B
-- [ ] LB sanity: a CRUD round-trip via the LB endpoint with 2 replicas
+- [x] `test_sdk_k8s_multi_*` (own ID prefix), reuse data_k8s deployment, skipped when `K8S_SERVER_URL` unset
+- [x] Index visibility: CreateIndex via A → Describe + List via B
+- [x] Entry write-through A→B and B→A (Create via one, lookup_key_by_context via the other)
+- [x] Delete propagation: DeleteEntry A→gone on B and B→gone on A; DeleteIndex A→gone on B
+- [x] LB sanity: existing `test_sdk_k8s_*` exercise the LB path at 2 replicas (all pass)
 
 ### WP04 — Validation + consistency fix (if needed)
 

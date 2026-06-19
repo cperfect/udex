@@ -1933,3 +1933,214 @@ async fn test_sdk_k8s_multi_direct_health() {
         );
     }
 }
+
+// Builds an SDK client pinned to one server instance via its port-forward
+// endpoint. Direct hops trust the pod cert (server CA, SNI "localhost"); auth is
+// the usual Hydra client_credentials flow (token endpoint is plain HTTP in dev).
+async fn build_pod_client(
+    endpoint: &str,
+    ca_pem: Vec<u8>,
+    token_url: &str,
+    client_id: &str,
+    client_secret: &str,
+    audience: &str,
+    scope: &str,
+) -> UdexClient {
+    UdexClient::connect(
+        ClientOptions::builder()
+            .endpoint(endpoint)
+            .ca_cert_pem_bytes(ca_pem)
+            .client_credentials(token_url.to_string(), client_id, client_secret)
+            .audience(audience)
+            .scope(scope.to_string())
+            .danger_allow_non_tls()
+            .build()
+            .unwrap(),
+    )
+    .await
+    .unwrap_or_else(|e| panic!("SDK connect to pod endpoint {endpoint} failed: {e}"))
+}
+
+// Cross-instance correctness: with 2 replicas sharing one datastore, a mutation
+// made through one instance must be observable through the other. Each request is
+// pinned to a specific pod via port-forward (NOT the round-robin LB), so the test
+// genuinely exercises instance A vs instance B rather than hitting the same pod
+// twice by luck. Proves the server holds no per-instance state that another
+// instance can't see (CLAUDE.md: "Server MUST be stateless"). See ST0025.
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_sdk_k8s_multi_cross_instance_crud() {
+    // Guarantees the 2-replica deployment is up (and skips when k8s is disabled).
+    if data_k8s().await.is_none() {
+        return;
+    }
+
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
+        .await
+        .expect("read server CA for cross-instance test");
+
+    let pods = discover_udex_pods().await;
+    assert_eq!(
+        pods.len(),
+        K8S_REPLICAS,
+        "expected {K8S_REPLICAS} running udex pods, got {pods:?}"
+    );
+
+    // Pin a client to each pod. Ports are distinct from the smoke test's so the
+    // two can run concurrently. Forwards drop (and are killed) at end of scope.
+    let pf_a = PortForward::start(&pods[0], 18445, &ca_pem).await;
+    let pf_b = PortForward::start(&pods[1], 18446, &ca_pem).await;
+
+    // Hydra client + scopes for this test's own index (distinct from data_k8s()).
+    let index_name = format!("{ID_K8S_PREFIX}-multi-index");
+    let audience = "udex".to_string();
+    let client_id = format!("{ID_K8S_PREFIX}-multi-client");
+    let client_secret = "sdk-k8s-multi-test-secret".to_string();
+    let scope = format!(
+        "udex:index:v1:list \
+         udex:index:v1:create \
+         udex:index:v1:{index_name}:read \
+         udex:index:v1:*:delete \
+         udex:entry:v1:{index_name}:create \
+         udex:entry:v1:{index_name}:read \
+         udex:entry:v1:{index_name}:write \
+         udex:entry:v1:{index_name}:delete"
+    );
+    register_hydra_client(
+        &hydra_admin_url(),
+        &client_id,
+        &client_secret,
+        &audience,
+        &scope,
+    )
+    .await;
+    let token_url = format!("{}/oauth2/token", hydra_public_url());
+
+    let client_a = build_pod_client(
+        &pf_a.endpoint(),
+        ca_pem.clone(),
+        &token_url,
+        &client_id,
+        &client_secret,
+        &audience,
+        &scope,
+    )
+    .await;
+    let client_b = build_pod_client(
+        &pf_b.endpoint(),
+        ca_pem.clone(),
+        &token_url,
+        &client_id,
+        &client_secret,
+        &audience,
+        &scope,
+    )
+    .await;
+
+    let not_found = |err: &udex_sdk::Error| matches!(err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::NOT_FOUND);
+
+    // 1. Index created on A is visible on B (describe + list).
+    client_a
+        .create_index(CreateIndexRequest {
+            name: index_name.clone(),
+            display_name: index_name.clone(),
+            description: "k8s multi-instance test index".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 50,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        })
+        .await
+        .expect("create_index on instance A failed");
+    let on_b = client_b
+        .describe_index(&index_name)
+        .await
+        .expect("describe_index on B failed — index created on A not visible to B");
+    assert_eq!(on_b.name, index_name);
+    let listed = client_b
+        .list_indices()
+        .await
+        .expect("list_indices on B failed");
+    assert!(
+        listed.iter().any(|i| i.name == index_name),
+        "index created on A missing from B's list_indices"
+    );
+
+    // 2. Entry written on A is readable on B.
+    let created_ab = client_a
+        .create_entry(&index_name, context_input(&[("cross_key_ab", "value_ab")]))
+        .await
+        .expect("create_entry on A failed");
+    let key_on_b = client_b
+        .lookup_key_by_context(&index_name, &created_ab.context_hash)
+        .await
+        .expect("lookup_key_by_context on B failed");
+    assert_eq!(
+        key_on_b.as_deref(),
+        Some(created_ab.key.as_str()),
+        "B did not resolve A's entry to the same key"
+    );
+
+    // 3. Entry written on B is readable on A.
+    let created_ba = client_b
+        .create_entry(&index_name, context_input(&[("cross_key_ba", "value_ba")]))
+        .await
+        .expect("create_entry on B failed");
+    let key_on_a = client_a
+        .lookup_key_by_context(&index_name, &created_ba.context_hash)
+        .await
+        .expect("lookup_key_by_context on A failed");
+    assert_eq!(
+        key_on_a.as_deref(),
+        Some(created_ba.key.as_str()),
+        "A did not resolve B's entry to the same key"
+    );
+
+    // 4. Deletes propagate both ways: delete A's entry on A → gone on B, and
+    //    delete B's entry on B → gone on A. This also empties the index for (5).
+    client_a
+        .delete_entry(&index_name, &created_ab.key)
+        .await
+        .expect("delete_entry on A failed");
+    let ab_on_b = client_b
+        .lookup_context_by_key(&index_name, &created_ab.key)
+        .await
+        .expect_err("B still found an entry deleted on A");
+    assert!(
+        not_found(&ab_on_b),
+        "expected NOT_FOUND on B after delete on A, got: {ab_on_b}"
+    );
+
+    client_b
+        .delete_entry(&index_name, &created_ba.key)
+        .await
+        .expect("delete_entry on B failed");
+    let ba_on_a = client_a
+        .lookup_context_by_key(&index_name, &created_ba.key)
+        .await
+        .expect_err("A still found an entry deleted on B");
+    assert!(
+        not_found(&ba_on_a),
+        "expected NOT_FOUND on A after delete on B, got: {ba_on_a}"
+    );
+
+    // 5. Index deleted on A is gone on B (index is now empty).
+    client_a
+        .delete_index(&index_name)
+        .await
+        .expect("delete_index on A failed");
+    let idx_err = client_b
+        .describe_index(&index_name)
+        .await
+        .expect_err("B still found an index deleted on A");
+    assert!(
+        not_found(&idx_err),
+        "expected NOT_FOUND on B after delete_index on A, got: {idx_err}"
+    );
+
+    // pf_a / pf_b drop here → kubectl port-forward children are killed (RAII).
+    drop((pf_a, pf_b));
+}

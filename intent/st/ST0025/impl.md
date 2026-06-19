@@ -23,6 +23,24 @@ All in `projects/rust/sdk/tests/integration_tests.rs`:
 
 Verified live: `validate-k8s-test.sh` → 7/7 k8s tests pass (6 existing + smoke) against 2 replicas; no leaked `kubectl port-forward` processes after the run; `cargo fmt --check` + `cargo clippy --tests -- -D warnings` clean.
 
+### WP03 — Multi-instance integration tests (as built)
+
+In `projects/rust/sdk/tests/integration_tests.rs`:
+
+- `build_pod_client(...)` helper — an SDK client pinned to one instance's port-forward endpoint (pod cert / server CA, SNI `localhost`), authed via the usual Hydra `client_credentials`.
+- `test_sdk_k8s_multi_cross_instance_crud` — reuses the `data_k8s()` deployment/DB (no second redeploy), discovers both pods, forwards each (ports 18445/18446, distinct from the smoke test's), registers a Hydra client for its own index, and builds `client_a`/`client_b` pinned to the two pods. Scenarios, each request pinned to a specific instance:
+  1. CreateIndex on A → DescribeIndex + ListIndices on B see it.
+  2. CreateEntry on A → `lookup_key_by_context` on B resolves the same key.
+  3. CreateEntry on B → `lookup_key_by_context` on A resolves the same key.
+  4. DeleteEntry on A → NOT_FOUND on B; DeleteEntry on B → NOT_FOUND on A (symmetric; also empties the index for step 5).
+  5. DeleteIndex on A → NOT_FOUND (describe) on B.
+
+**Verdict: no cross-instance consistency bug.** All 8 k8s tests pass (6 existing + `multi_direct_health` + `multi_cross_instance_crud`) against 2 replicas — confirms the server holds no per-instance state another instance can't see, exactly as the WP02/planning analysis predicted (index cache has a datastore fallback; entries uncached). So WP04 needs **no** server fix.
+
+One test-logic bug found and fixed during bring-up: the first cut deleted only A's entry before `delete_index`, leaving B's entry → `delete_index` returned `code 9 "index is not empty"`. Fixed by deleting both entries (which also made the delete-propagation check symmetric).
+
+Verified: 8/8 pass; `cargo fmt --check` + `cargo clippy --tests -- -D warnings` clean; no leaked `kubectl port-forward` processes.
+
 ## Code Examples
 
 [Key code snippets and examples]
