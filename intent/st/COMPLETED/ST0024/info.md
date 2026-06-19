@@ -1,10 +1,10 @@
 ---
 verblock: "18 Jun 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: WIP
+status: Completed
 slug: k8s-ingress-tls
 created: 20260618
-completed:
+completed: 20260619
 ---
 
 # ST0024: K8s ingress tls
