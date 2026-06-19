@@ -1,10 +1,10 @@
 ---
 verblock: "19 Jun 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: WIP
+status: Completed
 slug: cluster-integration-tests
 created: 20260619
-completed:
+completed: 20260619
 ---
 
 # ST0025: Cluster integration tests
