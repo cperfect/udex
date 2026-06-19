@@ -3,7 +3,7 @@ verblock: "19 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-04
 title: "Validation + consistency fix"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-04: Validation + consistency fix
@@ -20,9 +20,9 @@ Validate the full multi-instance path end to end and fix any cross-instance cons
 
 ## Acceptance Criteria
 
-- [ ] `bash scripts/validate-k8s-test.sh` → all k8s tests (single + multi instance) pass
-- [ ] `cargo fmt --check` + `cargo clippy --tests -- -D warnings` clean
-- [ ] No server (non-test) Rust change unless a real consistency bug required it (documented in impl.md)
+- [x] `bash scripts/validate-k8s-test.sh` → all 8 k8s tests (single + multi instance) pass against 2 replicas
+- [x] `cargo fmt --check` + `cargo clippy --tests -- -D warnings` clean
+- [x] No server (non-test) Rust change — no consistency bug surfaced (validation-only; see impl.md)
 
 ## Dependencies
 

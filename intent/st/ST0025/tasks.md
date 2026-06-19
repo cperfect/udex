@@ -26,11 +26,11 @@
 
 ### WP04 — Validation + consistency fix (if needed)
 
-- [ ] Full loop: `cluster-create → image-load → deploy` → 2/2 Ready
-- [ ] `validate-k8s-test.sh`: existing `test_sdk_k8s_*` still pass against 2 replicas
-- [ ] New `test_sdk_k8s_multi_*` pass
-- [ ] If a cross-instance bug surfaces: fix in `server/src` (D5) so suite is green
-- [ ] `cargo fmt --check` + `cargo clippy --tests -- -D warnings` clean
+- [x] Full loop verified: deploy rolls out 2/2 Ready (via the fixture's redeploy)
+- [x] `validate-k8s-test.sh`: existing `test_sdk_k8s_*` pass against 2 replicas
+- [x] New `test_sdk_k8s_multi_*` pass (8/8 total)
+- [x] No cross-instance bug surfaced → no `server/src` fix needed (validation-only)
+- [x] `cargo fmt --check` + `cargo clippy --tests -- -D warnings` clean
 
 ### WP05 — Documentation updates
 

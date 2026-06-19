@@ -41,6 +41,10 @@ One test-logic bug found and fixed during bring-up: the first cut deleted only A
 
 Verified: 8/8 pass; `cargo fmt --check` + `cargo clippy --tests -- -D warnings` clean; no leaked `kubectl port-forward` processes.
 
+### WP04 — Validation + consistency fix (validation-only)
+
+No work beyond validation was required: the full suite already passes (8/8 k8s tests against 2 replicas; `cargo fmt --check` + `cargo clippy --tests -- -D warnings` clean), and WP03 confirmed there is **no** cross-instance consistency bug. Per D5 the WP allowed a server fix if one surfaced — none did — so `projects/rust/server/src` is unchanged. WP04 closes as validation-only.
+
 ## Code Examples
 
 [Key code snippets and examples]
