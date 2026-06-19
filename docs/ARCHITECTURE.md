@@ -126,7 +126,7 @@ Udex follows the **Test Diamond** — integration tests carry the bulk of the co
 
 The SDK tests exercise TLS termination, JWT validation, gRPC wire format, and the full handler chain in one shot, which is the path a real client takes. Service-layer tests (index/entry service) are kept small because their scenarios are either already covered by the SDK suite or only add value for handler-level input validation — paths that the SDK can never trigger because it always sends well-formed, correctly-hashed inputs.
 
-The server is statelessness  is designed to be horizontally scaled (see e.g. [projects/k8s](/projects/k8s/README.md)).
+The server is statelessness and is designed to be horizontally scaled (see e.g. [projects/k8s](/projects/k8s/README.md)).
 
 ### Test Naming Convention
 
