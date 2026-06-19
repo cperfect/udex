@@ -4,6 +4,12 @@ image:
   # Never pull — image is loaded into k3d with image-load.sh
   pullPolicy: Never
 
+# Number of server pods. Defaults to 2 so the dev cluster always exercises the
+# multi-instance (stateless) invariant — the server keeps no per-instance state
+# that another instance can't see (all state lives in the datastore). The k8s
+# integration tests address individual instances directly to verify this.
+replicaCount: 2
+
 server:
   bindAddress: "0.0.0.0:443"
   requestTimeoutSecs: 30

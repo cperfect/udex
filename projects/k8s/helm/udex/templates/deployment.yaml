@@ -1,7 +1,8 @@
-# Deployment — tells Kubernetes to run and maintain one replica of the udex pod.
-# A Deployment manages a ReplicaSet which in turn manages the actual Pods.
-# On upgrade, Kubernetes performs a rolling update: starts the new pod, waits
-# for it to pass the readinessProbe, then terminates the old pod.
+# Deployment — tells Kubernetes to run and maintain .Values.replicaCount copies
+# of the udex pod (default 2; the server is stateless, so instances are
+# interchangeable). A Deployment manages a ReplicaSet which in turn manages the
+# actual Pods. On upgrade, Kubernetes performs a rolling update: starts new pods,
+# waits for them to pass the readinessProbe, then terminates the old ones.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -9,7 +10,7 @@ metadata:
   labels:
     {{- include "udex.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       {{- include "udex.selectorLabels" . | nindent 6 }}

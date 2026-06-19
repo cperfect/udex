@@ -115,6 +115,7 @@ Udex follows the **Test Diamond** — integration tests carry the bulk of the co
 | Suite | Prefix(es) | What it covers | Authority |
 |---|---|---|---|
 | SDK integration tests | `test_sdk_`, `test_sdk_oauth2_` | Full stack via TLS + OAuth2 + gRPC wire format — the closest thing to a real client | **Primary** — if the SDK tests pass, the system works end-to-end |
+| k8s / multi-instance tests | `test_sdk_k8s_`, `test_sdk_k8s_multi_` | SDK suite against a live k3d cluster; the `_multi_` variants pin requests to individual pods (via `kubectl port-forward`) to verify cross-instance statelessness with the default 2 replicas | Supplementary — deployment & multi-instance coverage |
 | Server integration tests | `test_server_`, `test_server_oauth2_` | Full gRPC stack with auth; used when debugging issues that are hard to isolate via SDK | Supplementary |
 | Index service tests | `test_index_service_` | gRPC handler input-validation paths that cannot be triggered by the SDK (SDK always sends valid inputs) | Supplementary — validation contract only |
 | Entry service tests | `test_entry_service_` | Same as above plus a minimal isolation set for debugging the entry handler without the full SDK stack | Supplementary — isolation debugging |
@@ -124,6 +125,8 @@ Udex follows the **Test Diamond** — integration tests carry the bulk of the co
 ### Rationale
 
 The SDK tests exercise TLS termination, JWT validation, gRPC wire format, and the full handler chain in one shot, which is the path a real client takes. Service-layer tests (index/entry service) are kept small because their scenarios are either already covered by the SDK suite or only add value for handler-level input validation — paths that the SDK can never trigger because it always sends well-formed, correctly-hashed inputs.
+
+The server is statelessness and is designed to be horizontally scaled (see e.g. [projects/k8s](/projects/k8s/README.md)).
 
 ### Test Naming Convention
 
