@@ -13,7 +13,7 @@
 #
 # DO NOT USE THESE ANYWHERE ELSE — development/testing only!
 
-set -e
++set -euo pipefail
 
 SCRIPT_DIR="$(dirname "$0")"
 CERT_DIR="$SCRIPT_DIR"
@@ -81,3 +81,4 @@ echo "  tls.csr  - edge server certificate signing request"
 echo "  tls.crt  - edge server certificate (signed by edge CA)"
 echo ""
 echo "Note: These certificates are for local development only — never use in production!"
+
