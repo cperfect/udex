@@ -7,8 +7,9 @@
 # automatically and maps to the host port configured in cluster-create.sh
 # (8443 on the host → 443 in the cluster).
 #
-# The IngressRouteTCP (ingressroutetcp.yaml) sits in front of this Service and
-# handles Traefik-level TCP routing with TLS passthrough.
+# The IngressRoute (ingressroute.yaml) sits in front of this Service: Traefik
+# terminates the client TLS at the ingress and re-encrypts to this Service over
+# HTTP/2 (scheme: https), so the port below still serves the pod's own TLS.
 apiVersion: v1
 kind: Service
 metadata:

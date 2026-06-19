@@ -11,6 +11,17 @@
 
 Verified: `gen-keys-and-certs.sh --force` runs all three generation steps; `openssl x509` confirms the four SANs; `openssl verify` confirms the chain; all key material is `git check-ignore`d; `dev-doctor.sh` reports the edge certs present. `bash -n` clean (shellcheck unavailable in env).
 
+### WP02 — Helm chart: terminate + re-encrypt (as built)
+
+- Deleted `templates/ingressroutetcp.yaml`.
+- Added `templates/ingressroute.yaml`: `kind: IngressRoute`, `entryPoints: [websecure]`, `match: PathPrefix(`/`)`, service `port: 443` with `scheme: https` (re-encrypt, HTTP/2 via ALPN for gRPC) and `serversTransport: udex-udex`; `tls.secretName: udex-udex-tls`.
+- Added `templates/serverstransport.yaml`: `kind: ServersTransport`, `insecureSkipVerify: true` (D4 — Traefik reaches the pod by Service name/IP, not a pod-cert SAN). Header documents the `rootCAsSecrets` + `serverName` prod-hardening path.
+- Added `templates/ingress-tls-secret.yaml`: `type: kubernetes.io/tls`, `tls.crt`/`tls.key` from `.Values.secrets.traefikTls{Crt,Key}` with `required` guards. Name `{{ fullname }}-tls`, matching the IngressRoute `secretName`.
+- `templates/service.yaml`: comment updated (passthrough → terminate + re-encrypt).
+- `values.yaml`: added `secrets.traefikTlsCrt` / `secrets.traefikTlsKey`; clarified pod-vs-edge TLS in comments.
+
+Verification: with helm v4.0.0 / kubectl v1.36 / k3d v5.8.3 available, `helm lint --strict` passes (0 failed) and `helm template --show-only` renders all three new resources correctly (IngressRoute with `scheme: https` + `serversTransport: udex-udex` + `secretName: udex-udex-tls`; ServersTransport `insecureSkipVerify: true`; kubernetes.io/tls Secret `udex-udex-tls`). No `IngressRouteTCP`/`passthrough` remains in the chart (only an explanatory comment reference). Live deploy/test exercised in WP03/WP04.
+
 ## Code Examples
 
 [Key code snippets and examples]

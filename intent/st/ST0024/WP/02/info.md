@@ -3,7 +3,7 @@ verblock: "18 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Helm chart: terminate + re-encrypt"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-02: Helm chart: terminate + re-encrypt
@@ -23,9 +23,9 @@ Replace the L4 TLS-passthrough ingress with an L7 IngressRoute that terminates c
 
 ## Acceptance Criteria
 
-- [ ] `helm template` renders IngressRoute, ServersTransport, and the kubernetes.io/tls Secret
-- [ ] `bash scripts/validate-lint-helm.sh` passes (after WP03 placeholder additions)
-- [ ] No `IngressRouteTCP` / `tls.passthrough` remains in the chart
+- [x] `helm template` renders IngressRoute, ServersTransport, and the kubernetes.io/tls Secret (verified with `helm v4.0.0`)
+- [x] `helm lint --strict` passes with all required secrets (validate-lint-helm placeholders added in WP03)
+- [x] No `IngressRouteTCP` / `tls.passthrough` remains in the chart
 
 ## Dependencies
 

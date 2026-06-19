@@ -1,0 +1,23 @@
+# ServersTransport — a Traefik CRD that configures how Traefik connects to the
+# backend (the udex pod) for the re-encrypt hop. Referenced by name from the
+# IngressRoute service (ingressroute.yaml).
+#
+# insecureSkipVerify: true — Traefik does NOT verify the pod's certificate.
+# This is deliberate for local dev: Traefik reaches the pod via the Service
+# name / pod IP, which is not a Subject Alternative Name on the pod cert
+# (projects/rust/server/tests/certs), so hostname verification would fail.
+# The hop stays encrypted; only verification is skipped, and only inside the
+# cluster network.
+#
+# Production hardening (out of scope here): replace insecureSkipVerify with
+#   rootCAsSecrets: [<pod CA secret>]
+#   serverName: <a SAN present on the pod cert>
+# so the backend certificate is fully verified.
+apiVersion: traefik.io/v1alpha1
+kind: ServersTransport
+metadata:
+  name: {{ include "udex.fullname" . }}
+  labels:
+    {{- include "udex.labels" . | nindent 4 }}
+spec:
+  insecureSkipVerify: true

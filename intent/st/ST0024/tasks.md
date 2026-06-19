@@ -11,12 +11,12 @@
 
 ### WP02 — Helm chart: terminate + re-encrypt
 
-- [ ] Delete `templates/ingressroutetcp.yaml`
-- [ ] Add `templates/ingressroute.yaml` (L7 IngressRoute, websecure, `scheme: https` + `serversTransport` ref, `tls.secretName`)
-- [ ] Add `templates/serverstransport.yaml` (`insecureSkipVerify: true`)
-- [ ] Add `templates/ingress-tls-secret.yaml` (`kubernetes.io/tls`, `required` guards)
-- [ ] Update `templates/service.yaml` comment (no longer passthrough)
-- [ ] Add `secrets.traefikTlsCrt` / `secrets.traefikTlsKey` to `values.yaml`
+- [x] Delete `templates/ingressroutetcp.yaml`
+- [x] Add `templates/ingressroute.yaml` (L7 IngressRoute, websecure, `scheme: https` + `serversTransport` ref, `tls.secretName`)
+- [x] Add `templates/serverstransport.yaml` (`insecureSkipVerify: true`)
+- [x] Add `templates/ingress-tls-secret.yaml` (`kubernetes.io/tls`, `required` guards)
+- [x] Update `templates/service.yaml` comment (no longer passthrough)
+- [x] Add `secrets.traefikTlsCrt` / `secrets.traefikTlsKey` to `values.yaml`
 
 ### WP03 — Deploy + cluster scripts
 
