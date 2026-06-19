@@ -27,6 +27,7 @@ done
 # interrupted run or manual deletion) triggers full regeneration.
 JWT_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/jwt"
 TLS_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/certs"
+EDGE_TLS_DIR="${WORKSPACE_DIR}/projects/k8s/traefik/certs"
 
 ALL_EXIST=true
 for f in \
@@ -37,7 +38,11 @@ for f in \
   "${TLS_DIR}/ca.key" \
   "${TLS_DIR}/ca.crt" \
   "${TLS_DIR}/server.key" \
-  "${TLS_DIR}/server.crt"; do
+  "${TLS_DIR}/server.crt" \
+  "${EDGE_TLS_DIR}/ca.key" \
+  "${EDGE_TLS_DIR}/ca.crt" \
+  "${EDGE_TLS_DIR}/tls.key" \
+  "${EDGE_TLS_DIR}/tls.crt"; do
   [[ -f "$f" ]] || { ALL_EXIST=false; break; }
 done
 
@@ -49,6 +54,10 @@ fi
 
 echo "==> Generating TLS certificates..."
 bash "${WORKSPACE_DIR}/projects/rust/server/tests/certs/regenerate_certs.sh"
+
+echo ""
+echo "==> Generating Traefik edge TLS certificates..."
+bash "${WORKSPACE_DIR}/projects/k8s/traefik/certs/regenerate_certs.sh"
 
 echo ""
 echo "==> Generating JWT signing key pairs..."

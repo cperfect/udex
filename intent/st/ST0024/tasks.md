@@ -4,10 +4,10 @@
 
 ### WP01 — Edge cert generation
 
-- [ ] Add `projects/k8s/traefik/certs/regenerate_certs.sh` (own CA + edge cert; SANs `host.docker.internal`, `localhost`, `127.0.0.1`, `::1`; `chmod` keys/certs; dev-only banner)
-- [ ] Gitignore the generated edge cert material
-- [ ] Wire the new script into `scripts/gen-keys-and-certs.sh` (generation step + `ALL_EXIST` guard)
-- [ ] Add the four edge cert files to the key-material check in `scripts/dev-doctor.sh`
+- [x] Add `projects/k8s/traefik/certs/regenerate_certs.sh` (own CA + edge cert; SANs `host.docker.internal`, `localhost`, `127.0.0.1`, `::1`; `chmod` keys/certs; dev-only banner)
+- [x] Gitignore the generated edge cert material
+- [x] Wire the new script into `scripts/gen-keys-and-certs.sh` (generation step + `ALL_EXIST` guard)
+- [x] Add the four edge cert files to the key-material check in `scripts/dev-doctor.sh`
 
 ### WP02 — Helm chart: terminate + re-encrypt
 

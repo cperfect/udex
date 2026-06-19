@@ -3,7 +3,7 @@ verblock: "18 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-01
 title: "Edge cert generation"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-01: Edge cert generation
@@ -21,10 +21,10 @@ Generate the static Traefik edge certificate (with its own CA) under `projects/k
 
 ## Acceptance Criteria
 
-- [ ] `bash scripts/gen-keys-and-certs.sh --force` produces `ca.key`, `ca.crt`, `tls.key`, `tls.crt` in `projects/k8s/traefik/certs/`
-- [ ] `openssl x509 -in tls.crt -text` shows the four required SANs
-- [ ] Edge cert material is gitignored (not staged by `git add -A`)
-- [ ] `bash scripts/dev-doctor.sh` reports edge cert material present
+- [x] `bash scripts/gen-keys-and-certs.sh --force` produces `ca.key`, `ca.crt`, `tls.key`, `tls.crt` in `projects/k8s/traefik/certs/`
+- [x] `openssl x509 -in tls.crt -text` shows the four required SANs
+- [x] Edge cert material is gitignored (not staged by `git add -A`)
+- [x] `bash scripts/dev-doctor.sh` reports edge cert material present
 
 ## Dependencies
 

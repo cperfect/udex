@@ -321,6 +321,7 @@ fi
 # JWT and TLS key material required by the test suite.
 JWT_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/jwt"
 TLS_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/certs"
+EDGE_TLS_DIR="${WORKSPACE_DIR}/projects/k8s/traefik/certs"
 ALL_KEYS=true
 for f in \
   "${JWT_DIR}/signing_private_key.pem" \
@@ -330,11 +331,15 @@ for f in \
   "${TLS_DIR}/ca.key" \
   "${TLS_DIR}/ca.crt" \
   "${TLS_DIR}/server.key" \
-  "${TLS_DIR}/server.crt"; do
+  "${TLS_DIR}/server.crt" \
+  "${EDGE_TLS_DIR}/ca.key" \
+  "${EDGE_TLS_DIR}/ca.crt" \
+  "${EDGE_TLS_DIR}/tls.key" \
+  "${EDGE_TLS_DIR}/tls.crt"; do
   [[ -f "$f" ]] || { ALL_KEYS=false; break; }
 done
 if [[ "${ALL_KEYS}" == true ]]; then
-  pass "key material present (TLS certs + JWT signing keys)"
+  pass "key material present (TLS certs + Traefik edge certs + JWT signing keys)"
 else
   fail "key material missing" \
     "Run: bash scripts/gen-keys-and-certs.sh"
