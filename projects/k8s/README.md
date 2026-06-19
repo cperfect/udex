@@ -33,7 +33,7 @@ graph LR
 
         subgraph k8s["Kubernetes resources"]
             svc["Service · :443"]
-            pod["Pod: udex\n:443 gRPC + TLS"]
+            pod["Pods: udex (×replicaCount, default 2)\n:443 gRPC + TLS"]
             cm["ConfigMap\nconfig.yaml"]
             secret["Secret\nDATABASE_URL · tls.crt · tls.key"]
             edge["Secret (kubernetes.io/tls)\nedge tls.crt · tls.key"]
@@ -44,7 +44,7 @@ graph LR
     client  -->|"HTTPS/gRPC · host:8443"| lb
     lb      --> ir
     ir      -->|"re-encrypt · HTTP/2 over TLS"| svc
-    svc     --> pod
+    svc     -->|"round-robin"| pod
     pod     -->|"SQL · host.k3d.internal:5432"| pg
     pod     -.->|"JWKS fetch\nhost.k3d.internal:4444"| hydra
 
@@ -59,7 +59,9 @@ graph LR
     edge    -.->|"edge cert for TLS termination"| ir
 ```
 
-**Call flow** (solid lines): a gRPC client connects to the k3d load balancer on `host:8443`, which forwards to Traefik. The `IngressRoute` (L7) **terminates** the client's TLS using the edge certificate (from the `kubernetes.io/tls` Secret), then **re-encrypts** to the Service and pod over HTTP/2 (`scheme: https`) — the server still terminates this second TLS hop with its own cert. The `ServersTransport` controls backend-cert verification for that hop (`insecureSkipVerify` in local dev). The pod connects out to PostgreSQL and (on the first request per token) fetches the Hydra JWKS to validate JWTs.
+**Call flow** (solid lines): a gRPC client connects to the k3d load balancer on `host:8443`, which forwards to Traefik. The `IngressRoute` (L7) **terminates** the client's TLS using the edge certificate (from the `kubernetes.io/tls` Secret), then **re-encrypts** to the Service over HTTP/2 (`scheme: https`); the Service load-balances (round-robin) across the server pods, each of which terminates this second TLS hop with its own cert. The `ServersTransport` controls backend-cert verification for that hop (`insecureSkipVerify` in local dev). Each pod connects out to PostgreSQL and (on the first request per token) fetches the Hydra JWKS to validate JWTs.
+
+**Replicas & statelessness.** The deployment defaults to **2 server replicas** (`replicaCount` in `values.yaml`) so local dev always runs the multi-instance configuration. The server is stateless — all state lives in the shared datastore — so any replica can serve any request. The multi-instance integration tests (`test_sdk_k8s_multi_*`) verify this by addressing each pod **directly** (bypassing the round-robin LB) via `kubectl port-forward`, then asserting that a write through one instance is visible through the other. Direct hops terminate against the pod's own cert; the load-balanced path uses the Traefik edge cert.
 
 **Cluster management** (solid lines, bottom): `image-build.sh` builds the Docker image locally; `image-load.sh` imports it into the k3d cluster so pods can use `imagePullPolicy: Never`. `deploy.sh` runs `helm upgrade --install`, which creates or updates all Kubernetes resources.
 
@@ -124,7 +126,7 @@ helm/udex/
     ├── configmap.yaml           # server config.yaml rendered from values
     ├── secret.yaml              # DATABASE_URL + pod TLS cert/key
     ├── ingress-tls-secret.yaml  # kubernetes.io/tls Secret — Traefik edge cert
-    ├── deployment.yaml          # single-replica pod; mounts ConfigMap and Secret
+    ├── deployment.yaml          # server pods (replicaCount, default 2); mounts ConfigMap and Secret
     ├── service.yaml             # LoadBalancer on port 443
     ├── ingressroute.yaml        # Traefik IngressRoute (L7) — terminates TLS
     └── serverstransport.yaml    # Traefik ServersTransport — re-encrypt to pod
@@ -168,5 +170,7 @@ bash scripts/validate-k8s-test.sh
 ```
 
 This mirrors the `k8s-test` CI job exactly. It runs `cargo test -p udex-sdk --test integration_tests -- k8s`. Tests are skipped automatically when `K8S_SERVER_URL` is not set, so the regular `cargo test` run is unaffected.
+
+This includes the multi-instance tests (`test_sdk_k8s_multi_*`), which require the default 2-replica deployment: they discover the pods and `kubectl port-forward` to each so requests can be pinned to a specific instance, verifying that writes through one instance are visible through the other.
 
 See [projects/rust/CONTRIBUTING.md](../rust/CONTRIBUTING.md) for the `test_sdk_k8s_*` naming convention.

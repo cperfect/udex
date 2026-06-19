@@ -60,12 +60,20 @@ cargo clippy --all-targets -- -D warnings
 > to run them locally; see [projects/k8s/README.md](../../projects/k8s/README.md) for
 > cluster setup.
 >
+> **Multi-instance k8s tests** — Tests prefixed with `test_sdk_k8s_multi_` are a
+> subset of the k8s tests that require the default 2-replica deployment. They
+> address each server pod **directly** via `kubectl port-forward` (bypassing the
+> round-robin load balancer) so a request can be pinned to a specific instance,
+> proving the server is stateless across replicas (a write through one instance is
+> visible through the other). Direct hops trust the pod cert (server CA, SNI
+> `localhost`); the load-balanced path uses the Traefik edge cert.
+>
 > **Integration test naming** — Every integration test function must be prefixed
 > with a layer indicator: `test_sdk_`, `test_sdk_oauth2_`, `test_sdk_k8s_`,
-> `test_server_`, `test_server_oauth2_`, `test_index_service_`, `test_entry_service_`,
-> `test_datastore_`, or `test_cli_`. This makes it immediately obvious from
-> output which layer a failing test covers. Shared fixture helpers live in
-> `udex-test-utils` — check there before duplicating fixture code.
+> `test_sdk_k8s_multi_`, `test_server_`, `test_server_oauth2_`, `test_index_service_`,
+> `test_entry_service_`, `test_datastore_`, or `test_cli_`. This makes it immediately
+> obvious from output which layer a failing test covers. Shared fixture helpers live
+> in `udex-test-utils` — check there before duplicating fixture code.
 
 ### Pre-commit Checklist
 

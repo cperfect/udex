@@ -34,11 +34,11 @@
 
 ### WP05 — Documentation updates
 
-- [ ] `projects/k8s/README.md`: 2-replica default; LB round-robin across instances; direct-addressing (port-forward) test path; refresh diagram/prose if affected
-- [ ] `docs/ARCHITECTURE.md`: multi-instance statelessness coverage + how cross-instance consistency is exercised
-- [ ] `projects/rust/CONTRIBUTING.md`: document the `test_sdk_k8s_multi_*` convention (alongside `test_sdk_k8s_*`)
-- [ ] `docs/SECRETS.md`: update only if new key material was introduced (none expected)
-- [ ] Repo-wide sweep: no stale single-replica claims; all fenced code blocks have language IDs
+- [x] `projects/k8s/README.md`: 2-replica default; LB round-robin; direct-addressing (port-forward) test path; diagram + prose refreshed
+- [x] `docs/ARCHITECTURE.md`: multi-instance statelessness coverage (suite-hierarchy row + rationale)
+- [x] `projects/rust/CONTRIBUTING.md`: documented the `test_sdk_k8s_multi_*` convention
+- [x] `docs/SECRETS.md`: no change needed (port-forward reuses existing certs; no new key material)
+- [x] Repo-wide sweep: no stale single-replica claims; no new bare code fences
 
 ## Task Notes
 

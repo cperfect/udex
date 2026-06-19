@@ -3,7 +3,7 @@ verblock: "19 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-05
 title: "Documentation updates"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-05: Documentation updates
@@ -21,10 +21,10 @@ Bring the docs in line with the multi-replica dev deployment and the direct-addr
 
 ## Acceptance Criteria
 
-- [ ] README describes the 2-replica default + direct-addressing test path; no stale single-replica references
-- [ ] ARCHITECTURE/CONTRIBUTING reflect the multi-instance tests and convention
-- [ ] Repo-wide sweep: no doc claims the deployment is single-replica
-- [ ] Markdown fenced blocks all have language identifiers (project rule)
+- [x] README describes the 2-replica default + direct-addressing test path; no stale single-replica references
+- [x] ARCHITECTURE/CONTRIBUTING reflect the multi-instance tests and convention
+- [x] Repo-wide sweep: no doc claims the deployment is single-replica
+- [x] Markdown fenced blocks all have language identifiers (no new bare opening fences)
 
 ## Dependencies
 

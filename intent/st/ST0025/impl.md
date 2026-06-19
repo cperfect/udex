@@ -45,6 +45,15 @@ Verified: 8/8 pass; `cargo fmt --check` + `cargo clippy --tests -- -D warnings` 
 
 No work beyond validation was required: the full suite already passes (8/8 k8s tests against 2 replicas; `cargo fmt --check` + `cargo clippy --tests -- -D warnings` clean), and WP03 confirmed there is **no** cross-instance consistency bug. Per D5 the WP allowed a server fix if one surfaced — none did — so `projects/rust/server/src` is unchanged. WP04 closes as validation-only.
 
+### WP05 — Documentation updates (as built)
+
+- `projects/k8s/README.md`: mermaid diagram now shows pods `×replicaCount (default 2)` and a `round-robin` Service→pods edge; new **Replicas & statelessness** paragraph (2-replica default, stateless, direct-addressing test path); call-flow prose updated for round-robin; chart-structure listing updated ("server pods (replicaCount, default 2)"); "Running k8s tests locally" notes the `test_sdk_k8s_multi_*` port-forward tests.
+- `projects/rust/CONTRIBUTING.md`: new **Multi-instance k8s tests** note (port-forward, pinned instances, pod vs edge cert); added `test_sdk_k8s_multi_` to the integration-test naming list.
+- `docs/ARCHITECTURE.md`: added a k8s/multi-instance row to the Suite Hierarchy table; rationale now states statelessness is verified by `test_sdk_k8s_multi_*`, not just asserted.
+- `docs/SECRETS.md`: no change — port-forward reuses the existing server certs; no new key material.
+
+Verified: repo-wide sweep finds no stale single-replica claims; no new bare code fences (flagged fences are pre-existing closing fences).
+
 ## Code Examples
 
 [Key code snippets and examples]
