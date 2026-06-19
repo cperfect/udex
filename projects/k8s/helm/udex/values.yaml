@@ -37,7 +37,11 @@ datastore:
 secrets:
   # PostgreSQL connection URL, e.g. postgres://postgres:secret@host.k3d.internal:5432/postgres
   databaseUrl: ""
-  # PEM-encoded server TLS certificate (raw PEM, not base64)
+  # Pod TLS — the server's OWN cert/key, used on the re-encrypted backend hop
+  # (Traefik -> pod). PEM-encoded (raw PEM, not base64).
   tlsCrt: ""
-  # PEM-encoded server TLS private key (raw PEM, not base64)
   tlsKey: ""
+  # Edge TLS — the certificate Traefik presents to clients when it terminates
+  # TLS at the ingress (projects/k8s/traefik/certs). PEM-encoded (raw PEM).
+  traefikTlsCrt: ""
+  traefikTlsKey: ""

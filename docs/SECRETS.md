@@ -45,9 +45,14 @@ Public artefacts (certificates, public keys, client IDs, endpoint URLs) are mark
 |------|------|-------|-------|--------|--------|
 | `ca.key` | RSA-4096 CA private key | Test certificate generation only | Dev | No | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/certs/` (gitignored) |
 | `ca.crt` | Self-signed CA certificate (365-day) | Server integration tests, bench — TLS trust anchor | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/certs/` (gitignored) |
-| `server.key` | RSA-4096 TLS server private key | gRPC server TLS | Dev | No | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/certs/` (gitignored) |
-| `server.crt` | TLS server certificate (signed by test CA) | gRPC server TLS | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/certs/` (gitignored) |
+| `server.key` | RSA-4096 TLS server private key | gRPC server TLS (pod cert; re-encrypted backend hop in k8s) | Dev | No | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/certs/` (gitignored) |
+| `server.crt` | TLS server certificate (signed by test CA) | gRPC server TLS (pod cert; re-encrypted backend hop in k8s) | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/certs/` (gitignored) |
 | `server.csr` | TLS server certificate signing request | Intermediate artefact — cert generation only | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/rust/server/tests/certs/` (gitignored) |
+| Traefik edge `ca.key` | RSA-4096 CA private key | Edge certificate generation only (k8s) | Dev | No | `scripts/gen-keys-and-certs.sh` → `projects/k8s/traefik/certs/` (gitignored) |
+| Traefik edge `ca.crt` | Self-signed edge CA certificate (365-day) | k8s — trust anchor clients use when Traefik terminates TLS at the ingress | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/k8s/traefik/certs/` (gitignored) |
+| Traefik edge `tls.key` | RSA-4096 TLS private key | k8s — Traefik edge TLS (client-facing termination) | Dev | No | `scripts/gen-keys-and-certs.sh` → `projects/k8s/traefik/certs/` (gitignored) |
+| Traefik edge `tls.crt` | TLS edge certificate (signed by edge CA) | k8s — cert Traefik presents to clients at the ingress | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/k8s/traefik/certs/` (gitignored) |
+| Traefik edge `tls.csr` | TLS certificate signing request | Intermediate artefact — edge cert generation only | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/k8s/traefik/certs/` (gitignored) |
 | `tls.cert` | `Secret<String>` holding a `urn:secrets-rs:file:` URN; resolved to PEM certificate at startup | Rust server/CLI — TLS configuration | Both | Yes | Config property; see `projects/rust/server/src/config.rs` |
 | `tls.key` | `Secret<String>` holding a `urn:secrets-rs:file:` URN; resolved to PEM private key at startup | Rust server/CLI — TLS configuration | Both | No | Config property; see `projects/rust/server/src/config.rs` |
 
@@ -56,7 +61,8 @@ Public artefacts (certificates, public keys, client IDs, endpoint URLs) are mark
 | Name | Type | Usage | Scope | Public | Source |
 |------|------|-------|-------|--------|--------|
 | `gen-env.sh` | Env var generation script | Dev — generate `.env` with DB passwords and Hydra secrets | Dev | Yes | `scripts/gen-env.sh` |
-| `gen-keys-and-certs.sh` | Key/cert generation script (delegates to sub-scripts) | Dev/CI — generate TLS certs and JWT signing keys | Dev | Yes | `scripts/gen-keys-and-certs.sh` |
+| `gen-keys-and-certs.sh` | Key/cert generation script (delegates to sub-scripts) | Dev/CI — generate server TLS certs, Traefik edge certs, and JWT signing keys | Dev | Yes | `scripts/gen-keys-and-certs.sh` |
 | `regenerate_jwt_signing_key_pair.sh` | Key generation script (ECDSA P-256, PKCS8) | Dev — rotate test JWT keys (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/rust/server/tests/jwt/regenerate_jwt_signing_key_pair.sh` |
-| `regenerate_certs.sh` | Certificate generation script (RSA-4096, CA + server) | Dev — rotate test TLS certs (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/rust/server/tests/certs/regenerate_certs.sh` |
+| `regenerate_certs.sh` (server) | Certificate generation script (RSA-4096, CA + server) | Dev — rotate pod TLS certs (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/rust/server/tests/certs/regenerate_certs.sh` |
+| `regenerate_certs.sh` (Traefik edge) | Certificate generation script (RSA-4096, CA + edge cert) | Dev — rotate Traefik edge TLS certs for k8s (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/k8s/traefik/certs/regenerate_certs.sh` |
 | `hydra-create-client.sh` | Hydra OAuth2 client registration script | Dev — register a client in Hydra with specified scopes; prints env vars for CLI use | Dev | Yes | `scripts/hydra-create-client.sh` |

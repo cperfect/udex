@@ -48,9 +48,19 @@ const ID_K8S_PREFIX: &str = "sdk-k8s-integration-test";
 
 const CERTS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../server/tests/certs");
 const JWT_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../server/tests/jwt");
+// Traefik edge certs (k8s only). With TLS terminated at Traefik, clients now
+// validate THIS cert/CA, not the pod's (CERTS_DIR). See ST0024.
+const EDGE_CERTS_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../projects/k8s/traefik/certs"
+);
 
 fn server_cert_path(file: &str) -> String {
     format!("{CERTS_DIR}/{file}")
+}
+
+fn edge_cert_path(file: &str) -> String {
+    format!("{EDGE_CERTS_DIR}/{file}")
 }
 
 fn jwt_key_path(file: &str) -> String {
@@ -1370,7 +1380,7 @@ fn k8s_database_url(local_url: &str, db_name: &str) -> String {
 
 // Polls the k8s server healthz endpoint after a helm rollout.
 // The readiness probe (tcpSocket) passes as soon as the port is open; Traefik
-// IngressRouteTCP routing updates lag slightly behind. Polling gRPC healthz
+// IngressRoute routing updates lag slightly behind. Polling gRPC healthz
 // directly ensures the new pod is actually serving before create_index runs.
 async fn wait_for_k8s_server(server_url: &str, ca_pem: &[u8]) {
     let addr = server_url
@@ -1420,6 +1430,16 @@ async fn redeploy_k8s_server(k8s_db_url: &str, server_url: &str, ca_pem: &[u8]) 
         env!("CARGO_MANIFEST_DIR"),
         "/../server/tests/certs/server.key"
     );
+    // Edge cert/key Traefik presents to clients when it terminates TLS. Required
+    // by the chart (kubernetes.io/tls Secret); distinct from the pod cert above.
+    let edge_cert_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../projects/k8s/traefik/certs/tls.crt"
+    );
+    let edge_key_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../projects/k8s/traefik/certs/tls.key"
+    );
     let mut db_url_file = tempfile::NamedTempFile::new().expect("tempfile for DATABASE_URL");
     db_url_file
         .write_all(k8s_db_url.as_bytes())
@@ -1438,6 +1458,10 @@ async fn redeploy_k8s_server(k8s_db_url: &str, server_url: &str, ca_pem: &[u8]) 
             &format!("secrets.tlsCrt={cert_path}"),
             "--set-file",
             &format!("secrets.tlsKey={key_path}"),
+            "--set-file",
+            &format!("secrets.traefikTlsCrt={edge_cert_path}"),
+            "--set-file",
+            &format!("secrets.traefikTlsKey={edge_key_path}"),
         ])
         .status()
         .await
@@ -1504,9 +1528,11 @@ async fn init_k8s_fixture() -> Option<K8sFixture> {
     let client_id = format!("{ID_K8S_PREFIX}-client");
     let client_secret = "sdk-k8s-test-secret".to_string();
 
-    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
+    // Traefik terminates client TLS at the ingress, so the client trusts the
+    // EDGE CA (projects/k8s/traefik/certs), not the pod's CA. See ST0024.
+    let ca_pem = tokio::fs::read(edge_cert_path("ca.crt"))
         .await
-        .expect("read CA cert for k8s fixture");
+        .expect("read edge CA cert for k8s fixture");
 
     // Create a fresh isolated test database — mirrors init_postgres() used by
     // the in-process fixtures. The database is registered for automatic cleanup

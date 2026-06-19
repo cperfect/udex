@@ -42,14 +42,19 @@ if grep -q "https://0.0.0.0:" "${HOME}/.kube/config" 2>/dev/null; then
 fi
 
 # k3s deploys Traefik asynchronously after the cluster API is ready. The
-# IngressRouteTCP CRD must be registered before helm install can apply it.
-# Poll until it appears (typically 10–30 s on CI runners).
-echo "Waiting for Traefik IngressRouteTCP CRD..."
+# IngressRoute and ServersTransport CRDs must be registered before helm install
+# can apply them (the chart terminates TLS at Traefik and re-encrypts to the pod).
+# Poll until both appear (typically 10–30 s on CI runners).
+echo "Waiting for Traefik IngressRoute + ServersTransport CRDs..."
 for i in $(seq 1 40); do
-  kubectl get crd ingressroutetcps.traefik.io &>/dev/null && { echo "Traefik CRD ready."; break; }
+  if kubectl get crd ingressroutes.traefik.io serverstransports.traefik.io &>/dev/null; then
+    echo "Traefik CRDs ready."; break
+  fi
   echo "  attempt $i/40..."; sleep 3
 done
-kubectl get crd ingressroutetcps.traefik.io || { echo "ERROR: Traefik IngressRouteTCP CRD did not become ready."; exit 1; }
+kubectl get crd ingressroutes.traefik.io serverstransports.traefik.io || {
+  echo "ERROR: Traefik IngressRoute/ServersTransport CRDs did not become ready."; exit 1
+}
 
 echo "Cluster '${CLUSTER_NAME}' ready."
 echo "kubectl context is now: $(kubectl config current-context)"

@@ -1,0 +1,40 @@
+# IngressRoute — a Traefik-specific Custom Resource (CRD) that configures
+# HTTP(S) routing at L7. Unlike IngressRouteTCP (raw L4 TCP), this lets Traefik
+# TERMINATE TLS at the ingress: it decrypts the client connection using the
+# edge certificate referenced by tls.secretName, then opens a NEW connection
+# to the backend.
+#
+# Because the udex server is gRPC (HTTP/2) and TLS-only, the backend hop must
+# also be TLS and HTTP/2:
+#   scheme: https      — Traefik re-encrypts to the pod and negotiates HTTP/2
+#                        with the backend via ALPN (required for gRPC).
+#   serversTransport   — references the ServersTransport (serverstransport.yaml)
+#                        that controls verification of the pod certificate.
+#
+# match: PathPrefix(`/`) is a catch-all so every gRPC path on the websecure
+# entrypoint routes to this service. In a multi-tenant cluster you would scope
+# this with Host(`udex.example.com`) instead.
+#
+# k3d installs Traefik by default, so this CRD is available without any extra
+# configuration in local dev.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "udex.fullname" . }}
+  labels:
+    {{- include "udex.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - websecure  # Traefik's built-in TLS entrypoint (port 443)
+  routes:
+    - match: PathPrefix(`/`)
+      kind: Rule
+      services:
+        - name: {{ include "udex.fullname" . }}
+          port: 443
+          scheme: https  # re-encrypt to the pod (HTTP/2 over TLS, for gRPC)
+          serversTransport: {{ include "udex.fullname" . }}
+  tls:
+    # Edge certificate Traefik presents to clients. Stored in the
+    # kubernetes.io/tls Secret rendered by ingress-tls-secret.yaml.
+    secretName: {{ include "udex.fullname" . }}-tls
