@@ -1520,6 +1520,12 @@ async fn udex_pod_counts() -> (usize, usize) {
         .output()
         .await
         .expect("kubectl get pods: command failed to start");
+    assert!(
+        out.status.success(),
+        "kubectl get pods exited with {}: {}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
     let lines: Vec<&str> = stdout.lines().filter(|l| !l.trim().is_empty()).collect();
     let ready = lines
@@ -1550,6 +1556,12 @@ async fn discover_udex_pods() -> Vec<String> {
         .output()
         .await
         .expect("kubectl get pods: command failed to start");
+    assert!(
+        out.status.success(),
+        "kubectl get pods exited with {}: {}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    );
     String::from_utf8_lossy(&out.stdout)
         .split_whitespace()
         .map(str::to_string)
