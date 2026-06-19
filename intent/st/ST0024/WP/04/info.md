@@ -3,7 +3,7 @@ verblock: "18 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-04
 title: "Test repoint + end-to-end validation"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-04: Test repoint + end-to-end validation
@@ -19,10 +19,11 @@ Repoint the k8s integration test to trust the new edge CA, then validate the ful
 
 ## Acceptance Criteria
 
-- [ ] `bash scripts/validate-k8s-test.sh` → all `test_sdk_k8s_*` pass against the re-encrypting ingress
-- [ ] Rollout completes; IngressRoute + ServersTransport applied in-cluster
-- [ ] `bash scripts/dev-doctor.sh` reports edge cert material present
-- [ ] No server (non-test) Rust code changed
+- [x] `bash scripts/validate-k8s-test.sh` → all 6 `test_sdk_k8s_*` pass (38.12s) against the re-encrypting ingress
+- [x] Rollout completes; IngressRoute + ServersTransport applied in-cluster (`traefik.io` group)
+- [x] `bash scripts/dev-doctor.sh` reports edge cert material present (verified in WP01)
+- [x] No server (non-test) Rust code changed — only `sdk/tests/integration_tests.rs`
+- [x] `cargo fmt --check` + `cargo clippy --tests -D warnings` clean
 
 ## Dependencies
 

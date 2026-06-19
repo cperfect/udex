@@ -26,10 +26,10 @@
 
 ### WP04 — Test repoint + end-to-end validation
 
-- [ ] Repoint k8s fixture CA in `sdk/tests/integration_tests.rs` (`server_cert_path("ca.crt")` ~1507 and `wait_for_k8s_server` probe ~1381) to `projects/k8s/traefik/certs/ca.crt`
-- [ ] Full loop: `cluster-create → image-build → image-load → deploy`
-- [ ] `bash scripts/validate-k8s-test.sh` → `test_sdk_k8s_*` pass
-- [ ] `bash scripts/dev-doctor.sh` → edge cert material reported present
+- [x] Repoint k8s fixture CA in `sdk/tests/integration_tests.rs` to `projects/k8s/traefik/certs/ca.crt` (new `edge_cert_path` helper); also add `secrets.traefikTls{Crt,Key}` to `redeploy_k8s_server`'s `helm upgrade` (required by chart)
+- [x] Full loop: `cluster-create → image-load → deploy` (image pre-built)
+- [x] `bash scripts/validate-k8s-test.sh` → all 6 `test_sdk_k8s_*` pass
+- [x] `bash scripts/dev-doctor.sh` → edge cert material reported present
 
 ### WP05 — Docs + security scan
 

@@ -30,6 +30,17 @@ Verification: with helm v4.0.0 / kubectl v1.36 / k3d v5.8.3 available, `helm lin
 
 Verified live (helm v4.0.0 / kubectl v1.36 / k3d v5.8.3): `cluster-create.sh` reported "Traefik CRDs ready"; `image-load.sh` + `deploy.sh` installed cleanly and `kubectl rollout status` succeeded (1/1). `kubectl get ingressroutes.traefik.io,serverstransports.traefik.io -A` shows `default/udex-udex` for both (note: the `ingressroute` short name resolves to the legacy `traefik.containo.us` group, which is empty — query the full `traefik.io` name). `openssl s_client host.docker.internal:8443` returns the edge cert (issuer "Udex Traefik Edge CA"), confirming TLS is terminated at Traefik. `validate-lint-helm.sh` passes.
 
+### WP04 — Test repoint + end-to-end validation (as built)
+
+`projects/rust/sdk/tests/integration_tests.rs` (test-only; no server code):
+
+- Added `EDGE_CERTS_DIR` const + `edge_cert_path()` helper pointing at `projects/k8s/traefik/certs`.
+- `init_k8s_fixture`: load the CA from `edge_cert_path("ca.crt")` (was `server_cert_path`) — the client now trusts the edge CA because Traefik terminates the client TLS. `wait_for_k8s_server` and the SDK client both consume this `ca_pem`, so the single repoint covers readiness probe + client.
+- `redeploy_k8s_server`: added `--set-file secrets.traefikTlsCrt/Key` (edge cert/key) to the `helm upgrade` invocation. Without these the chart's `required` guards on the kubernetes.io/tls Secret would fail the upgrade. Pod cert (`secrets.tlsCrt/Key` = server.crt/key) unchanged.
+- Fixed a stale `IngressRouteTCP` comment in `wait_for_k8s_server`.
+
+Verified: `cluster-create.sh` → `image-load.sh` → `deploy.sh` roll out 1/1; `scripts/validate-k8s-test.sh` → 6/6 `test_sdk_k8s_*` pass (38.12s) — gRPC client → Traefik (TLS terminated, edge cert) → re-encrypted backend → pod. `cargo fmt --check` and `cargo clippy --tests -- -D warnings` both clean (exit 0).
+
 ## Code Examples
 
 [Key code snippets and examples]
