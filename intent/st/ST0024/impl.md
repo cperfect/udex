@@ -22,6 +22,14 @@ Verified: `gen-keys-and-certs.sh --force` runs all three generation steps; `open
 
 Verification: with helm v4.0.0 / kubectl v1.36 / k3d v5.8.3 available, `helm lint --strict` passes (0 failed) and `helm template --show-only` renders all three new resources correctly (IngressRoute with `scheme: https` + `serversTransport: udex-udex` + `secretName: udex-udex-tls`; ServersTransport `insecureSkipVerify: true`; kubernetes.io/tls Secret `udex-udex-tls`). No `IngressRouteTCP`/`passthrough` remains in the chart (only an explanatory comment reference). Live deploy/test exercised in WP03/WP04.
 
+### WP03 — Deploy + cluster scripts (as built)
+
+- `projects/k8s/scripts/deploy.sh`: added `EDGE_CERTS_DIR=projects/k8s/traefik/certs`; extended the pre-flight cert guard with `tls.crt`/`tls.key`; added `--set-file secrets.traefikTlsCrt/Key` to the `helm upgrade` call.
+- `projects/k8s/scripts/cluster-create.sh`: CRD readiness wait now polls `ingressroutes.traefik.io` + `serverstransports.traefik.io` (was `ingressroutetcps.traefik.io`).
+- `scripts/validate-lint-helm.sh`: added `--set secrets.traefikTlsCrt=placeholder --set secrets.traefikTlsKey=placeholder`.
+
+Verified live (helm v4.0.0 / kubectl v1.36 / k3d v5.8.3): `cluster-create.sh` reported "Traefik CRDs ready"; `image-load.sh` + `deploy.sh` installed cleanly and `kubectl rollout status` succeeded (1/1). `kubectl get ingressroutes.traefik.io,serverstransports.traefik.io -A` shows `default/udex-udex` for both (note: the `ingressroute` short name resolves to the legacy `traefik.containo.us` group, which is empty — query the full `traefik.io` name). `openssl s_client host.docker.internal:8443` returns the edge cert (issuer "Udex Traefik Edge CA"), confirming TLS is terminated at Traefik. `validate-lint-helm.sh` passes.
+
 ## Code Examples
 
 [Key code snippets and examples]

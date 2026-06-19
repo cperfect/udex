@@ -20,9 +20,9 @@
 
 ### WP03 — Deploy + cluster scripts
 
-- [ ] `scripts/deploy.sh`: `--set-file` edge cert/key + existence guard
-- [ ] `scripts/cluster-create.sh`: wait on `ingressroutes.traefik.io` / `serverstransports.traefik.io` CRDs (not `ingressroutetcps`)
-- [ ] `scripts/validate-lint-helm.sh`: add `traefikTlsCrt`/`traefikTlsKey` placeholders
+- [x] `scripts/deploy.sh`: `--set-file` edge cert/key + existence guard
+- [x] `scripts/cluster-create.sh`: wait on `ingressroutes.traefik.io` / `serverstransports.traefik.io` CRDs (not `ingressroutetcps`)
+- [x] `scripts/validate-lint-helm.sh`: add `traefikTlsCrt`/`traefikTlsKey` placeholders
 
 ### WP04 — Test repoint + end-to-end validation
 

@@ -20,4 +20,6 @@ helm lint "${CHART_DIR}" \
   --strict \
   --set secrets.databaseUrl=placeholder \
   --set secrets.tlsCrt=placeholder \
-  --set secrets.tlsKey=placeholder
+  --set secrets.tlsKey=placeholder \
+  --set secrets.traefikTlsCrt=placeholder \
+  --set secrets.traefikTlsKey=placeholder

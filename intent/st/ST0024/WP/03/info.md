@@ -3,7 +3,7 @@ verblock: "18 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-03
 title: "Deploy + cluster scripts"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: Deploy + cluster scripts
@@ -20,9 +20,10 @@ Update the deploy and cluster-bootstrap scripts for the new ingress: ship the ed
 
 ## Acceptance Criteria
 
-- [ ] `cluster-create.sh` polls and passes on the new CRD names
-- [ ] `deploy.sh` fails fast with an actionable error when edge cert files are absent
-- [ ] `bash scripts/validate-lint-helm.sh` passes with the new placeholders
+- [x] `cluster-create.sh` polls and passes on the new CRD names (saw "Traefik CRDs ready" for `ingressroutes` + `serverstransports`)
+- [x] `deploy.sh` fails fast with an actionable error when edge cert files are absent (guard extended with `traefik/certs/tls.{crt,key}`)
+- [x] `bash scripts/validate-lint-helm.sh` passes with the new placeholders
+- [x] Live deploy succeeds: rollout complete; IngressRoute + ServersTransport created in `traefik.io` group; Traefik serves the edge cert at `host.docker.internal:8443`
 
 ## Dependencies
 
