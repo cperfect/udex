@@ -4,9 +4,9 @@
 
 ### WP01 — Chart: default dev to 2 replicas
 
-- [ ] Add `replicaCount: 2` to `values.yaml` (commented: dev default for multi-instance coverage)
-- [ ] `templates/deployment.yaml`: `replicas: {{ .Values.replicaCount }}`; update header comment (no longer "one replica")
-- [ ] `helm template` / `validate-lint-helm.sh` renders a 2-replica Deployment
+- [x] Add `replicaCount: 2` to `values.yaml` (commented: dev default for multi-instance coverage)
+- [x] `templates/deployment.yaml`: `replicas: {{ .Values.replicaCount }}`; update header comment (no longer "one replica")
+- [x] `helm template` / `validate-lint-helm.sh` renders a 2-replica Deployment
 
 ### WP02 — Test harness: direct pod addressing
 
