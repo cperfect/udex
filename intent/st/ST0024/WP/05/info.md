@@ -3,7 +3,7 @@ verblock: "18 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-05
 title: "Docs + security scan"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-05: Docs + security scan
@@ -19,9 +19,11 @@ Bring docs in line with the new ingress and clear the Helm security scan for the
 
 ## Acceptance Criteria
 
-- [ ] README diagram + prose describe terminate + re-encrypt; no stale passthrough references
-- [ ] Chart-structure listing matches the new templates
-- [ ] Helm Trivy/KSV scan is green (clean or with annotated, justified suppressions)
+- [x] README diagram + prose describe terminate + re-encrypt; no stale passthrough references (repo-wide sweep clean)
+- [x] Chart-structure listing matches the new templates
+- [x] `docs/SECRETS.md` lists the Traefik edge cert material + new edge `regenerate_certs.sh`
+- [x] `.trivy.yaml` renders the chart with the new required secrets (all 7 templates scanned — no silent skip)
+- [x] Helm Trivy/KSV scan green at the CI gate: exit 0 at MEDIUM+, only pre-existing LOW findings, `insecureSkipVerify` not flagged
 
 ## Dependencies
 

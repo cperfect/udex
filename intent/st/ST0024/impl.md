@@ -41,6 +41,16 @@ Verified live (helm v4.0.0 / kubectl v1.36 / k3d v5.8.3): `cluster-create.sh` re
 
 Verified: `cluster-create.sh` → `image-load.sh` → `deploy.sh` roll out 1/1; `scripts/validate-k8s-test.sh` → 6/6 `test_sdk_k8s_*` pass (38.12s) — gRPC client → Traefik (TLS terminated, edge cert) → re-encrypted backend → pod. `cargo fmt --check` and `cargo clippy --tests -- -D warnings` both clean (exit 0).
 
+### WP05 — Docs + security scan (as built)
+
+- `projects/k8s/README.md`: mermaid diagram updated (IngressRoute L7 terminates TLS with edge cert + re-encrypts; new `kubernetes.io/tls` edge Secret node; call-flow edge label `re-encrypt · HTTP/2 over TLS`); call-flow + config-injection prose rewritten; `cluster-create.sh`/`deploy.sh` script-table rows updated; chart-structure listing now lists `ingress-tls-secret.yaml`, `ingressroute.yaml`, `serverstransport.yaml` (no more `ingressroutetcp.yaml`). Health-probe section left as-is — the pod still terminates TLS on 443, so the `tcpSocket`/"TLS-only" rationale stays accurate.
+- `docs/SECRETS.md`: added five Traefik edge cert rows (edge `ca.key`/`ca.crt`/`tls.key`/`tls.crt`/`tls.csr` under `projects/k8s/traefik/certs`, gitignored) to the TLS table; clarified the server rows as the pod cert (re-encrypted hop); added the edge `regenerate_certs.sh` to the generation-scripts table and noted `gen-keys-and-certs.sh` now also produces edge certs.
+- `.trivy.yaml`: added `secrets.traefikTlsCrt=stub` / `secrets.traefikTlsKey=stub` to `misconfiguration.helm.set`. Without these the new `required` guards fail the Helm render and Trivy silently skips the whole chart.
+
+Security scan (Trivy 0.71.0): `trivy config -c .trivy.yaml projects/k8s/helm/udex` renders all 7 templates (incl. the 3 new ones) and reports `Tests: 95 (SUCCESSES: 90, FAILURES: 5)` — all 5 FAILURES are LOW (the pre-existing KSV-0018/KSV-0110 etc.); MEDIUM/HIGH/CRITICAL = 0, so exit 0 at the CI `MEDIUM,HIGH,CRITICAL` gate. The new `ServersTransport.insecureSkipVerify: true` is not flagged by any check at any severity, so no new `.trivyignore` entry was added (avoids a speculative suppression with no matching ID); the rationale lives in the `serverstransport.yaml` header.
+
+Repo-wide sweep confirms no stale `passthrough`/`IngressRouteTCP` references remain (only the explanatory "Unlike IngressRouteTCP" comment in `ingressroute.yaml`).
+
 ## Code Examples
 
 [Key code snippets and examples]

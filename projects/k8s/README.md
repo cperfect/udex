@@ -28,7 +28,7 @@ graph LR
         lb["Load balancer\nhost:8443 → :443"]
 
         subgraph traefik["Traefik (built-in)"]
-            ir["IngressRouteTCP\nHostSNI(*) · TLS passthrough"]
+            ir["IngressRoute · L7\nterminates TLS (edge cert)\nre-encrypts via ServersTransport"]
         end
 
         subgraph k8s["Kubernetes resources"]
@@ -36,13 +36,14 @@ graph LR
             pod["Pod: udex\n:443 gRPC + TLS"]
             cm["ConfigMap\nconfig.yaml"]
             secret["Secret\nDATABASE_URL · tls.crt · tls.key"]
+            edge["Secret (kubernetes.io/tls)\nedge tls.crt · tls.key"]
         end
     end
 
     %% ── Call flow ─────────────────────────────────────────────────────────
     client  -->|"HTTPS/gRPC · host:8443"| lb
     lb      --> ir
-    ir      -->|"TCP passthrough"| svc
+    ir      -->|"re-encrypt · HTTP/2 over TLS"| svc
     svc     --> pod
     pod     -->|"SQL · host.k3d.internal:5432"| pg
     pod     -.->|"JWKS fetch\nhost.k3d.internal:4444"| hydra
@@ -55,13 +56,14 @@ graph LR
     %% ── Config injection (dashed = mounted/injected at startup) ───────────
     cm      -.->|"mounted: /etc/udex/config.yaml"| pod
     secret  -.->|"env: DATABASE_URL\nvolume: tls.crt/key"| pod
+    edge    -.->|"edge cert for TLS termination"| ir
 ```
 
-**Call flow** (solid lines): a gRPC client connects to the k3d load balancer on `host:8443`, which forwards to Traefik. The `IngressRouteTCP` rule passes the raw TLS bytes through to the Service and then the pod — the server terminates TLS itself. The pod connects out to PostgreSQL and (on the first request per token) fetches the Hydra JWKS to validate JWTs.
+**Call flow** (solid lines): a gRPC client connects to the k3d load balancer on `host:8443`, which forwards to Traefik. The `IngressRoute` (L7) **terminates** the client's TLS using the edge certificate (from the `kubernetes.io/tls` Secret), then **re-encrypts** to the Service and pod over HTTP/2 (`scheme: https`) — the server still terminates this second TLS hop with its own cert. The `ServersTransport` controls backend-cert verification for that hop (`insecureSkipVerify` in local dev). The pod connects out to PostgreSQL and (on the first request per token) fetches the Hydra JWKS to validate JWTs.
 
 **Cluster management** (solid lines, bottom): `image-build.sh` builds the Docker image locally; `image-load.sh` imports it into the k3d cluster so pods can use `imagePullPolicy: Never`. `deploy.sh` runs `helm upgrade --install`, which creates or updates all Kubernetes resources.
 
-**Config injection** (dashed lines): the ConfigMap is mounted as a file at `/etc/udex/config.yaml`; the Secret is projected as both an environment variable (`DATABASE_URL`) and a volume (`tls.crt`, `tls.key`).
+**Config injection** (dashed lines): the ConfigMap is mounted as a file at `/etc/udex/config.yaml`; the Opaque Secret is projected as both an environment variable (`DATABASE_URL`) and a volume (the pod's own `tls.crt`/`tls.key`); the `kubernetes.io/tls` Secret holds the edge cert Traefik presents to clients.
 
 ## Quickstart
 
@@ -84,9 +86,9 @@ All scripts are idempotent where possible and require no arguments. Run them fro
 | Script | What it does |
 |---|---|
 | `image-build.sh` | Builds the `udex:latest` Docker image from `projects/rust/cli/Dockerfile`. Pass `--dev` for a debug build. |
-| `cluster-create.sh` | Creates a k3d cluster named `udex` with port `8443→443` forwarded. Also patches kubeconfig for devcontainer use. Skips if cluster already exists. |
+| `cluster-create.sh` | Creates a k3d cluster named `udex` with port `8443→443` forwarded, then waits for the Traefik `IngressRoute` + `ServersTransport` CRDs. Also patches kubeconfig for devcontainer use. Skips if cluster already exists. |
 | `image-load.sh` | Imports `udex:latest` into the k3d cluster so pods can pull it without a registry. |
-| `deploy.sh` | Runs `helm upgrade --install`, passing `DATABASE_URL`, `tls.crt`, and `tls.key` from `.env` and the generated certs. Waits for rollout to complete. |
+| `deploy.sh` | Runs `helm upgrade --install`, passing `DATABASE_URL`, the pod's `tls.crt`/`tls.key`, and Traefik's edge `tls.crt`/`tls.key` from `.env` and the generated certs. Waits for rollout to complete. |
 | `undeploy.sh` | Runs `helm uninstall udex`. |
 | `cluster-delete.sh` | Deletes the k3d cluster entirely. |
 
@@ -118,12 +120,14 @@ helm/udex/
 ├── Chart.yaml          # name, version, appVersion
 ├── values.yaml         # all configurable fields with defaults
 └── templates/
-    ├── _helpers.tpl          # named template helpers (names, labels)
-    ├── configmap.yaml        # server config.yaml rendered from values
-    ├── secret.yaml           # DATABASE_URL + TLS cert/key
-    ├── deployment.yaml       # single-replica pod; mounts ConfigMap and Secret
-    ├── service.yaml          # LoadBalancer on port 443
-    └── ingressroutetcp.yaml  # Traefik IngressRouteTCP for TLS passthrough
+    ├── _helpers.tpl             # named template helpers (names, labels)
+    ├── configmap.yaml           # server config.yaml rendered from values
+    ├── secret.yaml              # DATABASE_URL + pod TLS cert/key
+    ├── ingress-tls-secret.yaml  # kubernetes.io/tls Secret — Traefik edge cert
+    ├── deployment.yaml          # single-replica pod; mounts ConfigMap and Secret
+    ├── service.yaml             # LoadBalancer on port 443
+    ├── ingressroute.yaml        # Traefik IngressRoute (L7) — terminates TLS
+    └── serverstransport.yaml    # Traefik ServersTransport — re-encrypt to pod
 ```
 
 ## Health probes

@@ -33,8 +33,10 @@
 
 ### WP05 — Docs + security scan
 
-- [ ] Update `projects/k8s/README.md` (mermaid diagram, prose passthrough → terminate+re-encrypt, chart-structure listing, health-probe note)
-- [ ] Run the Trivy/KSV Helm misconfig scan; add a justified annotated suppression if `insecureSkipVerify` is flagged
+- [x] Update `projects/k8s/README.md` (mermaid diagram, prose passthrough → terminate+re-encrypt, chart-structure listing; health-probe note unchanged — pod still TLS)
+- [x] Update `docs/SECRETS.md` (Traefik edge cert material + new edge `regenerate_certs.sh`)
+- [x] Update `.trivy.yaml` helm.set stubs for the new required `traefikTls{Crt,Key}` (else the chart silently skips misconfig scanning)
+- [x] Run the Trivy/KSV Helm misconfig scan; `insecureSkipVerify` not flagged by Trivy 0.71.0 → no new suppression needed
 
 ## Task Notes
 
