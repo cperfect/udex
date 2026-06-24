@@ -1,0 +1,21 @@
+# Grafana datasources, provisioned on startup. Names are referenced by
+# dashboards and by the WP06 integration tests.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100

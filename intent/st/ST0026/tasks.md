@@ -2,7 +2,7 @@
 
 ## Work Packages
 
-- [ ] **WP01 - Observability runtime stack.** `projects/observability/`: compose
+- [x] **WP01 - Observability runtime stack.** `projects/observability/`: compose
   for Collector, Tempo, Prometheus, Loki, Grafana, Vector; per-component config
   trees; cert/secret generation (gitignored, folded into `gen-keys-and-certs.sh`);
   up/down/rebuild scripts (compose profile); layer into main compose + devcontainer

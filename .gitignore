@@ -12,6 +12,10 @@ projects/k8s/traefik/certs/*.key
 projects/k8s/traefik/certs/*.crt
 projects/k8s/traefik/certs/*.csr
 projects/k8s/traefik/certs/*.srl
+projects/observability/certs/*.key
+projects/observability/certs/*.crt
+projects/observability/certs/*.csr
+projects/observability/certs/*.srl
 
 # ignore mcp state
 .mcp/

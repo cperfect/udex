@@ -1,0 +1,36 @@
+# Vector - ships Docker container stdout (udex app, postgres, hydra) to Loki.
+# This is the durable "floor" of the hybrid log design: the app always writes
+# JSON to stdout regardless of whether the OTLP log path is enabled.
+
+data_dir: /vector-data-dir
+
+sources:
+  docker:
+    type: docker_logs
+    # Avoid a feedback loop (Vector shipping its own logs).
+    exclude_containers:
+      - vector
+
+transforms:
+  # The udex server emits JSON logs; lift those fields to the top level so they
+  # are queryable in Loki. Non-JSON lines (postgres, hydra) pass through as-is.
+  parse:
+    type: remap
+    inputs: [docker]
+    source: |
+      structured, err = parse_json(.message)
+      if err == null {
+        . = merge(., object!(structured))
+      }
+
+sinks:
+  loki:
+    type: loki
+    inputs: [parse]
+    endpoint: http://loki:3100
+    encoding:
+      codec: json
+    out_of_order_action: accept
+    labels:
+      container: "{{ container_name }}"
+      source: vector

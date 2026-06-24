@@ -1,0 +1,13 @@
+# Grafana dashboard provider - loads JSON dashboards from disk.
+
+apiVersion: 1
+
+providers:
+  - name: udex
+    orgId: 1
+    folder: Udex
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/dashboards
