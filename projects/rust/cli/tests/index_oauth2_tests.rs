@@ -114,6 +114,7 @@ async fn init_fixture() -> Fixture {
             cert: bind_file_secret(SERVER_CERT),
             key: bind_file_secret(SERVER_KEY),
         },
+        observability: None,
         init_indexes: vec![
             // Empty index — no entries seeded.
             CreateIndexRequest {

@@ -2,6 +2,7 @@
 members = [
     "api",
     "datastore",
+    "telemetry",
     "server",
     "cli",
     "sdk",

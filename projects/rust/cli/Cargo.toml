@@ -12,6 +12,7 @@ udex-sdk = { path = "../sdk" }
 udex-api = { path = "../api" }
 udex-datastore = { path = "../datastore" }
 udex-server = { path = "../server" }
+udex-telemetry = { path = "../telemetry" }
 tokio = { workspace = true }
 tonic = { workspace = true }
 clap = { workspace = true }

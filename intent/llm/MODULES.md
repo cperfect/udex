@@ -33,7 +33,20 @@ The workspace has five crates. New code goes in the crate that owns its layer �
 | Entry gRPC service handler | `udex_server::entry` | `EntryService` — thin handler; delegates to datastore |
 | Index gRPC service handler | `udex_server::index` | `IndexService` — thin handler; delegates to datastore |
 | gRPC health check | `tonic-health` (external) | Standard [`grpc.health.v1.Health`](https://github.com/grpc/grpc-proto/blob/master/grpc/health/v1/health.proto) service; no Udex-specific module — registered in `serve()` |
-| Tracing / logging initialisation | `udex_server::logging` | `init_tracing()` (production), `init_test_tracing()` (tests) |
+| Tracing / logging initialisation | `udex_server::logging` | `init_test_tracing()` (tests only). Production telemetry (stdout JSON + OTLP) is owned by `udex-telemetry`; `serve()` calls `udex_telemetry::init` |
+
+### `udex-telemetry` — OpenTelemetry setup for binaries (open-standard boundary)
+
+| Concern | Module | Notes |
+| ------- | ------ | ----- |
+| Telemetry init for binaries | `udex_telemetry` (lib.rs) | `init(config, identity) -> TelemetryGuard` — builds the combined `tracing-subscriber` (always-on JSON stdout + optional OTLP traces/metrics/logs), sets global providers, graceful flush on guard drop. Used by `udex-server` and `udex-cli` |
+| Telemetry configuration contract | `udex_telemetry::TelemetryConfig` | Open-standard, serde-deserialisable config: `enabled`, `otlp_endpoint`, `otlp_ca`, `sample_ratio`, per-signal flags, `resource_attributes`. Embedded by `udex_server::config` as the `observability` section |
+| Telemetry error type | `udex_telemetry::TelemetryError` | `thiserror`; never exposes raw opentelemetry/exporter errors |
+
+This crate is the ONLY place that depends on the `opentelemetry*` crates — the
+rest of the workspace stays coupled to open standards (the `tracing` API), not to
+any specific backend. The SDK (`udex-sdk`) deliberately does NOT use this crate:
+as a library it must not own a global provider (see WP04).
 
 ### `udex-datastore` — Data access interface and PostgreSQL implementation
 

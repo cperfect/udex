@@ -131,6 +131,7 @@ async fn init_jwt_fixture() -> JwtFixture {
             cert: bind_file_secret(&server_cert_path("server.crt")),
             key: bind_file_secret(&server_cert_path("server.key")),
         },
+        observability: None,
         init_indexes: vec![CreateIndexRequest {
             name: index_name.clone(),
             display_name: index_name.clone(),
@@ -233,6 +234,7 @@ async fn init_hydra_fixture() -> HydraFixture {
             cert: bind_file_secret(&server_cert_path("server.crt")),
             key: bind_file_secret(&server_cert_path("server.key")),
         },
+        observability: None,
         init_indexes: vec![CreateIndexRequest {
             name: index_name.clone(),
             display_name: index_name.clone(),

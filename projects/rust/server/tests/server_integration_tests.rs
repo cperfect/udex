@@ -110,6 +110,7 @@ async fn init_server() -> MaybeOnceType {
             cert: bind_file_secret("tests/certs/server.crt"),
             key: bind_file_secret("tests/certs/server.key"),
         },
+        observability: None,
         init_indexes: vec![CreateIndexRequest {
             name: index_name.clone(),
             display_name: index_name.clone(),
@@ -220,6 +221,7 @@ async fn init_server_hydra() -> HydraFixtureType {
             cert: bind_file_secret("tests/certs/server.crt"),
             key: bind_file_secret("tests/certs/server.key"),
         },
+        observability: None,
         init_indexes: vec![CreateIndexRequest {
             name: index_name.clone(),
             display_name: index_name.clone(),

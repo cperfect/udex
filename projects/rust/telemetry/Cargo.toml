@@ -1,0 +1,31 @@
+[package]
+name = "udex-telemetry"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "OpenTelemetry setup for Udex binaries (open-standard observability boundary)"
+
+[dependencies]
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-opentelemetry = "0.33"
+thiserror = { workspace = true }
+serde = { workspace = true }
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.32", default-features = false, features = [
+  "grpc-tonic",
+  "trace",
+  "metrics",
+  "logs",
+  "tls",
+] }
+opentelemetry-appender-tracing = "0.32"
+# Direct dep on the tonic version opentelemetry-otlp uses (0.14), solely to build
+# the OTLP gRPC client TLS config (custom CA). Distinct from the app's tonic 0.13.
+tonic = { version = "0.14", default-features = false, features = ["transport", "tls-ring", "tls-native-roots"] }
+
+[dev-dependencies]
+tokio = { workspace = true }

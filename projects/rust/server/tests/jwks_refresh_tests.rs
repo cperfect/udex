@@ -221,6 +221,7 @@ async fn start_jwks_server(
             cert: bind_file_secret("tests/certs/server.crt"),
             key: bind_file_secret("tests/certs/server.key"),
         },
+        observability: None,
         init_indexes: vec![CreateIndexRequest {
             name: index_name.to_string(),
             display_name: index_name.to_string(),

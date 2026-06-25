@@ -3,6 +3,7 @@ use secrets_rs::{bind_all, sources::file::FileSource, Secret, SourceRegistry};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use udex_server::config::{AuthzConfig, TlsConfig};
+use udex_telemetry::TelemetryConfig;
 
 /// Top-level Udex configuration, covering the server and datastore.
 #[derive(Debug, Serialize, Deserialize)]
@@ -27,6 +28,10 @@ pub struct ServerConfig {
     pub max_message_size_bytes: usize,
     pub tls: TlsConfig,
     pub authz: AuthzConfig,
+    /// OpenTelemetry observability (traces/metrics/logs). Absent/disabled by
+    /// default; configure `enabled`, `otlp_endpoint`, `sample_ratio`, etc.
+    #[serde(default)]
+    pub observability: Option<TelemetryConfig>,
 }
 
 /// PostgreSQL datastore configuration.
@@ -87,6 +92,7 @@ impl Default for UdexConfig {
                     jwks_backoff_factor_secs: None,
                     jwks_max_age_secs: None,
                 },
+                observability: None,
             },
             datastore: DatastoreConfig {
                 connection_url: Secret::new("urn:secrets-rs:env:DATABASE_URL")
@@ -334,6 +340,7 @@ impl UdexConfig {
             tls: server.tls,
             authz: server.authz,
             init_indexes: vec![],
+            observability: server.observability,
         };
 
         // URN copy pattern: reconstruct a fresh unbound Secret from the URN
@@ -544,5 +551,54 @@ datastore:
             result.unwrap().datastore.connection_url.urn().to_string(),
             "urn:secrets-rs:env:DATABASE_URL"
         );
+    }
+
+    #[test]
+    fn test_observability_section_parses() {
+        let yaml = r#"
+server:
+  bind_address: "0.0.0.0:50051"
+  request_timeout_secs: 30
+  max_connections: 1000
+  max_message_size_bytes: 4194304
+  tls:
+    cert: "urn:secrets-rs:file:certs/server.crt"
+    key: "urn:secrets-rs:file:certs/server.key"
+  authz:
+    jwt_public_key: "urn:secrets-rs:file:certs/jwt_public_key.pem"
+    jwt_issuer: "https://auth.example.com"
+    jwt_audience: "udex"
+  observability:
+    enabled: true
+    otlp_endpoint: "https://otel-collector:4317"
+    sample_ratio: 0.5
+datastore:
+  connection_url: "urn:secrets-rs:env:DATABASE_URL"
+  max_connections: 10
+  min_connections: 1
+  connection_timeout_secs: 10
+  query_timeout_secs: 30
+"#;
+        let cfg: UdexConfig =
+            serde_saphyr::from_str(yaml).expect("config with observability must parse");
+        let obs = cfg
+            .server
+            .observability
+            .expect("observability section present");
+        assert!(obs.enabled);
+        assert_eq!(
+            obs.otlp_endpoint.as_deref(),
+            Some("https://otel-collector:4317")
+        );
+        assert_eq!(obs.sample_ratio, 0.5);
+        // Per-signal flags default to true when omitted.
+        assert!(obs.traces && obs.metrics && obs.logs);
+    }
+
+    #[test]
+    fn test_observability_absent_is_none() {
+        // A config without an observability section leaves it disabled (None).
+        let cfg = UdexConfig::default();
+        assert!(cfg.server.observability.is_none());
     }
 }

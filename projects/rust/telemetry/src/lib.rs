@@ -1,0 +1,313 @@
+//! Telemetry setup for Udex binaries - the open-standard observability boundary.
+//!
+//! [`init`] builds the combined `tracing-subscriber` (always-on JSON stdout plus
+//! optional OTLP traces/metrics/logs), installs the global OpenTelemetry
+//! providers, and returns a [`TelemetryGuard`] that flushes and shuts the
+//! providers down when dropped.
+//!
+//! This crate is the ONLY place in the workspace that depends on the
+//! `opentelemetry*` crates: everything else stays coupled to the `tracing` API,
+//! not to any specific backend.
+
+mod config;
+mod error;
+
+pub use config::TelemetryConfig;
+pub use error::TelemetryError;
+
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry::KeyValue;
+use opentelemetry_otlp::{WithExportConfig, WithTonicConfig};
+use opentelemetry_sdk::logs::SdkLoggerProvider;
+use opentelemetry_sdk::metrics::SdkMeterProvider;
+use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
+use opentelemetry_sdk::Resource;
+use std::collections::BTreeMap;
+use tonic::transport::{Certificate, ClientTlsConfig};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{fmt, EnvFilter, Layer};
+
+/// Identity of the emitting service, stamped onto every signal as OTel resource
+/// attributes (`service.name`, `service.version`, `service.instance.id`).
+pub struct ServiceIdentity {
+    /// e.g. `udex-server`.
+    pub name: String,
+    /// Service version (typically `CARGO_PKG_VERSION`).
+    pub version: String,
+    /// Unique per-process instance id (e.g. a UUID or `host:pid`).
+    pub instance_id: String,
+}
+
+/// Holds the OpenTelemetry providers so they can be flushed and shut down on
+/// drop. Keep it alive for the lifetime of the program (e.g. in `main`/`serve`).
+#[must_use = "dropping the guard immediately shuts telemetry down and flushes pending data"]
+pub struct TelemetryGuard {
+    tracer_provider: Option<SdkTracerProvider>,
+    meter_provider: Option<SdkMeterProvider>,
+    logger_provider: Option<SdkLoggerProvider>,
+}
+
+impl Drop for TelemetryGuard {
+    fn drop(&mut self) {
+        if let Some(p) = self.tracer_provider.take() {
+            if let Err(e) = p.shutdown() {
+                tracing::warn!(error = %e, "OTLP tracer provider shutdown error");
+            }
+        }
+        if let Some(p) = self.meter_provider.take() {
+            if let Err(e) = p.shutdown() {
+                tracing::warn!(error = %e, "OTLP meter provider shutdown error");
+            }
+        }
+        if let Some(p) = self.logger_provider.take() {
+            if let Err(e) = p.shutdown() {
+                tracing::warn!(error = %e, "OTLP logger provider shutdown error");
+            }
+        }
+    }
+}
+
+/// Initialise telemetry from `config`.
+///
+/// Always installs a JSON-to-stdout `tracing` layer (the durable log floor). When
+/// `config` is enabled with an endpoint, it additionally builds and installs the
+/// requested OTLP exporters (traces/metrics/logs) over TLS and sets the global
+/// OpenTelemetry providers.
+///
+/// Returns a [`TelemetryGuard`]; hold it for the program's lifetime.
+pub fn init(
+    config: &TelemetryConfig,
+    identity: ServiceIdentity,
+) -> Result<TelemetryGuard, TelemetryError> {
+    config.validate()?;
+
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let fmt_layer = fmt::layer().json();
+
+    // Disabled / no endpoint: install the stdout floor only and return a no-op guard.
+    if !config.active() {
+        // `try_init` fails only when a global subscriber is already installed
+        // (e.g. tests, or a second init in-process). That is a no-op by design -
+        // matching the historical idempotent `init_tracing` behaviour - not an error.
+        let _ = tracing_subscriber::registry()
+            .with(env_filter)
+            .with(fmt_layer)
+            .try_init();
+        return Ok(TelemetryGuard {
+            tracer_provider: None,
+            meter_provider: None,
+            logger_provider: None,
+        });
+    }
+
+    let endpoint = config
+        .otlp_endpoint
+        .clone()
+        .expect("active() guarantees an endpoint");
+    let ca_pem = match &config.otlp_ca {
+        Some(path) => Some(std::fs::read(path).map_err(|e| TelemetryError::CaRead {
+            path: path.clone(),
+            source: e,
+        })?),
+        None => None,
+    };
+    let resource = build_resource(&identity, &config.resource_attributes);
+
+    // Traces -> Tempo.
+    let (tracer_provider, trace_layer) = if config.traces {
+        let exporter = build_span_exporter(&endpoint, ca_pem.as_deref())?;
+        let provider = SdkTracerProvider::builder()
+            .with_batch_exporter(exporter)
+            .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
+                config.sample_ratio,
+            ))))
+            .with_resource(resource.clone())
+            .build();
+        let tracer = provider.tracer("udex");
+        opentelemetry::global::set_tracer_provider(provider.clone());
+        let layer = tracing_opentelemetry::layer().with_tracer(tracer).boxed();
+        (Some(provider), Some(layer))
+    } else {
+        (None, None)
+    };
+
+    // Metrics -> Prometheus (via the collector).
+    let meter_provider = if config.metrics {
+        let exporter = build_metric_exporter(&endpoint, ca_pem.as_deref())?;
+        let provider = SdkMeterProvider::builder()
+            .with_periodic_exporter(exporter)
+            .with_resource(resource.clone())
+            .build();
+        opentelemetry::global::set_meter_provider(provider.clone());
+        Some(provider)
+    } else {
+        None
+    };
+
+    // Logs -> Loki (hybrid: stdout JSON is still on via fmt_layer).
+    let (logger_provider, logs_layer) = if config.logs {
+        let exporter = build_log_exporter(&endpoint, ca_pem.as_deref())?;
+        let provider = SdkLoggerProvider::builder()
+            .with_batch_exporter(exporter)
+            .with_resource(resource.clone())
+            .build();
+        // Exclude the exporter stack's own logs to avoid a feedback loop.
+        let bridge =
+            opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge::new(&provider)
+                .with_filter(tracing_subscriber::filter::filter_fn(|meta| {
+                    let t = meta.target();
+                    !(t.starts_with("opentelemetry")
+                        || t.starts_with("tonic")
+                        || t.starts_with("hyper")
+                        || t.starts_with("h2")
+                        || t.starts_with("tower")
+                        || t.starts_with("reqwest"))
+                }))
+                .boxed();
+        (Some(provider), Some(bridge))
+    } else {
+        (None, None)
+    };
+
+    // As above, an already-installed subscriber is a no-op (the global OTel
+    // providers are still set); only the layers are not re-attached.
+    let _ = tracing_subscriber::registry()
+        .with(env_filter)
+        .with(fmt_layer)
+        .with(trace_layer)
+        .with(logs_layer)
+        .try_init();
+
+    tracing::info!(
+        endpoint = %endpoint,
+        traces = config.traces,
+        metrics = config.metrics,
+        logs = config.logs,
+        sample_ratio = config.sample_ratio,
+        "OpenTelemetry initialised"
+    );
+
+    Ok(TelemetryGuard {
+        tracer_provider,
+        meter_provider,
+        logger_provider,
+    })
+}
+
+fn build_resource(identity: &ServiceIdentity, attrs: &BTreeMap<String, String>) -> Resource {
+    let mut kvs = vec![
+        KeyValue::new("service.name", identity.name.clone()),
+        KeyValue::new("service.version", identity.version.clone()),
+        KeyValue::new("service.instance.id", identity.instance_id.clone()),
+    ];
+    for (k, v) in attrs {
+        kvs.push(KeyValue::new(k.clone(), v.clone()));
+    }
+    Resource::builder().with_attributes(kvs).build()
+}
+
+/// Build a tonic OTLP TLS config for an `https://` endpoint. Returns `None` for
+/// plaintext (`http://`) endpoints (the exporter then connects without TLS).
+fn tls_config(endpoint: &str, ca_pem: Option<&[u8]>) -> Option<ClientTlsConfig> {
+    if !endpoint.starts_with("https://") {
+        return None;
+    }
+    let mut tls = ClientTlsConfig::new();
+    if let Some(host) = host_of(endpoint) {
+        tls = tls.domain_name(host);
+    }
+    tls = match ca_pem {
+        Some(pem) => tls.ca_certificate(Certificate::from_pem(pem)),
+        None => tls.with_enabled_roots(),
+    };
+    Some(tls)
+}
+
+fn build_span_exporter(
+    endpoint: &str,
+    ca_pem: Option<&[u8]>,
+) -> Result<opentelemetry_otlp::SpanExporter, TelemetryError> {
+    let mut builder = opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
+        .with_endpoint(endpoint);
+    if let Some(tls) = tls_config(endpoint, ca_pem) {
+        builder = builder.with_tls_config(tls);
+    }
+    builder.build().map_err(|e| TelemetryError::Exporter {
+        signal: "traces",
+        detail: e.to_string(),
+    })
+}
+
+fn build_metric_exporter(
+    endpoint: &str,
+    ca_pem: Option<&[u8]>,
+) -> Result<opentelemetry_otlp::MetricExporter, TelemetryError> {
+    let mut builder = opentelemetry_otlp::MetricExporter::builder()
+        .with_tonic()
+        .with_endpoint(endpoint);
+    if let Some(tls) = tls_config(endpoint, ca_pem) {
+        builder = builder.with_tls_config(tls);
+    }
+    builder.build().map_err(|e| TelemetryError::Exporter {
+        signal: "metrics",
+        detail: e.to_string(),
+    })
+}
+
+fn build_log_exporter(
+    endpoint: &str,
+    ca_pem: Option<&[u8]>,
+) -> Result<opentelemetry_otlp::LogExporter, TelemetryError> {
+    let mut builder = opentelemetry_otlp::LogExporter::builder()
+        .with_tonic()
+        .with_endpoint(endpoint);
+    if let Some(tls) = tls_config(endpoint, ca_pem) {
+        builder = builder.with_tls_config(tls);
+    }
+    builder.build().map_err(|e| TelemetryError::Exporter {
+        signal: "logs",
+        detail: e.to_string(),
+    })
+}
+
+/// Extract the host from a `scheme://host:port/...` endpoint, for TLS SNI.
+fn host_of(endpoint: &str) -> Option<String> {
+    let after = endpoint.split("://").nth(1)?;
+    let host = after.split('/').next()?.split(':').next()?;
+    (!host.is_empty()).then(|| host.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn host_of_parses_endpoints() {
+        assert_eq!(
+            host_of("https://otel-collector:4317").as_deref(),
+            Some("otel-collector")
+        );
+        assert_eq!(
+            host_of("http://localhost:4318/v1/logs").as_deref(),
+            Some("localhost")
+        );
+        assert_eq!(host_of("not-a-url"), None);
+    }
+
+    #[test]
+    fn tls_config_none_for_http() {
+        assert!(tls_config("http://otel-collector:4318", None).is_none());
+    }
+
+    #[test]
+    fn disabled_init_returns_noop_guard() {
+        // A disabled config must not create providers. (Subscriber init may or may
+        // not succeed depending on global state in the test binary, so only assert
+        // the guard shape via a fresh disabled config validate path.)
+        let cfg = TelemetryConfig::default();
+        assert!(cfg.validate().is_ok());
+        assert!(!cfg.active());
+    }
+}

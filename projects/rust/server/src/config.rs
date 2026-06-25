@@ -2,6 +2,7 @@ use secrets_rs::Secret;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::time::Duration;
+use udex_telemetry::TelemetryConfig;
 
 /// Server-related configuration for gRPC.
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,6 +21,11 @@ pub struct ServerConfig {
     pub authz: AuthzConfig,
     /// statically defined indexes
     pub init_indexes: Vec<udex_api::index::CreateIndexRequest>,
+    /// OpenTelemetry observability configuration. Absent/disabled by default;
+    /// when enabled the server exports OTLP traces/metrics/logs (see
+    /// `udex-telemetry`). JSON stdout logging is always on regardless.
+    #[serde(default)]
+    pub observability: Option<TelemetryConfig>,
 }
 
 /// TLS configuration for the gRPC server.
@@ -99,6 +105,11 @@ impl ServerConfig {
     pub fn validate(&self) -> Result<(), crate::Error> {
         self.tls.validate()?;
         self.authz.validate()?;
+        if let Some(observability) = &self.observability {
+            observability
+                .validate()
+                .map_err(|e| crate::Error::ConfigValidation(e.to_string()))?;
+        }
         Ok(())
     }
 }
@@ -348,6 +359,7 @@ mod tests {
             },
             authz: valid_authz(),
             init_indexes: vec![],
+            observability: None,
         };
         assert!(cfg.validate().is_err());
     }

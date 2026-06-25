@@ -124,6 +124,7 @@ async fn init_server() -> String {
             cert: bind_file_secret(SERVER_CERT),
             key: bind_file_secret(SERVER_KEY),
         },
+        observability: None,
         init_indexes: vec![CreateIndexRequest {
             name: INDEX_NAME.to_string(),
             display_name: "CLI Test Index".to_string(),

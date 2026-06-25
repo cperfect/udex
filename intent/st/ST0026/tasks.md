@@ -7,7 +7,7 @@
   trees; cert/secret generation (gitignored, folded into `gen-keys-and-certs.sh`);
   up/down/rebuild scripts (compose profile); layer into main compose + devcontainer
   (symlinks); `dev-doctor.sh` updates. Verify stack health via each component API.
-- [ ] **WP02 - Telemetry foundation + server enablement.** `udex-telemetry` crate;
+- [x] **WP02 - Telemetry foundation + server enablement.** `udex-telemetry` crate;
   `observability` config section (schema + validation + defaults); OTLP
   traces/metrics/hybrid-logs wired into server startup with graceful on/off +
   sampling. Verify traces in Tempo, metrics in Prometheus, OTLP logs in Loki.

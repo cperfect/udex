@@ -1,6 +1,4 @@
-use crate::{
-    authz::AuthzInterceptor, config::ServerConfig, logging, EntryService, Error, IndexService,
-};
+use crate::{authz::AuthzInterceptor, config::ServerConfig, EntryService, Error, IndexService};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tonic::transport::server::TcpIncoming;
@@ -89,7 +87,20 @@ pub async fn serve_with_listener<D>(
 where
     D: Datastore + Send + Sync + 'static,
 {
-    logging::init_tracing();
+    // Initialise telemetry: always installs JSON-to-stdout logging (the durable
+    // floor) and, when `observability` is enabled, the OTLP traces/metrics/logs
+    // exporters. The guard is held for the server's lifetime so pending data is
+    // flushed on shutdown.
+    let telemetry_config = config.observability.clone().unwrap_or_default();
+    let _telemetry_guard = udex_telemetry::init(
+        &telemetry_config,
+        udex_telemetry::ServiceIdentity {
+            name: "udex-server".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            instance_id: uuid::Uuid::new_v4().to_string(),
+        },
+    )
+    .map_err(|e| Error::ConfigValidation(e.to_string()))?;
 
     // validate the server configuration
     config.validate()?;
