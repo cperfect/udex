@@ -1447,6 +1447,12 @@ async fn redeploy_k8s_server(k8s_db_url: &str, server_url: &str, ca_pem: &[u8]) 
         env!("CARGO_MANIFEST_DIR"),
         "/../../../projects/k8s/traefik/certs/tls.key"
     );
+    // OTLP CA the pods trust when exporting telemetry to the local Collector.
+    // Required by the chart when observability.enabled (the dev default).
+    let otlp_ca_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../projects/observability/certs/ca.crt"
+    );
     let mut db_url_file = tempfile::NamedTempFile::new().expect("tempfile for DATABASE_URL");
     db_url_file
         .write_all(k8s_db_url.as_bytes())
@@ -1469,6 +1475,8 @@ async fn redeploy_k8s_server(k8s_db_url: &str, server_url: &str, ca_pem: &[u8]) 
             &format!("secrets.traefikTlsCrt={edge_cert_path}"),
             "--set-file",
             &format!("secrets.traefikTlsKey={edge_key_path}"),
+            "--set-file",
+            &format!("secrets.otlpCa={otlp_ca_path}"),
         ])
         .status()
         .await

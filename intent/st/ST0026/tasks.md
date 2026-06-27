@@ -18,7 +18,7 @@
 - [x] **WP04 - SDK + CLI client tracing.** SDK client spans + W3C `traceparent`
   injection interceptor, provider-free and host-span-integrable; CLI (reference
   client) enables telemetry via `udex-telemetry`.
-- [ ] **WP05 - K8s deployment with observability.** Collector in-cluster; Helm
+- [x] **WP05 - K8s deployment with observability.** Collector in-cluster; Helm
   values/templates; app pods pointed at the OTLP endpoint with full trace +
   metric sampling for dev.
 - [ ] **WP06 - Integration tests (idempotent).** Assert signals land by querying

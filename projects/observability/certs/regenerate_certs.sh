@@ -43,6 +43,7 @@ openssl req -new -key collector.key -out collector.csr \
 #   otel-collector        - compose/devcontainer service name (in-network)
 #   localhost / 127.0.0.1 - host apps via the published port
 #   host.docker.internal  - devcontainer/host bridge
+#   host.k3d.internal     - k3d pods reaching the host-published collector port
 echo "5. Generating collector server certificate..."
 openssl x509 -req -in collector.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
   -out collector.crt -days 365 -extensions v3_req -extfile <(
@@ -56,6 +57,7 @@ subjectAltName = @alt_names
 DNS.1 = otel-collector
 DNS.2 = localhost
 DNS.3 = host.docker.internal
+DNS.4 = host.k3d.internal
 IP.1 = 127.0.0.1
 IP.2 = ::1
 EOF

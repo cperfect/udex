@@ -38,6 +38,19 @@ datastore:
   # Apply pending migrations on startup — acceptable for local dev.
   applyMigrations: true
 
+# OpenTelemetry observability. The dev cluster exports OTLP to the local
+# observability stack (projects/observability) running on the host, reached from
+# k3d pods via host.k3d.internal — the same bridge used for postgres and Hydra.
+# Full sampling for dev. Bring the stack up first: projects/observability/scripts/up.sh
+observability:
+  enabled: true
+  # Local-stack OTel Collector, published on the host at :4317 (OTLP gRPC, TLS).
+  otlpEndpoint: "https://host.k3d.internal:4317"
+  # Full trace + metric sampling in dev.
+  sampleRatio: 1.0
+  # Tags cluster-originated telemetry so it is distinguishable in Grafana.
+  deploymentEnvironment: "k3d"
+
 # Secrets — never store real values here.
 # Provide at deploy time via --set-string or scripts/deploy.sh.
 secrets:
@@ -51,3 +64,6 @@ secrets:
   # TLS at the ingress (projects/k8s/traefik/certs). PEM-encoded (raw PEM).
   traefikTlsCrt: ""
   traefikTlsKey: ""
+  # OTLP CA — the CA that signed the observability Collector's cert
+  # (projects/observability/certs/ca.crt). Required when observability.enabled.
+  otlpCa: ""

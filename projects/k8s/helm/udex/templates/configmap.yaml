@@ -31,6 +31,17 @@ data:
         danger_allow_non_tls: {{ .Values.authz.dangerAllowNonTls }}
         scope_claim_name: {{ .Values.authz.scopeClaimName | quote }}
         mask_subject_in_logs: {{ .Values.authz.maskSubjectInLogs }}
+{{- if .Values.observability.enabled }}
+      # OpenTelemetry export. otlp_ca is the OTLP CA mounted from the Secret (see
+      # secret.yaml / deployment.yaml). JSON stdout logging stays on regardless.
+      observability:
+        enabled: true
+        otlp_endpoint: {{ .Values.observability.otlpEndpoint | quote }}
+        otlp_ca: "/etc/udex/otel/ca.crt"
+        sample_ratio: {{ .Values.observability.sampleRatio }}
+        resource_attributes:
+          deployment.environment: {{ .Values.observability.deploymentEnvironment | quote }}
+{{- end }}
     datastore:
       # URN reference (see the server.tls note above) — not a secret. The actual
       # DATABASE_URL value is injected from the Secret as an env var by the Deployment.
