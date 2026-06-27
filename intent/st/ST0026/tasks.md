@@ -15,7 +15,7 @@
   spans; server handler spans + core metrics (per-method counts/latencies); gRPC
   server-side W3C context extraction; validate `postgresqlreceiver` against the
   live DB.
-- [ ] **WP04 - SDK + CLI client tracing.** SDK client spans + W3C `traceparent`
+- [x] **WP04 - SDK + CLI client tracing.** SDK client spans + W3C `traceparent`
   injection interceptor, provider-free and host-span-integrable; CLI (reference
   client) enables telemetry via `udex-telemetry`.
 - [ ] **WP05 - K8s deployment with observability.** Collector in-cluster; Helm

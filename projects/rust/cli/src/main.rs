@@ -151,6 +151,39 @@ async fn build_client(
     Ok(UdexClient::connect(builder.build()?).await?)
 }
 
+/// Initialise client-side telemetry for non-`serve` CLI commands.
+///
+/// Opt-in: returns `Ok(None)` (no subscriber installed, current behaviour
+/// preserved) unless `UDEX_OTLP_ENDPOINT` is set. When set, the CLI emits OTLP
+/// traces/metrics/logs as `udex-cli` so commands can be traced end to end against
+/// the observability stack. `serve` is excluded — it initialises its own
+/// telemetry from the server config.
+fn init_cli_telemetry() -> anyhow::Result<Option<udex_telemetry::TelemetryGuard>> {
+    let Ok(endpoint) = std::env::var("UDEX_OTLP_ENDPOINT") else {
+        return Ok(None);
+    };
+    let cfg = udex_telemetry::TelemetryConfig {
+        enabled: true,
+        otlp_endpoint: Some(endpoint),
+        otlp_ca: std::env::var("UDEX_OTLP_CA").ok(),
+        sample_ratio: std::env::var("UDEX_TRACE_SAMPLE_RATIO")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1.0),
+        ..Default::default()
+    };
+    let guard = udex_telemetry::init(
+        &cfg,
+        udex_telemetry::ServiceIdentity {
+            name: "udex-cli".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            instance_id: format!("pid-{}", std::process::id()),
+        },
+    )
+    .map_err(|e| anyhow::anyhow!("telemetry init failed: {e}"))?;
+    Ok(Some(guard))
+}
+
 async fn run(cli: Cli) -> anyhow::Result<()> {
     let Cli {
         command,
@@ -159,6 +192,14 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
         output,
         ..
     } = cli;
+
+    // Optional client telemetry (opt-in via UDEX_OTLP_ENDPOINT). Held for the
+    // duration of the command so spans/metrics/logs are flushed on completion.
+    let _telemetry_guard = if matches!(command, Commands::Serve(_)) {
+        None
+    } else {
+        init_cli_telemetry()?
+    };
 
     match command {
         Commands::Serve(args) => commands::serve::run(args).await,

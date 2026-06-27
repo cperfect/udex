@@ -309,13 +309,36 @@ impl UdexClient {
     }
 }
 
-/// Builds an interceptor that injects `Authorization: Bearer <token>` when `token` is `Some`.
+/// Adapts a tonic [`MetadataMap`] to the OpenTelemetry `Injector` trait so the
+/// current trace context can be written as a W3C `traceparent` header.
+struct MetadataInjector<'a>(&'a mut tonic::metadata::MetadataMap);
+
+impl opentelemetry::propagation::Injector for MetadataInjector<'_> {
+    fn set(&mut self, key: &str, value: String) {
+        if let Ok(name) = tonic::metadata::MetadataKey::from_bytes(key.as_bytes()) {
+            if let Ok(val) = value.parse::<MetadataValue<_>>() {
+                self.0.insert(name, val);
+            }
+        }
+    }
+}
+
+/// Builds an interceptor that injects `Authorization: Bearer <token>` (when
+/// `token` is `Some`) and propagates the current trace context as a W3C
+/// `traceparent`.
+///
+/// Trace propagation reads the ambient context of whatever span is current when
+/// the request is sent (i.e. the SDK client span, itself a child of any host
+/// span). It is a no-op unless the host application has installed a text-map
+/// propagator — the SDK never installs one — so non-OTel callers are unaffected.
 // tonic requires the closure to return Result<_, tonic::Status>; the 176-byte Status is
 // unavoidable here since it is the fixed error type for the interceptor signature.
 #[allow(clippy::result_large_err)]
 pub(crate) fn make_auth_interceptor(
     token: Option<String>,
 ) -> impl Fn(Request<()>) -> Result<Request<()>, tonic::Status> + Clone {
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+
     move |mut req: Request<()>| {
         if let Some(t) = &token {
             let val: MetadataValue<_> = format!("Bearer {t}")
@@ -323,6 +346,66 @@ pub(crate) fn make_auth_interceptor(
                 .map_err(|_| tonic::Status::internal("invalid bearer token"))?;
             req.metadata_mut().insert("authorization", val);
         }
+
+        // Propagate the current OTel context (W3C traceparent) so the server can
+        // continue this trace. No-op when no propagator is installed.
+        let cx = tracing::Span::current().context();
+        opentelemetry::global::get_text_map_propagator(|propagator| {
+            propagator.inject_context(&cx, &mut MetadataInjector(req.metadata_mut()));
+        });
+
         Ok(req)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opentelemetry::trace::{TraceContextExt, TracerProvider as _};
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+    use tracing_subscriber::prelude::*;
+
+    #[test]
+    fn auth_interceptor_injects_traceparent_from_current_span() {
+        opentelemetry::global::set_text_map_propagator(
+            opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+        );
+        // A real (export-free) tracer so spans carry a valid trace context.
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+        let tracer = provider.tracer("test");
+        let subscriber =
+            tracing_subscriber::registry().with(tracing_opentelemetry::layer().with_tracer(tracer));
+        let _default = tracing::subscriber::set_default(subscriber);
+
+        let span = tracing::info_span!("host");
+        let trace_id = span.context().span().span_context().trace_id();
+        let _enter = span.enter();
+
+        let interceptor = make_auth_interceptor(Some("tok".to_string()));
+        let req = interceptor(Request::new(())).expect("interceptor ok");
+
+        let traceparent = req
+            .metadata()
+            .get("traceparent")
+            .expect("traceparent injected")
+            .to_str()
+            .expect("ascii")
+            .to_string();
+        // Format: 00-<32hex trace-id>-<16hex span-id>-<flags>
+        let parts: Vec<&str> = traceparent.split('-').collect();
+        assert_eq!(parts.len(), 4, "traceparent shape: {traceparent}");
+        assert_eq!(
+            parts[1],
+            format!("{trace_id}"),
+            "inbound trace-id propagated"
+        );
+    }
+
+    #[test]
+    fn auth_interceptor_omits_traceparent_without_otel_context() {
+        // With no active OTel span (non-OTel host), nothing is injected.
+        let interceptor = make_auth_interceptor(None);
+        let req = interceptor(Request::new(())).expect("interceptor ok");
+        assert!(req.metadata().get("traceparent").is_none());
     }
 }

@@ -14,6 +14,11 @@ tonic = { workspace = true }
 tonic-health = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+# OpenTelemetry API ONLY (no SDK/exporter): used to read the ambient trace context
+# and inject a W3C `traceparent` into outgoing requests. The SDK never installs a
+# provider - the host application owns that. Keeps the SDK backend-agnostic.
+opentelemetry = "0.32"
+tracing-opentelemetry = "0.33"
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
@@ -38,6 +43,7 @@ path = "examples/envelope_write.rs"
 udex-test-utils = { path = "../test-utils" }
 udex-server = { path = "../server" }
 udex-datastore = { path = "../datastore", features = ["integration_test"] }
+opentelemetry_sdk = "0.32"
 tokio-shared-rt = { workspace = true }
 maybe-once = { workspace = true }
 rstest = { workspace = true }

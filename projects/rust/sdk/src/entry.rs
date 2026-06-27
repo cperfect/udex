@@ -16,6 +16,7 @@ impl UdexClient {
     ///
     /// Idempotent: if an entry already exists for the given context within the
     /// index, the existing key and hash are returned unchanged.
+    #[tracing::instrument(name = "sdk.create_entry", skip_all, fields(index = %index_name))]
     pub async fn create_entry(
         &self,
         index_name: &str,
@@ -33,6 +34,7 @@ impl UdexClient {
     }
 
     /// Deletes the entry identified by `key` from `index_name`.
+    #[tracing::instrument(name = "sdk.delete_entry", skip_all, fields(index = %index_name, key = %key))]
     pub async fn delete_entry(&self, index_name: &str, key: &str) -> Result<(), Error> {
         let mut client = self.entry_client().await?;
         client
@@ -49,6 +51,7 @@ impl UdexClient {
     /// Returns [`Error::Rpc`] with status `NOT_FOUND` if no entry exists for
     /// `key`, or [`Error::InvalidResponse`] if the server omits the context
     /// payload in a successful response.
+    #[tracing::instrument(name = "sdk.lookup_context_by_key", skip_all, fields(index = %index_name, key = %key))]
     pub async fn lookup_context_by_key(
         &self,
         index_name: &str,
@@ -69,6 +72,7 @@ impl UdexClient {
     /// Reverse-looks up the entry key for the given pre-computed `context_hash` in `index_name`.
     ///
     /// Returns `None` when no entry exists for the hash.
+    #[tracing::instrument(name = "sdk.lookup_key_by_context", skip_all, fields(index = %index_name))]
     pub async fn lookup_key_by_context(
         &self,
         index_name: &str,
@@ -91,6 +95,7 @@ impl UdexClient {
     ///
     /// The response `created` field is `true` when the entry was created by
     /// this call and `false` when a pre-existing entry was found.
+    #[tracing::instrument(name = "sdk.lookup_or_create_entry", skip_all, fields(index = %index_name))]
     pub async fn lookup_or_create_entry(
         &self,
         index_name: &str,
@@ -114,6 +119,7 @@ impl UdexClient {
     ///
     /// All operations share `index_name`. Results are returned in the same
     /// order as the input `operations`.
+    #[tracing::instrument(name = "sdk.bulk_write", skip_all, fields(index = %index_name, ops = operations.len()))]
     pub async fn bulk_write(
         &self,
         index_name: &str,
@@ -131,6 +137,7 @@ impl UdexClient {
     }
 
     /// Executes multiple read operations, returning results in input order.
+    #[tracing::instrument(name = "sdk.bulk_read", skip_all, fields(index = %index_name, ops = operations.len()))]
     pub async fn bulk_read(
         &self,
         index_name: &str,

@@ -13,6 +13,7 @@ impl UdexClient {
     /// Returns [`Error::Rpc`] with status `NOT_FOUND` if the index does not
     /// exist, or [`Error::InvalidResponse`] if the server omits the index
     /// payload in a successful response.
+    #[tracing::instrument(name = "sdk.describe_index", skip_all, fields(index = %name))]
     pub async fn describe_index(&self, name: &str) -> Result<Index, Error> {
         let mut client = self.index_client().await?;
         let resp = client
@@ -29,6 +30,7 @@ impl UdexClient {
     ///
     /// Returns [`Error::InvalidResponse`] if the server omits the index payload
     /// in a successful response.
+    #[tracing::instrument(name = "sdk.create_index", skip_all, fields(index = %req.name))]
     pub async fn create_index(&self, req: CreateIndexRequest) -> Result<Index, Error> {
         let mut client = self.index_client().await?;
         let resp: CreateIndexResponse = client.create_index(req).await?.into_inner();
@@ -40,6 +42,7 @@ impl UdexClient {
     ///
     /// Returns [`Error::InvalidResponse`] if the server omits the index payload
     /// in a successful response.
+    #[tracing::instrument(name = "sdk.update_index", skip_all, fields(index = %name))]
     pub async fn update_index(&self, name: &str, update: IndexUpdate) -> Result<Index, Error> {
         let mut client = self.index_client().await?;
         let resp = client
@@ -57,6 +60,7 @@ impl UdexClient {
     ///
     /// Returns [`Error::Rpc`] with status `FAILED_PRECONDITION` if the index
     /// still has entries, or `NOT_FOUND` if the index does not exist.
+    #[tracing::instrument(name = "sdk.delete_index", skip_all, fields(index = %name))]
     pub async fn delete_index(&self, name: &str) -> Result<(), Error> {
         let mut client = self.index_client().await?;
         client
@@ -68,6 +72,7 @@ impl UdexClient {
     }
 
     /// Lists all indices accessible to the caller.
+    #[tracing::instrument(name = "sdk.list_indices", skip_all)]
     pub async fn list_indices(&self) -> Result<Vec<Index>, Error> {
         let mut client = self.index_client().await?;
         let resp = client
