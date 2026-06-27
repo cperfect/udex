@@ -380,6 +380,7 @@ impl Datastore for PostgresDatastore {
         Ok(true)
     }
 
+    #[tracing::instrument(name = "db.create_index", skip_all, fields(index = %index.name))]
     async fn create_index(&self, index: Index) -> Result<(), Error> {
         let created_at = {
             match google_timestamp_to_offset_datetime(index.created_at) {
@@ -451,6 +452,7 @@ impl Datastore for PostgresDatastore {
         Ok(())
     }
 
+    #[tracing::instrument(name = "db.get_index", skip_all, fields(index = %name))]
     async fn get_index(&self, name: &str) -> Result<Index, Error> {
         let row = sqlx::query(
             r#"
@@ -518,6 +520,7 @@ impl Datastore for PostgresDatastore {
         })
     }
 
+    #[tracing::instrument(name = "db.update_index", skip_all, fields(index = %name))]
     async fn update_index(
         &self,
         name: &str,
@@ -567,6 +570,7 @@ impl Datastore for PostgresDatastore {
         self.get_index(name).await
     }
 
+    #[tracing::instrument(name = "db.list_indices", skip_all)]
     async fn list_indices(&self) -> Result<Vec<Index>, Error> {
         let rows = sqlx::query(
             r#"
@@ -643,6 +647,7 @@ impl Datastore for PostgresDatastore {
             .collect::<Result<Vec<Index>, Error>>()
     }
 
+    #[tracing::instrument(name = "db.create_entry", skip_all, fields(index = %entry.index_name, key = %entry.key))]
     async fn create_entry(&self, entry: Entry) -> Result<Uuid, Error> {
         let mut tx = self.pool.begin().await.map_err(Error::Database)?;
         let key = self.create_entry_tx(entry, &mut tx).await?;
@@ -650,6 +655,7 @@ impl Datastore for PostgresDatastore {
         Ok(key)
     }
 
+    #[tracing::instrument(name = "db.lookup_or_create_entry", skip_all, fields(index = %entry.index_name))]
     async fn lookup_or_create_entry(&self, entry: Entry) -> Result<(Uuid, bool), Error> {
         let mut tx = self.pool.begin().await.map_err(Error::Database)?;
         let result = self.lookup_or_create_entry_tx(entry, &mut tx).await?;
@@ -657,10 +663,12 @@ impl Datastore for PostgresDatastore {
         Ok(result)
     }
 
+    #[tracing::instrument(name = "db.get_entry_by_key", skip_all, fields(key = %key))]
     async fn get_entry_by_key(&self, key: Uuid) -> Result<Entry, Error> {
         self.get_entry_by_key_ex(key, &*self.pool).await
     }
 
+    #[tracing::instrument(name = "db.get_entry_by_context", skip_all, fields(index = %index_name))]
     async fn get_entry_by_context(
         &self,
         index_name: &str,
@@ -670,6 +678,7 @@ impl Datastore for PostgresDatastore {
             .await
     }
 
+    #[tracing::instrument(name = "db.delete_entry", skip_all, fields(index = %index_name, key = %key))]
     async fn delete_entry(&self, index_name: &str, key: Uuid) -> Result<(), Error> {
         let mut tx = self.pool.begin().await.map_err(Error::Database)?;
         self.delete_entry_tx(index_name, key, &mut tx).await?;
@@ -677,6 +686,7 @@ impl Datastore for PostgresDatastore {
         Ok(())
     }
 
+    #[tracing::instrument(name = "db.delete_index", skip_all, fields(index = %name))]
     async fn delete_index(&self, name: &str) -> Result<(), Error> {
         let mut tx = self.pool.begin().await.map_err(Error::Database)?;
 
@@ -723,6 +733,7 @@ impl Datastore for PostgresDatastore {
         Ok(())
     }
 
+    #[tracing::instrument(name = "db.bulk_entry_read", skip_all, fields(ops = operations.len()))]
     async fn bulk_entry_read(
         &self,
         operations: Vec<EntryReadOperation>,
@@ -757,6 +768,7 @@ impl Datastore for PostgresDatastore {
         Ok(results)
     }
 
+    #[tracing::instrument(name = "db.bulk_entry_write", skip_all, fields(ops = operations.len()))]
     async fn bulk_entry_write(
         &self,
         operations: Vec<EntryWriteOperation>,

@@ -184,9 +184,23 @@ where
     let index_server = IndexServiceServer::new(index_service);
 
     // Build and start the server with TLS, serving on the pre-bound listener.
+    //
+    // Observability middleware (outermost first):
+    //   - TraceLayer: one span per request, named by gRPC method, parented on the
+    //     caller's W3C `traceparent` if present (handler + datastore spans nest
+    //     under it). All OTel usage is confined to udex-telemetry.
+    //   - MetricsLayer: per-method request counter + latency histogram.
     let incoming = TcpIncoming::from(listener);
+    let observability = tower::ServiceBuilder::new()
+        .layer(
+            TraceLayer::new_for_grpc().make_span_with(|req: &http::Request<_>| {
+                udex_telemetry::make_request_span(req.uri().path(), req.headers())
+            }),
+        )
+        .layer(crate::telemetry::MetricsLayer)
+        .into_inner();
     TonicServer::builder()
-        .layer(TraceLayer::new_for_grpc())
+        .layer(observability)
         .tls_config(ServerTlsConfig::new().identity(identity))
         .map_err(|e| Error::ServerError(format!("TLS configuration error: {}", e)))?
         .add_service(InterceptorFor::new(index_server, auth_interceptor.clone()))

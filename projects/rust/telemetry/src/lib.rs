@@ -15,15 +15,21 @@ mod error;
 pub use config::TelemetryConfig;
 pub use error::TelemetryError;
 
+use opentelemetry::metrics::{Counter, Histogram};
+use opentelemetry::propagation::Extractor;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
 use opentelemetry_otlp::{WithExportConfig, WithTonicConfig};
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
+use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
 use opentelemetry_sdk::Resource;
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
+use std::time::Duration;
 use tonic::transport::{Certificate, ClientTlsConfig};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter, Layer};
@@ -81,6 +87,11 @@ pub fn init(
     identity: ServiceIdentity,
 ) -> Result<TelemetryGuard, TelemetryError> {
     config.validate()?;
+
+    // Install the W3C TraceContext propagator so the server can extract an
+    // inbound `traceparent` and continue the caller's trace. Harmless when
+    // tracing is disabled (extraction simply yields an empty context).
+    opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let fmt_layer = fmt::layer().json();
@@ -277,6 +288,85 @@ fn host_of(endpoint: &str) -> Option<String> {
     let after = endpoint.split("://").nth(1)?;
     let host = after.split('/').next()?.split(':').next()?;
     (!host.is_empty()).then(|| host.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Server-side request instrumentation helpers.
+//
+// These keep all `opentelemetry`/`tracing-opentelemetry` usage inside this crate
+// so callers (the server middleware) depend only on `tracing` + `http`.
+// ---------------------------------------------------------------------------
+
+/// Adapts an `http::HeaderMap` to the OpenTelemetry `Extractor` trait so an
+/// inbound W3C `traceparent` can be read from gRPC request headers.
+struct HeaderExtractor<'a>(&'a http::HeaderMap);
+
+impl Extractor for HeaderExtractor<'_> {
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).and_then(|v| v.to_str().ok())
+    }
+
+    fn keys(&self) -> Vec<&str> {
+        self.0.keys().map(|k| k.as_str()).collect()
+    }
+}
+
+/// Build the per-request tracing span for an incoming gRPC call, parenting it on
+/// the caller's trace if the request carries a W3C `traceparent` header. The
+/// returned span is named after the gRPC method (`/pkg.Service/Method`) so it
+/// surfaces that way in Tempo. Server middleware enters this span around the
+/// request, so handler and datastore spans nest beneath it.
+pub fn make_request_span(method: &str, headers: &http::HeaderMap) -> tracing::Span {
+    let parent_cx = opentelemetry::global::get_text_map_propagator(|prop| {
+        prop.extract(&HeaderExtractor(headers))
+    });
+    let span = tracing::info_span!("grpc.request", otel.name = method, rpc.method = method);
+    // Best-effort: attaching the remote parent only fails if the OTel layer is
+    // absent (telemetry disabled), in which case there is no trace to link to.
+    let _ = span.set_parent(parent_cx);
+    span
+}
+
+struct RequestMetrics {
+    requests: Counter<u64>,
+    duration: Histogram<f64>,
+}
+
+fn request_metrics() -> &'static RequestMetrics {
+    static METRICS: OnceLock<RequestMetrics> = OnceLock::new();
+    METRICS.get_or_init(|| {
+        let meter = opentelemetry::global::meter("udex");
+        RequestMetrics {
+            requests: meter
+                .u64_counter("udex.rpc.requests")
+                .with_description("Total gRPC requests handled, by method and status")
+                .build(),
+            duration: meter
+                .f64_histogram("udex.rpc.duration")
+                .with_description("gRPC request duration in seconds, by method")
+                .with_unit("s")
+                .build(),
+        }
+    })
+}
+
+/// Record one handled gRPC request: increments a per-method/per-status counter and
+/// records request duration. A no-op when no meter provider is installed (i.e.
+/// telemetry disabled), so it is safe to call unconditionally from middleware.
+pub fn record_request(method: &str, grpc_status_code: i64, elapsed: Duration) {
+    let metrics = request_metrics();
+    let method = method.to_string();
+    metrics.requests.add(
+        1,
+        &[
+            KeyValue::new("rpc.method", method.clone()),
+            KeyValue::new("rpc.grpc.status_code", grpc_status_code),
+        ],
+    );
+    metrics.duration.record(
+        elapsed.as_secs_f64(),
+        &[KeyValue::new("rpc.method", method)],
+    );
 }
 
 #[cfg(test)]

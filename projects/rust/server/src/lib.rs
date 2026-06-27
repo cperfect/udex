@@ -12,6 +12,7 @@ pub mod entry;
 pub mod index;
 pub mod logging;
 pub mod server;
+pub mod telemetry;
 
 pub use entry::EntryService;
 pub use index::IndexService;

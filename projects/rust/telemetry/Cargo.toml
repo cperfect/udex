@@ -23,6 +23,8 @@ opentelemetry-otlp = { version = "0.32", default-features = false, features = [
   "tls",
 ] }
 opentelemetry-appender-tracing = "0.32"
+# For the W3C context extractor over incoming gRPC/HTTP headers (server side).
+http = "1"
 # Direct dep on the tonic version opentelemetry-otlp uses (0.14), solely to build
 # the OTLP gRPC client TLS config (custom CA). Distinct from the app's tonic 0.13.
 tonic = { version = "0.14", default-features = false, features = ["transport", "tls-ring", "tls-native-roots"] }

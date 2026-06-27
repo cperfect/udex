@@ -4357,6 +4357,7 @@ dependencies = [
  "base64",
  "criterion",
  "dotenvy",
+ "http",
  "jsonwebtoken",
  "maybe-once",
  "mockall",
@@ -4380,6 +4381,7 @@ dependencies = [
  "tonic 0.13.1",
  "tonic-health",
  "tonic-middleware",
+ "tower 0.5.2",
  "tower-http",
  "tracing",
  "tracing-subscriber",
@@ -4396,6 +4398,7 @@ dependencies = [
 name = "udex-telemetry"
 version = "0.1.0"
 dependencies = [
+ "http",
  "opentelemetry",
  "opentelemetry-appender-tracing",
  "opentelemetry-otlp",

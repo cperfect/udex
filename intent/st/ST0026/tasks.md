@@ -11,7 +11,7 @@
   `observability` config section (schema + validation + defaults); OTLP
   traces/metrics/hybrid-logs wired into server startup with graceful on/off +
   sampling. Verify traces in Tempo, metrics in Prometheus, OTLP logs in Loki.
-- [ ] **WP03 - Deep instrumentation (datastore + server).** sqlx client query
+- [x] **WP03 - Deep instrumentation (datastore + server).** sqlx client query
   spans; server handler spans + core metrics (per-method counts/latencies); gRPC
   server-side W3C context extraction; validate `postgresqlreceiver` against the
   live DB.
