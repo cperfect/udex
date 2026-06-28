@@ -54,6 +54,19 @@ local Grafana stack provides the dev backends.
   duplicate in-cluster Collector.
 - **Cross-cutting instrumentation in middleware**, handlers untouched.
 
+## Post-completion changes
+
+- **Observability stack default-on in the devcontainer** (follow-up to WP01's
+  opt-in decision): `.devcontainer/post-create.sh` now runs
+  `projects/observability/scripts/up.sh` (non-fatal) after first-time setup, so the
+  Collector/Tempo/Prometheus/Loki/Grafana/Vector components are up by default in
+  the devcontainer (with `restart: unless-stopped` carrying across restarts). It is
+  still opt-in outside the devcontainer (plain `docker compose up` is unchanged),
+  and **application/SDK telemetry export remains opt-in** (server config /
+  `UDEX_OTLP_ENDPOINT`), so test runs are unaffected. The stack is run via `up.sh`
+  rather than merged into the devcontainer compose file set, to keep the WP01
+  host-path-translation and external-network handling intact.
+
 ## Challenges & Solutions
 
 - **docker-outside-of-docker bind mounts** (WP01): the host daemon does not know

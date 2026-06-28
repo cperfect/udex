@@ -66,13 +66,20 @@ bash projects/observability/scripts/down.sh
 Then open Grafana at <http://localhost:3000> (user `admin`, password from
 `GRAFANA_ADMIN_PASSWORD` in `.env`; anonymous viewer access is also enabled).
 
-### Opt-in by design
+### Default-on in the devcontainer; opt-in otherwise
 
-This stack is **off by default**. A plain `docker compose up` of the base stack
-starts only PostgreSQL and Hydra. The observability services carry a compose
-`profile` of `observability` and are only started by `up.sh`. The Udex app, in
-turn, only emits OTLP when an `observability.otlp_endpoint` is configured - so
-nothing here imposes overhead on a developer who has not opted in.
+In the **devcontainer** this stack starts automatically: `post-create.sh` runs
+`up.sh` after first-time setup, and the components carry `restart: unless-stopped`
+so they persist across restarts. Grafana is available at <http://localhost:3000>
+without any extra step.
+
+Outside the devcontainer it is **opt-in**: a plain `docker compose up` of the base
+stack starts only PostgreSQL and Hydra; the observability services carry a compose
+`profile` of `observability` and are started only by `up.sh`. Either way, the Udex
+**application** still only emits OTLP when an `observability.otlp_endpoint` is
+configured (server config) or `UDEX_OTLP_ENDPOINT` is set (CLI) - starting the
+backend components imposes no telemetry overhead on app/test runs that have not
+opted in. Tear the stack down anytime with `down.sh`.
 
 ### How layering works (and why it is its own project)
 

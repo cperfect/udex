@@ -146,7 +146,7 @@ Observability is configured via the optional `observability` section of the serv
 
 ### Deployment
 
-The local stack is opt-in: a plain `docker compose up` starts only PostgreSQL and Hydra; `projects/observability/scripts/up.sh` adds the observability components. The k3d dev deployment runs with observability **enabled** and full sampling, exporting to the local-stack Collector via `host.k3d.internal` (the same host bridge used for PostgreSQL and Hydra). For component details and usage, see [projects/observability/README.md](../projects/observability/README.md).
+The local stack starts **automatically in the devcontainer** (`post-create.sh` runs `up.sh`); outside the devcontainer it is opt-in — a plain `docker compose up` starts only PostgreSQL and Hydra, and `projects/observability/scripts/up.sh` adds the observability components. Starting the backends imposes no overhead on the application, which only emits OTLP when configured. The k3d dev deployment runs with observability **enabled** and full sampling, exporting to the local-stack Collector via `host.k3d.internal` (the same host bridge used for PostgreSQL and Hydra). For component details and usage, see [projects/observability/README.md](../projects/observability/README.md).
 
 ## Test Strategy
 
