@@ -2166,3 +2166,257 @@ async fn test_sdk_k8s_multi_cross_instance_crud() {
     // pf_a / pf_b drop here → kubectl port-forward children are killed (RAII).
     drop((pf_a, pf_b));
 }
+
+// ── Observability tests (WP06) ──────────────────────────────────────────────
+//
+// These assert that telemetry from the k8s deployment lands in the local
+// observability stack (Tempo / Prometheus / Loki). They reuse the k8s fixture
+// (`data_k8s`), so they skip when `K8S_SERVER_URL` is unset, and additionally
+// skip when the observability stack is not reachable. They are idempotent:
+// trace assertions key off a freshly-created entry's unique server-generated key
+// (a span attribute), and metric/log assertions are presence checks that hold
+// after any traffic. Bring the stack up first:
+//   bash projects/observability/scripts/up.sh
+//
+// The deployment exports telemetry to the host-published stack; from inside the
+// devcontainer the backends are reached by service name. Override with the
+// TEMPO_URL / PROMETHEUS_URL / LOKI_URL env vars for other environments.
+
+fn obs_url(var: &str, default: &str) -> String {
+    std::env::var(var).unwrap_or_else(|_| default.to_string())
+}
+
+fn now_unix_nanos() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock before unix epoch")
+        .as_nanos()
+}
+
+// Returns true when Tempo, Prometheus, and Loki are all reachable, so the obs
+// tests can run; false => skip (stack not up).
+async fn obs_stack_ready() -> bool {
+    let http = reqwest::Client::new();
+    let checks = [
+        (obs_url("TEMPO_URL", "http://tempo:3200"), "/ready"),
+        (
+            obs_url("PROMETHEUS_URL", "http://prometheus:9090"),
+            "/-/ready",
+        ),
+        (obs_url("LOKI_URL", "http://loki:3100"), "/ready"),
+    ];
+    for (base, path) in checks {
+        let ok = http
+            .get(format!("{base}{path}"))
+            .timeout(Duration::from_secs(3))
+            .send()
+            .await
+            .map(|r| r.status().is_success())
+            .unwrap_or(false);
+        if !ok {
+            return false;
+        }
+    }
+    true
+}
+
+// Polls Tempo for a trace matching `traceql`, returning the sorted, de-duplicated
+// span names of the first matching trace (empty if none within the budget).
+async fn tempo_trace_span_names(traceql: &str) -> Vec<String> {
+    let base = obs_url("TEMPO_URL", "http://tempo:3200");
+    let http = reqwest::Client::new();
+    for _ in 0..30u32 {
+        if let Ok(resp) = http
+            .get(format!("{base}/api/search"))
+            .query(&[("q", traceql)])
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+        {
+            if let Ok(json) = resp.json::<serde_json::Value>().await {
+                if let Some(trace_id) = json["traces"]
+                    .as_array()
+                    .and_then(|t| t.first())
+                    .and_then(|t| t["traceID"].as_str())
+                {
+                    if let Ok(tr) = http
+                        .get(format!("{base}/api/traces/{trace_id}"))
+                        .timeout(Duration::from_secs(5))
+                        .send()
+                        .await
+                    {
+                        if let Ok(tj) = tr.json::<serde_json::Value>().await {
+                            let mut names: Vec<String> = tj["batches"]
+                                .as_array()
+                                .into_iter()
+                                .flatten()
+                                .flat_map(|b| b["scopeSpans"].as_array().into_iter().flatten())
+                                .flat_map(|s| s["spans"].as_array().into_iter().flatten())
+                                .filter_map(|s| s["name"].as_str().map(str::to_string))
+                                .collect();
+                            names.sort();
+                            names.dedup();
+                            if !names.is_empty() {
+                                return names;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        sleep(Duration::from_secs(2)).await;
+    }
+    Vec::new()
+}
+
+// Polls a Prometheus instant query, returning the number of result series.
+async fn prometheus_series_count(query: &str) -> usize {
+    let base = obs_url("PROMETHEUS_URL", "http://prometheus:9090");
+    let http = reqwest::Client::new();
+    for _ in 0..30u32 {
+        if let Ok(resp) = http
+            .get(format!("{base}/api/v1/query"))
+            .query(&[("query", query)])
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+        {
+            if let Ok(json) = resp.json::<serde_json::Value>().await {
+                let n = json["data"]["result"].as_array().map_or(0, Vec::len);
+                if n > 0 {
+                    return n;
+                }
+            }
+        }
+        sleep(Duration::from_secs(2)).await;
+    }
+    0
+}
+
+// Polls a Loki range query over the last hour, returning the total line count.
+async fn loki_line_count(logql: &str) -> usize {
+    let base = obs_url("LOKI_URL", "http://loki:3100");
+    let http = reqwest::Client::new();
+    for _ in 0..30u32 {
+        let end = now_unix_nanos();
+        let start = end.saturating_sub(3_600_000_000_000); // 1h in ns
+        if let Ok(resp) = http
+            .get(format!("{base}/loki/api/v1/query_range"))
+            .query(&[
+                ("query", logql),
+                ("start", &start.to_string()),
+                ("end", &end.to_string()),
+                ("limit", "100"),
+            ])
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await
+        {
+            if let Ok(json) = resp.json::<serde_json::Value>().await {
+                let n: usize = json["data"]["result"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|s| s["values"].as_array().map_or(0, Vec::len))
+                    .sum();
+                if n > 0 {
+                    return n;
+                }
+            }
+        }
+        sleep(Duration::from_secs(2)).await;
+    }
+    0
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_obs_k8s_traces_land() {
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
+        return;
+    };
+    if !obs_stack_ready().await {
+        eprintln!("observability stack not reachable — skipping test_obs_k8s_traces_land");
+        return;
+    }
+
+    // A unique context yields a new entry with a server-generated key; the server
+    // stamps that key onto the db.create_entry span as the `key` attribute, giving
+    // us a run-specific handle to find this exact request's trace.
+    let tag = format!("obs-{}", now_unix_nanos());
+    let resp = client
+        .create_entry(index_name, context_input(&[("obs_tag", &tag)]))
+        .await
+        .expect("create_entry for obs trace test");
+    let key = resp.key;
+
+    let spans = tempo_trace_span_names(&format!("{{ span.key = \"{key}\" }}")).await;
+    assert!(
+        !spans.is_empty(),
+        "no trace found in Tempo for entry key {key}"
+    );
+    // The request span is named after the gRPC method; the datastore span is db.create_entry.
+    assert!(
+        spans.iter().any(|s| s.contains("CreateEntry")),
+        "trace missing the CreateEntry request span; got {spans:?}"
+    );
+    assert!(
+        spans.iter().any(|s| s == "db.create_entry"),
+        "trace missing the db.create_entry span; got {spans:?}"
+    );
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_obs_k8s_metrics_land() {
+    let fixture = data_k8s().await;
+    let Some((client, _index_name)) = fixture.as_ref() else {
+        return;
+    };
+    if !obs_stack_ready().await {
+        eprintln!("observability stack not reachable — skipping test_obs_k8s_metrics_land");
+        return;
+    }
+
+    // Generate a request so the per-method counter is populated.
+    client
+        .list_indices()
+        .await
+        .expect("list_indices for obs metric test");
+
+    // App request metric, emitted by the k3d pods (tagged deployment.environment=k3d).
+    let app =
+        prometheus_series_count("udex_rpc_requests_total{deployment_environment=\"k3d\"}").await;
+    assert!(
+        app > 0,
+        "no udex_rpc_requests_total series for k3d in Prometheus"
+    );
+
+    // PostgreSQL receiver metric (the Collector scrapes the database directly).
+    let pg = prometheus_series_count("postgresql_backends").await;
+    assert!(pg > 0, "no postgresql_backends series in Prometheus");
+}
+
+#[rstest]
+#[tokio_shared_rt::test]
+async fn test_obs_k8s_logs_land() {
+    let fixture = data_k8s().await;
+    let Some((client, _index_name)) = fixture.as_ref() else {
+        return;
+    };
+    if !obs_stack_ready().await {
+        eprintln!("observability stack not reachable — skipping test_obs_k8s_logs_land");
+        return;
+    }
+
+    // Generate activity so there are recent server logs to ship.
+    client
+        .list_indices()
+        .await
+        .expect("list_indices for obs log test");
+
+    // The server's OTLP logs reach Loki tagged with the OTel service name.
+    let lines = loki_line_count("{service_name=\"udex-server\"}").await;
+    assert!(lines > 0, "no udex-server logs found in Loki");
+}
