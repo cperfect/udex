@@ -2,8 +2,8 @@
 
 This directory contains the local development observability stack for Udex:
 distributed tracing, metrics, and log aggregation built on OpenTelemetry and the
-Grafana ecosystem. It is the local backend that receives the telemetry the Udex
-server, SDK, and CLI emit (wired up in later ST0026 work packages).
+Grafana ecosystem. It is the local backend that receives the OpenTelemetry
+signals the Udex server, SDK, and CLI emit (traces, metrics, and logs over OTLP).
 
 The Udex application is coupled only to **open standards** (OTLP). This stack is
 one possible backend; any OTel-compatible backend can be substituted by
@@ -121,5 +121,6 @@ development only.
 
 - Storage is local/ephemeral (no persistent volumes) with short retention - this
   is a development aid, not a production deployment.
-- The Grafana "Udex Overview" dashboard is a starter; richer dashboards land as
-  the app's spans and metrics are added in later ST0026 work packages.
+- The Grafana "Udex Overview" dashboard is a starter; the app already emits
+  request/datastore spans and per-method metrics, so richer dashboards can be
+  built on `udex_rpc_*` metrics and the `db.*` / gRPC spans.

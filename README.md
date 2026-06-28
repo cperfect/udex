@@ -186,11 +186,13 @@ This project is developed using [Claude Code](https://claude.ai/code) (Anthropic
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting policy |
 | [.devcontainer/](.devcontainer/README.md) | VS Code dev container — tools and first-time setup |
 | [projects/compose/](projects/compose/README.md) | Docker Compose — local PostgreSQL + Hydra services |
+| [projects/observability/](projects/observability/README.md) | Local observability stack — OTel Collector, Tempo, Prometheus, Loki, Vector, Grafana |
 | [projects/k8s/](projects/k8s/README.md) | Helm chart and scripts for local k3d Kubernetes development |
 | [projects/protobuf/](projects/protobuf/README.md) | Protobuf API definitions — source of truth for all API types |
 | [projects/rust/api/](projects/rust/api/README.md) | `udex-api` — generated types, authz, hashing |
 | [projects/rust/server/](projects/rust/server/README.md) | `udex-server` — gRPC server |
 | [projects/rust/datastore/](projects/rust/datastore/README.md) | `udex-datastore` — PostgreSQL implementation |
+| [projects/rust/telemetry/](projects/rust/telemetry/README.md) | `udex-telemetry` — OpenTelemetry setup for binaries (open-standard boundary) |
 | [projects/rust/sdk/](projects/rust/sdk/README.md) | `udex-sdk` — Rust client SDK |
 | [projects/rust/cli/](projects/rust/cli/README.md) | `udex-cli` — command-line interface |
 | [projects/rust/test-utils/](projects/rust/test-utils/README.md) | `udex-test-utils` — shared integration test fixtures (dev-only) |

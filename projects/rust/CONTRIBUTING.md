@@ -68,12 +68,22 @@ cargo clippy --all-targets -- -D warnings
 > visible through the other). Direct hops trust the pod cert (server CA, SNI
 > `localhost`); the load-balanced path uses the Traefik edge cert.
 >
+> **Observability tests** — Tests prefixed with `test_obs_k8s_` assert that
+> telemetry from the k3d deployment lands in the local observability stack (traces
+> in Tempo, metrics in Prometheus, logs in Loki). They reuse the k8s fixture, so
+> they skip when `K8S_SERVER_URL` is unset, and additionally skip (with a printed
+> message) when the observability stack is not reachable. Bring the stack up with
+> `bash projects/observability/scripts/up.sh` first; backend URLs default to the
+> devcontainer service names and are overridable via `TEMPO_URL` / `PROMETHEUS_URL`
+> / `LOKI_URL`.
+>
 > **Integration test naming** — Every integration test function must be prefixed
 > with a layer indicator: `test_sdk_`, `test_sdk_oauth2_`, `test_sdk_k8s_`,
-> `test_sdk_k8s_multi_`, `test_server_`, `test_server_oauth2_`, `test_index_service_`,
-> `test_entry_service_`, `test_datastore_`, or `test_cli_`. This makes it immediately
-> obvious from output which layer a failing test covers. Shared fixture helpers live
-> in `udex-test-utils` — check there before duplicating fixture code.
+> `test_sdk_k8s_multi_`, `test_obs_k8s_`, `test_server_`, `test_server_oauth2_`,
+> `test_index_service_`, `test_entry_service_`, `test_datastore_`, or `test_cli_`.
+> This makes it immediately obvious from output which layer a failing test covers.
+> Shared fixture helpers live in `udex-test-utils` — check there before duplicating
+> fixture code.
 
 ### Pre-commit Checklist
 

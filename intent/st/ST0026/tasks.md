@@ -24,7 +24,7 @@
 - [x] **WP06 - Integration tests (idempotent).** Assert signals land by querying
   component APIs/data sources (Tempo / Prometheus / Loki + postgres metrics). New
   `test_obs_` / `test_obs_k8s_` prefixes.
-- [ ] **WP07 - Docs.** ARCHITECTURE.md observability section + mermaid diagrams;
+- [x] **WP07 - Docs.** ARCHITECTURE.md observability section + mermaid diagrams;
   README updates (compose / observability / k8s); CONTRIBUTING test-naming + new
   prefixes; SECRETS.md for any new credentials.
 

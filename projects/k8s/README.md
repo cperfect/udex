@@ -108,6 +108,18 @@ bash scripts/validate-k8s-test.sh
 
 Edit `helm/udex/values.yaml` or pass `--set` overrides, then re-run `deploy.sh`. Helm performs a rolling update automatically. The `checksum/secret` pod annotation ensures pods are restarted when the Secret (database URL or TLS credentials) changes.
 
+## Observability
+
+The deployment runs with OpenTelemetry **enabled** and full sampling (`observability` in `values.yaml`). The pods export OTLP traces, metrics, and logs to the **local observability stack** ([`projects/observability/`](../observability/README.md)) via `host.k3d.internal:4317` — the same host bridge used for PostgreSQL and Hydra — rather than a second in-cluster Collector. The OTLP CA (`projects/observability/certs/ca.crt`) is mounted into the pods and passed by `deploy.sh` via `--set-file secrets.otlpCa`; cluster telemetry is tagged `deployment.environment=k3d`.
+
+To view the data, bring the stack up before (or after) deploying:
+
+```bash
+bash projects/observability/scripts/up.sh   # Grafana at http://localhost:3000
+```
+
+Telemetry export is best-effort: if the stack is down the pods keep serving and simply cannot export. The `test_obs_k8s_*` integration tests assert the signals land (see [projects/rust/CONTRIBUTING.md](../rust/CONTRIBUTING.md)).
+
 ## Teardown
 
 ```bash

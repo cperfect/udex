@@ -35,6 +35,10 @@ docker compose -f projects/compose/docker-compose.yml down
 
 When using the devcontainer, services start automatically and the above commands are not needed.
 
+### Optional: observability stack
+
+A plain `up` starts only PostgreSQL and Hydra. The local observability stack (OpenTelemetry Collector, Tempo, Prometheus, Loki, Vector, Grafana) is opt-in and lives in its own project — bring it up with `bash projects/observability/scripts/up.sh`. See [`projects/observability/README.md`](../observability/README.md).
+
 ## Service URLs
 
 | Endpoint | URL |
