@@ -10,5 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "==> Rebuilding observability stack..."
-bash "${SCRIPT_DIR}/down.sh"
+# KEEP_VOLUMES=0 so the components' anonymous data volumes (Grafana, Loki, Tempo,
+# Prometheus) are removed too - a true clean slate, not just fresh containers.
+KEEP_VOLUMES=0 bash "${SCRIPT_DIR}/down.sh"
 FORCE_RECREATE=1 bash "${SCRIPT_DIR}/up.sh"
