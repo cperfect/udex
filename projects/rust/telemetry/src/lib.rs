@@ -112,10 +112,14 @@ pub fn init(
         });
     }
 
+    // active() guarantees a non-empty endpoint; trim it (consistent with
+    // validate()/active()) so with_endpoint() and host_of() get a clean value.
     let endpoint = config
         .otlp_endpoint
-        .clone()
-        .expect("active() guarantees an endpoint");
+        .as_deref()
+        .map(str::trim)
+        .expect("active() guarantees an endpoint")
+        .to_string();
     let ca_pem = match &config.otlp_ca {
         Some(path) => Some(std::fs::read(path).map_err(|e| TelemetryError::CaRead {
             path: path.clone(),
