@@ -16,15 +16,18 @@ operation. Tests must be reliable and safe to rerun.
 
 ## Deliverables
 
-- New `test_obs_` (local stack) and `test_obs_k8s_` (cluster) integration tests:
+- New `test_obs_k8s_` (cluster) integration tests:
   - **Traces**: perform a uniquely-tagged operation, then query Tempo for a trace
     containing the tag (bounded polling).
   - **Metrics**: query Prometheus (instant query) for app metrics and for
     `postgresqlreceiver` metrics.
-  - **Logs**: query Loki for a uniquely-tagged log line (both OTLP and stdout
-    paths).
-- Shared helpers (in `udex-test-utils` where appropriate) for backend queries and
-  bounded-retry polling.
+  - **Logs**: query Loki for the server's log lines.
+  - (A separate local in-process `test_obs_` suite was intentionally dropped - it
+    would fight the shared global tracing subscriber in the test binary; the
+    `test_obs_k8s_` tests already exercise the local Tempo/Prometheus/Loki
+    backends. See the as-built notes below.)
+- Shared backend-query + bounded-retry-polling helpers (in the test file, not
+  `udex-test-utils`, which has no HTTP stack - see the as-built notes).
 - Skip/guard behaviour consistent with existing suites (e.g. backends not up ->
   clearly skipped, mirroring the `K8S_SERVER_URL` pattern), without skipping when
   the stack is available.
