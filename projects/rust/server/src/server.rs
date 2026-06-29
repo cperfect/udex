@@ -87,8 +87,13 @@ pub async fn serve_with_listener<D>(
 where
     D: Datastore + Send + Sync + 'static,
 {
-    // Initialise telemetry: always installs JSON-to-stdout logging (the durable
-    // floor) and, when `observability` is enabled, the OTLP traces/metrics/logs
+    // validate the server configuration
+    config.validate()?;
+
+    // Initialise telemetry only after the config is validated, so an invalid
+    // config cannot install global telemetry state (providers, propagator,
+    // instance_id). Always installs JSON-to-stdout logging (the durable floor)
+    // and, when `observability` is enabled, the OTLP traces/metrics/logs
     // exporters. The guard is held for the server's lifetime so pending data is
     // flushed on shutdown.
     let telemetry_config = config.observability.clone().unwrap_or_default();
@@ -101,9 +106,6 @@ where
         },
     )
     .map_err(|e| Error::ConfigValidation(e.to_string()))?;
-
-    // validate the server configuration
-    config.validate()?;
 
     let addr = listener
         .local_addr()
