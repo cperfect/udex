@@ -104,7 +104,9 @@ impl TelemetryConfig {
         }
 
         if let Some(ca) = &self.otlp_ca {
-            if std::fs::metadata(ca).is_err() {
+            // Open for reading (not just stat) so the check matches the "not
+            // readable" message and init()'s std::fs::read of the CA.
+            if std::fs::File::open(ca).is_err() {
                 return Err(TelemetryError::Config(format!(
                     "otlp_ca '{ca}' is not readable"
                 )));
