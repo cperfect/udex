@@ -2410,7 +2410,18 @@ async fn test_obs_k8s_metrics_land() {
     let query = format!(
         "sum(udex_rpc_requests_total{{deployment_environment=\"k3d\", rpc_method=\"{method}\"}})"
     );
-    let baseline = prometheus_scalar(&query).await.unwrap_or(0.0);
+    // Capture a real baseline. Retry so a transient Prometheus miss does not
+    // default us to 0.0 (which a stale value from a prior run could then exceed).
+    // A `sum(...)` over zero series returns an empty result, so a persistently
+    // absent series (fresh pods, no ListIndices yet) settles to 0.0 after the loop.
+    let mut baseline = 0.0;
+    for _ in 0..10u32 {
+        if let Some(v) = prometheus_scalar(&query).await {
+            baseline = v;
+            break;
+        }
+        sleep(Duration::from_secs(1)).await;
+    }
 
     client
         .list_indices()
