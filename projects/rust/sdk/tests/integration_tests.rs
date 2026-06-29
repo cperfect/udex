@@ -2293,13 +2293,36 @@ async fn prometheus_series_count(query: &str) -> usize {
     0
 }
 
-// Polls a Loki range query over the last hour, returning the total line count.
+// Reads a Prometheus instant query's first scalar value (e.g. the result of a
+// `sum(...)`), returning None when there is no result.
+async fn prometheus_scalar(query: &str) -> Option<f64> {
+    let base = obs_url("PROMETHEUS_URL", "http://prometheus:9090");
+    let http = reqwest::Client::new();
+    let resp = http
+        .get(format!("{base}/api/v1/query"))
+        .query(&[("query", query)])
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+        .ok()?;
+    let json = resp.json::<serde_json::Value>().await.ok()?;
+    json["data"]["result"].as_array()?.first()?["value"]
+        .as_array()?
+        .get(1)?
+        .as_str()?
+        .parse::<f64>()
+        .ok()
+}
+
+// Polls a Loki range query over a recent window, returning the total line count.
+// A recent window (rather than the default wide range) keeps the check from
+// matching telemetry left over from a much earlier run.
 async fn loki_line_count(logql: &str) -> usize {
     let base = obs_url("LOKI_URL", "http://loki:3100");
     let http = reqwest::Client::new();
     for _ in 0..30u32 {
         let end = now_unix_nanos();
-        let start = end.saturating_sub(3_600_000_000_000); // 1h in ns
+        let start = end.saturating_sub(600_000_000_000); // 10 min in ns
         if let Ok(resp) = http
             .get(format!("{base}/loki/api/v1/query_range"))
             .query(&[
@@ -2379,21 +2402,38 @@ async fn test_obs_k8s_metrics_land() {
         return;
     }
 
-    // Generate a request so the per-method counter is populated.
+    // Run-specific check: capture the ListIndices counter, make the call, then poll
+    // for an increase - so a stale series left from a prior run cannot satisfy the
+    // test. The budget is generous because the OTel metric export interval (default
+    // 60s) plus the Prometheus scrape interval gate how soon the increment appears.
+    let method = "/udex.index.v1.IndexService/ListIndices";
+    let query = format!(
+        "sum(udex_rpc_requests_total{{deployment_environment=\"k3d\", rpc_method=\"{method}\"}})"
+    );
+    let baseline = prometheus_scalar(&query).await.unwrap_or(0.0);
+
     client
         .list_indices()
         .await
         .expect("list_indices for obs metric test");
 
-    // App request metric, emitted by the k3d pods (tagged deployment.environment=k3d).
-    let app =
-        prometheus_series_count("udex_rpc_requests_total{deployment_environment=\"k3d\"}").await;
+    let mut increased = false;
+    for _ in 0..60u32 {
+        if let Some(v) = prometheus_scalar(&query).await {
+            if v > baseline {
+                increased = true;
+                break;
+            }
+        }
+        sleep(Duration::from_secs(2)).await;
+    }
     assert!(
-        app > 0,
-        "no udex_rpc_requests_total series for k3d in Prometheus"
+        increased,
+        "udex_rpc_requests_total for {method} did not increase after the request (baseline {baseline})"
     );
 
-    // PostgreSQL receiver metric (the Collector scrapes the database directly).
+    // PostgreSQL receiver metric — the Collector scrapes the DB continuously, so a
+    // presence check is appropriate here.
     let pg = prometheus_series_count("postgresql_backends").await;
     assert!(pg > 0, "no postgresql_backends series in Prometheus");
 }
