@@ -151,6 +151,9 @@ pub fn init(
             .with_resource(resource.clone())
             .build();
         opentelemetry::global::set_meter_provider(provider.clone());
+        // Build the request-metric instruments now that the provider is set, so
+        // record_request never caches no-op instruments from the default provider.
+        install_request_metrics();
         Some(provider)
     } else {
         None
@@ -332,9 +335,14 @@ struct RequestMetrics {
     duration: Histogram<f64>,
 }
 
-fn request_metrics() -> &'static RequestMetrics {
-    static METRICS: OnceLock<RequestMetrics> = OnceLock::new();
-    METRICS.get_or_init(|| {
+static REQUEST_METRICS: OnceLock<RequestMetrics> = OnceLock::new();
+
+/// Build the request-metric instruments from the CURRENT global meter provider and
+/// install them. Called by `init` AFTER `set_meter_provider`, so the instruments
+/// are never created from the default no-op provider (which a `OnceLock` would
+/// otherwise cache permanently if `record_request` ran before `init`). Idempotent.
+fn install_request_metrics() {
+    let _ = REQUEST_METRICS.get_or_init(|| {
         let meter = opentelemetry::global::meter("udex");
         RequestMetrics {
             requests: meter
@@ -347,14 +355,17 @@ fn request_metrics() -> &'static RequestMetrics {
                 .with_unit("s")
                 .build(),
         }
-    })
+    });
 }
 
 /// Record one handled gRPC request: increments a per-method/per-status counter and
-/// records request duration. A no-op when no meter provider is installed (i.e.
-/// telemetry disabled), so it is safe to call unconditionally from middleware.
+/// records request duration. A no-op until `init` has installed the instruments
+/// (i.e. telemetry enabled with metrics on), so it is safe to call unconditionally
+/// from middleware.
 pub fn record_request(method: &str, grpc_status_code: i64, elapsed: Duration) {
-    let metrics = request_metrics();
+    let Some(metrics) = REQUEST_METRICS.get() else {
+        return;
+    };
     let method = method.to_string();
     metrics.requests.add(
         1,
