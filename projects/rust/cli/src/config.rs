@@ -597,8 +597,32 @@ datastore:
 
     #[test]
     fn test_observability_absent_is_none() {
-        // A config without an observability section leaves it disabled (None).
-        let cfg = UdexConfig::default();
+        // A YAML config that omits the observability section must deserialize with
+        // server.observability == None, exercising the ServerConfig/UdexConfig
+        // deserializer (a default() check would not catch a #[serde(default)]
+        // regression).
+        let yaml = r#"
+server:
+  bind_address: "0.0.0.0:50051"
+  request_timeout_secs: 30
+  max_connections: 1000
+  max_message_size_bytes: 4194304
+  tls:
+    cert: "urn:secrets-rs:file:certs/server.crt"
+    key: "urn:secrets-rs:file:certs/server.key"
+  authz:
+    jwt_public_key: "urn:secrets-rs:file:certs/jwt_public_key.pem"
+    jwt_issuer: "https://auth.example.com"
+    jwt_audience: "udex"
+datastore:
+  connection_url: "urn:secrets-rs:env:DATABASE_URL"
+  max_connections: 10
+  min_connections: 1
+  connection_timeout_secs: 10
+  query_timeout_secs: 30
+"#;
+        let cfg: UdexConfig =
+            serde_saphyr::from_str(yaml).expect("config without observability must parse");
         assert!(cfg.server.observability.is_none());
     }
 }
