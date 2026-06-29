@@ -1,19 +1,17 @@
-# Vector - ships the Udex base-stack containers' stdout (postgres, hydra) to Loki.
-# This is the durable "floor" of the hybrid log design alongside the app's own OTLP
-# logs. (The Udex server runs in-process or in k3d, not as a host container, so the
-# always-present host containers to collect are postgres and hydra.)
+# Vector - ships container stdout to Loki (the durable "floor" of the hybrid log
+# design, alongside the app's own OTLP logs). It collects all containers, then
+# drops the noise (the observability stack's own containers - including Vector -
+# and the k3d node containers) in the `udex_only` transform below.
+#
+# Why a filter transform rather than the source's include_labels allowlist:
+# Vector 0.44's docker_logs include_labels did not match the Compose service
+# labels reliably (it collected nothing), so the scoping is done here in VRL.
 
 data_dir: /vector-data-dir
 
 sources:
   docker:
     type: docker_logs
-    # Scope to the Udex containers by their Compose service labels so unrelated
-    # containers on the daemon are not shipped to Loki. (Also excludes the obs
-    # stack's own containers, avoiding a feedback loop.)
-    include_labels:
-      - "com.docker.compose.service=postgres"
-      - "com.docker.compose.service=hydra"
 
 transforms:
   # The udex server emits JSON logs; lift those fields to the top level so they
@@ -27,10 +25,19 @@ transforms:
         . = merge(., object!(structured))
       }
 
+  # Drop the observability stack's own containers (avoid feedback noise; their
+  # names start with the compose project "udex-observability", which also covers
+  # Vector itself) and the k3d node containers. Keeps the Udex base stack
+  # (postgres, hydra) and the app.
+  udex_only:
+    type: filter
+    inputs: [parse]
+    condition: '!starts_with(string(.container_name) ?? "", "udex-observability") && !starts_with(string(.container_name) ?? "", "k3d-")'
+
 sinks:
   loki:
     type: loki
-    inputs: [parse]
+    inputs: [udex_only]
     endpoint: http://loki:3100
     encoding:
       codec: json
