@@ -15,11 +15,13 @@ local Grafana stack provides the dev backends.
   `certs/regenerate_certs.sh` (folded into `gen-keys-and-certs.sh`); Grafana
   credential from `gen-env.sh`.
 - **`udex-telemetry` crate** (WP02) - the only crate that sets up an OTel
-  provider/exporter. `init(&TelemetryConfig, ServiceIdentity) -> TelemetryGuard`
-  builds the combined `tracing-subscriber` (always-on JSON stdout + optional OTLP
-  traces/metrics/logs), installs global providers + the W3C propagator, flushes on
-  drop. Also exposes `make_request_span` + `record_request` for the server
-  middleware. OTLP over gRPC with TLS (custom CA via tonic 0.14).
+  provider/exporter. `init(&TelemetryConfig, ServiceIdentity) -> Result<TelemetryGuard,
+  TelemetryError>` (it can fail before a guard is created - invalid config,
+  unreadable OTLP CA, or an exporter that cannot be built) builds the combined
+  `tracing-subscriber` (always-on JSON stdout + optional OTLP traces/metrics/logs),
+  installs global providers + the W3C propagator, flushes on drop. Also exposes
+  `make_request_span` + `record_request` for the server middleware. OTLP over gRPC
+  with TLS (custom CA via tonic 0.14).
 - **Server** (WP02/WP03) - `observability` config section threaded from the CLI
   config; `serve()` calls `udex_telemetry::init`. Cross-cutting middleware (a
   tower `MetricsLayer` + `TraceLayer.make_span_with(make_request_span)`) gives
