@@ -15,7 +15,7 @@ mod error;
 pub use config::TelemetryConfig;
 pub use error::TelemetryError;
 
-use opentelemetry::metrics::{Counter, Histogram};
+use opentelemetry::metrics::{Counter, Histogram, MeterProvider as _};
 use opentelemetry::propagation::Extractor;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry::KeyValue;
@@ -135,8 +135,9 @@ pub fn init(
             ))))
             .with_resource(resource.clone())
             .build();
+        // Note: the layer holds the tracer directly; the provider is published
+        // globally only after try_init succeeds (below).
         let tracer = provider.tracer("udex");
-        opentelemetry::global::set_tracer_provider(provider.clone());
         let layer = tracing_opentelemetry::layer().with_tracer(tracer).boxed();
         (Some(provider), Some(layer))
     } else {
@@ -146,15 +147,12 @@ pub fn init(
     // Metrics -> Prometheus (via the collector).
     let meter_provider = if config.metrics {
         let exporter = build_metric_exporter(&endpoint, ca_pem.as_deref())?;
-        let provider = SdkMeterProvider::builder()
-            .with_periodic_exporter(exporter)
-            .with_resource(resource.clone())
-            .build();
-        opentelemetry::global::set_meter_provider(provider.clone());
-        // Build the request-metric instruments now that the provider is set, so
-        // record_request never caches no-op instruments from the default provider.
-        install_request_metrics();
-        Some(provider)
+        Some(
+            SdkMeterProvider::builder()
+                .with_periodic_exporter(exporter)
+                .with_resource(resource.clone())
+                .build(),
+        )
     } else {
         None
     };
@@ -187,8 +185,8 @@ pub fn init(
     // Unlike the disabled path, here a failed try_init means the OTLP trace/log
     // layers were NOT attached (a subscriber is already installed), so telemetry
     // would silently fail to export. Treat it as a hard error: shut the providers
-    // we built back down (flush + stop exporters) and surface the failure rather
-    // than returning a guard that does nothing.
+    // we built back down (flush + stop exporters) and surface the failure. No
+    // providers have been published globally yet, so nothing is left installed.
     if let Err(e) = tracing_subscriber::registry()
         .with(env_filter)
         .with(fmt_layer)
@@ -206,6 +204,16 @@ pub fn init(
             let _ = p.shutdown();
         }
         return Err(TelemetryError::Subscriber(e.to_string()));
+    }
+
+    // try_init succeeded: now publish the providers globally and build the request
+    // metric instruments directly from the meter provider.
+    if let Some(p) = &tracer_provider {
+        opentelemetry::global::set_tracer_provider(p.clone());
+    }
+    if let Some(p) = &meter_provider {
+        opentelemetry::global::set_meter_provider(p.clone());
+        install_request_metrics(p);
     }
 
     tracing::info!(
@@ -239,7 +247,10 @@ fn build_resource(identity: &ServiceIdentity, attrs: &BTreeMap<String, String>) 
         .collect();
     kvs.push(KeyValue::new("service.name", identity.name.clone()));
     kvs.push(KeyValue::new("service.version", identity.version.clone()));
-    kvs.push(KeyValue::new("service.instance.id", identity.instance_id.clone()));
+    kvs.push(KeyValue::new(
+        "service.instance.id",
+        identity.instance_id.clone(),
+    ));
     Resource::builder().with_attributes(kvs).build()
 }
 
@@ -365,13 +376,13 @@ struct RequestMetrics {
 
 static REQUEST_METRICS: OnceLock<RequestMetrics> = OnceLock::new();
 
-/// Build the request-metric instruments from the CURRENT global meter provider and
-/// install them. Called by `init` AFTER `set_meter_provider`, so the instruments
-/// are never created from the default no-op provider (which a `OnceLock` would
-/// otherwise cache permanently if `record_request` ran before `init`). Idempotent.
-fn install_request_metrics() {
+/// Build the request-metric instruments from the given meter provider and install
+/// them. Called by `init` once the subscriber is up, so the instruments are never
+/// created from the default no-op provider (which a `OnceLock` would otherwise
+/// cache permanently if `record_request` ran before `init`). Idempotent.
+fn install_request_metrics(provider: &SdkMeterProvider) {
     let _ = REQUEST_METRICS.get_or_init(|| {
-        let meter = opentelemetry::global::meter("udex");
+        let meter = provider.meter("udex");
         RequestMetrics {
             requests: meter
                 .u64_counter("udex.rpc.requests")
