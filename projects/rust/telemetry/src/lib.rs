@@ -184,14 +184,29 @@ pub fn init(
         (None, None)
     };
 
-    // As above, an already-installed subscriber is a no-op (the global OTel
-    // providers are still set); only the layers are not re-attached.
-    let _ = tracing_subscriber::registry()
+    // Unlike the disabled path, here a failed try_init means the OTLP trace/log
+    // layers were NOT attached (a subscriber is already installed), so telemetry
+    // would silently fail to export. Treat it as a hard error: shut the providers
+    // we built back down (flush + stop exporters) and surface the failure rather
+    // than returning a guard that does nothing.
+    if let Err(e) = tracing_subscriber::registry()
         .with(env_filter)
         .with(fmt_layer)
         .with(trace_layer)
         .with(logs_layer)
-        .try_init();
+        .try_init()
+    {
+        if let Some(p) = &tracer_provider {
+            let _ = p.shutdown();
+        }
+        if let Some(p) = &meter_provider {
+            let _ = p.shutdown();
+        }
+        if let Some(p) = &logger_provider {
+            let _ = p.shutdown();
+        }
+        return Err(TelemetryError::Subscriber(e.to_string()));
+    }
 
     tracing::info!(
         endpoint = %endpoint,

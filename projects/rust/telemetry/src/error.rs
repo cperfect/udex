@@ -27,4 +27,9 @@ pub enum TelemetryError {
         /// Human-readable detail (wrapped; not a third-party error type).
         detail: String,
     },
+
+    /// The global tracing subscriber could not be installed, so the OTLP layers
+    /// were not attached and telemetry would silently not export.
+    #[error("failed to install the telemetry subscriber (one is already set): {0}")]
+    Subscriber(String),
 }
