@@ -32,11 +32,24 @@ for f in ca.crt collector.crt collector.key; do
 done
 
 # --- Ensure the base stack is up and find its network ----------------------
-PG_CID="$(docker ps -q --filter "label=com.docker.compose.service=postgres" | head -n1)"
+# Scope container discovery to THIS checkout's compose project when we can identify
+# our own container (i.e. running inside the devcontainer), so a second checkout's
+# `postgres`/`devcontainer` services on the same daemon are not matched by mistake.
+# On a bare host (no self-container) we fall back to a daemon-wide match, which is
+# unambiguous for a single running stack.
+SELF_PROJECT="$(docker inspect "$(hostname)" \
+  --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)"
+PROJECT_FILTER=()
+if [[ -n "${SELF_PROJECT}" ]]; then
+  PROJECT_FILTER=(--filter "label=com.docker.compose.project=${SELF_PROJECT}")
+  echo "==> Scoping discovery to compose project: ${SELF_PROJECT}"
+fi
+
+PG_CID="$(docker ps -q "${PROJECT_FILTER[@]}" --filter "label=com.docker.compose.service=postgres" | head -n1)"
 if [[ -z "${PG_CID}" ]]; then
   echo "==> Base stack not running; starting postgres + hydra..."
   docker compose -f "${BASE_COMPOSE}" --env-file "${ENV_FILE}" up -d
-  PG_CID="$(docker ps -q --filter "label=com.docker.compose.service=postgres" | head -n1)"
+  PG_CID="$(docker ps -q "${PROJECT_FILTER[@]}" --filter "label=com.docker.compose.service=postgres" | head -n1)"
 fi
 [[ -n "${PG_CID}" ]] || { echo "ERROR: could not start/find the base postgres container" >&2; exit 1; }
 
@@ -50,7 +63,7 @@ echo "==> Attaching observability stack to network: ${OBS_NETWORK}"
 # know our in-container /workspace path, so translate it to the host path via the
 # devcontainer's /workspace mount source. On the host, OBS_DIR is already a valid
 # daemon path.
-DEVC_CID="$(docker ps -q --filter "label=com.docker.compose.service=devcontainer" | head -n1)"
+DEVC_CID="$(docker ps -q "${PROJECT_FILTER[@]}" --filter "label=com.docker.compose.service=devcontainer" | head -n1)"
 HOST_WORKSPACE=""
 if [[ -n "${DEVC_CID}" ]]; then
   HOST_WORKSPACE="$(docker inspect "${DEVC_CID}" --format '{{range .Mounts}}{{if eq .Destination "/workspace"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || true)"
