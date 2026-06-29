@@ -18,9 +18,10 @@
 - [x] **WP04 - SDK + CLI client tracing.** SDK client spans + W3C `traceparent`
   injection interceptor, provider-free and host-span-integrable; CLI (reference
   client) enables telemetry via `udex-telemetry`.
-- [x] **WP05 - K8s deployment with observability.** Collector in-cluster; Helm
-  values/templates; app pods pointed at the OTLP endpoint with full trace +
-  metric sampling for dev.
+- [x] **WP05 - K8s deployment with observability.** App pods export OTLP directly
+  to the local-stack Collector via `host.k3d.internal` (no in-cluster Collector);
+  Helm values/templates + OTLP CA mounted from the Secret; full trace + metric
+  sampling for dev (`deployment.environment=k3d`).
 - [x] **WP06 - Integration tests (idempotent).** Assert signals land by querying
   component APIs/data sources (Tempo / Prometheus / Loki + postgres metrics). New
   `test_obs_` / `test_obs_k8s_` prefixes.
