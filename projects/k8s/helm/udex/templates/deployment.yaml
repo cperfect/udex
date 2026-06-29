@@ -82,6 +82,12 @@ spec:
             - name: tls
               mountPath: /etc/udex/tls
               readOnly: true
+{{- if .Values.observability.enabled }}
+            # OTLP CA — the server trusts this when connecting to the Collector.
+            - name: otel
+              mountPath: /etc/udex/otel
+              readOnly: true
+{{- end }}
           # livenessProbe / readinessProbe: kubelet's tcpSocket probe only establishes
           # a TCP connection — it does not perform a TLS handshake or send any data.
           # This is enough to detect a crashed or deadlocked process that is no longer
@@ -119,3 +125,12 @@ spec:
                 path: tls.crt
               - key: tls.key
                 path: tls.key
+{{- if .Values.observability.enabled }}
+        # OTLP CA volume: projects otlp-ca.crt as ca.crt for the server to trust.
+        - name: otel
+          secret:
+            secretName: {{ include "udex.fullname" . }}
+            items:
+              - key: otlp-ca.crt
+                path: ca.crt
+{{- end }}

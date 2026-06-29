@@ -1,6 +1,4 @@
-use crate::{
-    authz::AuthzInterceptor, config::ServerConfig, logging, EntryService, Error, IndexService,
-};
+use crate::{authz::AuthzInterceptor, config::ServerConfig, EntryService, Error, IndexService};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tonic::transport::server::TcpIncoming;
@@ -89,10 +87,25 @@ pub async fn serve_with_listener<D>(
 where
     D: Datastore + Send + Sync + 'static,
 {
-    logging::init_tracing();
-
     // validate the server configuration
     config.validate()?;
+
+    // Initialise telemetry only after the config is validated, so an invalid
+    // config cannot install global telemetry state (providers, propagator,
+    // instance_id). Always installs JSON-to-stdout logging (the durable floor)
+    // and, when `observability` is enabled, the OTLP traces/metrics/logs
+    // exporters. The guard is held for the server's lifetime so pending data is
+    // flushed on shutdown.
+    let telemetry_config = config.observability.clone().unwrap_or_default();
+    let _telemetry_guard = udex_telemetry::init(
+        &telemetry_config,
+        udex_telemetry::ServiceIdentity {
+            name: "udex-server".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            instance_id: uuid::Uuid::new_v4().to_string(),
+        },
+    )
+    .map_err(|e| Error::ConfigValidation(e.to_string()))?;
 
     let addr = listener
         .local_addr()
@@ -173,9 +186,23 @@ where
     let index_server = IndexServiceServer::new(index_service);
 
     // Build and start the server with TLS, serving on the pre-bound listener.
+    //
+    // Observability middleware (outermost first):
+    //   - TraceLayer: one span per request, named by gRPC method, parented on the
+    //     caller's W3C `traceparent` if present (handler + datastore spans nest
+    //     under it). All OTel usage is confined to udex-telemetry.
+    //   - MetricsLayer: per-method request counter + latency histogram.
     let incoming = TcpIncoming::from(listener);
+    let observability = tower::ServiceBuilder::new()
+        .layer(
+            TraceLayer::new_for_grpc().make_span_with(|req: &http::Request<_>| {
+                udex_telemetry::make_request_span(req.uri().path(), req.headers())
+            }),
+        )
+        .layer(crate::telemetry::MetricsLayer)
+        .into_inner();
     TonicServer::builder()
-        .layer(TraceLayer::new_for_grpc())
+        .layer(observability)
         .tls_config(ServerTlsConfig::new().identity(identity))
         .map_err(|e| Error::ServerError(format!("TLS configuration error: {}", e)))?
         .add_service(InterceptorFor::new(index_server, auth_interceptor.clone()))

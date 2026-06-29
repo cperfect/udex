@@ -28,6 +28,7 @@ done
 JWT_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/jwt"
 TLS_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/certs"
 EDGE_TLS_DIR="${WORKSPACE_DIR}/projects/k8s/traefik/certs"
+OTLP_TLS_DIR="${WORKSPACE_DIR}/projects/observability/certs"
 
 ALL_EXIST=true
 for f in \
@@ -42,7 +43,11 @@ for f in \
   "${EDGE_TLS_DIR}/ca.key" \
   "${EDGE_TLS_DIR}/ca.crt" \
   "${EDGE_TLS_DIR}/tls.key" \
-  "${EDGE_TLS_DIR}/tls.crt"; do
+  "${EDGE_TLS_DIR}/tls.crt" \
+  "${OTLP_TLS_DIR}/ca.key" \
+  "${OTLP_TLS_DIR}/ca.crt" \
+  "${OTLP_TLS_DIR}/collector.key" \
+  "${OTLP_TLS_DIR}/collector.crt"; do
   [[ -f "$f" ]] || { ALL_EXIST=false; break; }
 done
 
@@ -62,6 +67,10 @@ bash "${WORKSPACE_DIR}/projects/k8s/traefik/certs/regenerate_certs.sh"
 echo ""
 echo "==> Generating JWT signing key pairs..."
 bash "${WORKSPACE_DIR}/projects/rust/server/tests/jwt/regenerate_jwt_signing_key_pair.sh"
+
+echo ""
+echo "==> Generating OTLP collector TLS certificates..."
+bash "${WORKSPACE_DIR}/projects/observability/certs/regenerate_certs.sh"
 
 echo ""
 echo "All key material generated successfully."

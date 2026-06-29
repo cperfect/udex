@@ -275,6 +275,7 @@ async fn start_server_and_connect() -> (
         max_connections: 1000,
         max_message_size: 4 * 1024 * 1024,
         tls: udex_server::config::TlsConfig { cert, key },
+        observability: None,
         init_indexes: vec![CreateIndexRequest {
             name: index_name.clone(),
             display_name: "Benchmark Index".to_string(),

@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: ["main"]
 
+# Least privilege: every job here only reads the repo (checkout; setup-protoc
+# uses GITHUB_TOKEN read-only for API rate limits). None write contents, comment
+# on PRs, or upload security events, so a single read-only default suffices.
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint

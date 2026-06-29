@@ -33,7 +33,22 @@ The workspace has five crates. New code goes in the crate that owns its layer �
 | Entry gRPC service handler | `udex_server::entry` | `EntryService` — thin handler; delegates to datastore |
 | Index gRPC service handler | `udex_server::index` | `IndexService` — thin handler; delegates to datastore |
 | gRPC health check | `tonic-health` (external) | Standard [`grpc.health.v1.Health`](https://github.com/grpc/grpc-proto/blob/master/grpc/health/v1/health.proto) service; no Udex-specific module — registered in `serve()` |
-| Tracing / logging initialisation | `udex_server::logging` | `init_tracing()` (production), `init_test_tracing()` (tests) |
+| Tracing / logging initialisation | `udex_server::logging` | `init_test_tracing()` (tests only). Production telemetry (stdout JSON + OTLP) is owned by `udex-telemetry`; `serve()` calls `udex_telemetry::init` |
+
+### `udex-telemetry` — OpenTelemetry setup for binaries (open-standard boundary)
+
+| Concern | Module | Notes |
+| ------- | ------ | ----- |
+| Telemetry init for binaries | `udex_telemetry` (lib.rs) | `init(config, identity) -> Result<TelemetryGuard, TelemetryError>` — builds the combined `tracing-subscriber` (always-on JSON stdout + optional OTLP traces/metrics/logs), sets global providers, graceful flush on guard drop. Used by `udex-server` and `udex-cli` |
+| Telemetry configuration contract | `udex_telemetry::TelemetryConfig` | Open-standard, serde-deserialisable config: `enabled`, `otlp_endpoint`, `otlp_ca`, `sample_ratio`, per-signal flags, `resource_attributes`. Embedded by `udex_server::config` as the `observability` section |
+| Telemetry error type | `udex_telemetry::TelemetryError` | `thiserror`; never exposes raw opentelemetry/exporter errors |
+
+This crate is the only place that sets up an OpenTelemetry provider/exporter
+(`opentelemetry_sdk` + `opentelemetry-otlp`) — binaries stay decoupled from any
+specific backend. The SDK (`udex-sdk`) deliberately does NOT use this crate and
+never installs a provider; as a library it uses only the vendor-neutral
+`opentelemetry` API (+ `tracing-opentelemetry`) to read the ambient context and
+inject a W3C `traceparent`, composing into a host app's OTel setup (see WP04).
 
 ### `udex-datastore` — Data access interface and PostgreSQL implementation
 
@@ -57,6 +72,7 @@ The workspace has five crates. New code goes in the crate that owns its layer �
 | Index service wrappers | `udex_sdk::index` | High-level async methods over the index gRPC stubs |
 | SDK error types | `udex_sdk::error` | `Error` enum with `thiserror`; never exposes raw tonic/reqwest errors |
 | gRPC health check client | `udex_sdk::health` | `UdexClient::health()` + `HealthStatus` enum; wraps `grpc.health.v1.Health/Check`; no auth required |
+| Client tracing & W3C propagation | `udex_sdk::entry`/`index` (`#[instrument]`) + `udex_sdk::client` (interceptor) | Per-call `sdk.*` client spans; the auth interceptor also injects the ambient trace context as `traceparent`. Provider-free (host owns the OTel provider); uses the `opentelemetry` API only |
 
 ### `udex-cli` — Command-line interface binary
 

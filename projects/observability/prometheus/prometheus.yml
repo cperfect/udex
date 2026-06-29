@@ -1,0 +1,17 @@
+# Prometheus - local dev. Scrapes the OTel Collector's Prometheus exporter
+# (app + PostgreSQL receiver metrics) and the collector's own internal metrics.
+
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+scrape_configs:
+  # App + PostgreSQL metrics, re-exported by the collector's `prometheus` exporter.
+  - job_name: otel-collector
+    static_configs:
+      - targets: ["otel-collector:8889"]
+
+  # The collector's own internal telemetry.
+  - job_name: otel-collector-internal
+    static_configs:
+      - targets: ["otel-collector:8888"]

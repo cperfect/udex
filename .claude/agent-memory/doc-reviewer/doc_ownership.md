@@ -19,6 +19,7 @@ Udex repo doc ownership (Highlander). Cross-reference these rather than duplicat
 - DB schema/tables → `projects/rust/datastore/README.md`
 - Rust contribution / pre-commit / version pin table → `projects/rust/CONTRIBUTING.md`
 - k8s/Helm deploy → `projects/k8s/README.md`
+- Observability / OTel design → `docs/ARCHITECTURE.md#observability` (system-level) + `projects/observability/README.md` (local stack). Telemetry crate boundary → `projects/rust/telemetry/README.md` (`udex-telemetry` is the ONLY crate that installs an OTel provider; SDK is provider-free, uses `opentelemetry` API only).
 - Pinned-version table authority → `projects/rust/CONTRIBUTING.md` "Developing" section names the defining file for each version.
 
 Authz fact (verify against `projects/rust/api/src/authz/entry.rs`): LookupOrCreate requires BOTH read AND write (`Operation::LookupOrCreate(_) => &["read","write"]`). Docs that say "write only" are wrong.
