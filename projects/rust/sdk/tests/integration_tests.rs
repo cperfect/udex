@@ -2314,40 +2314,34 @@ async fn prometheus_scalar(query: &str) -> Option<f64> {
         .ok()
 }
 
-// Polls a Loki range query over a recent window, returning the total line count.
-// A recent window (rather than the default wide range) keeps the check from
-// matching telemetry left over from a much earlier run.
-async fn loki_line_count(logql: &str) -> usize {
+// Counts Loki log lines matching `logql` over the fixed window [start_ns, now]
+// (a single query, no internal polling). With a fixed start the count is
+// monotonic as `now` advances, so a baseline-then-increase comparison is reliable
+// and run-specific.
+async fn loki_count_since(start_ns: u128, logql: &str) -> usize {
     let base = obs_url("LOKI_URL", "http://loki:3100");
     let http = reqwest::Client::new();
-    for _ in 0..30u32 {
-        let end = now_unix_nanos();
-        let start = end.saturating_sub(600_000_000_000); // 10 min in ns
-        if let Ok(resp) = http
-            .get(format!("{base}/loki/api/v1/query_range"))
-            .query(&[
-                ("query", logql),
-                ("start", &start.to_string()),
-                ("end", &end.to_string()),
-                ("limit", "100"),
-            ])
-            .timeout(Duration::from_secs(5))
-            .send()
-            .await
-        {
-            if let Ok(json) = resp.json::<serde_json::Value>().await {
-                let n: usize = json["data"]["result"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .map(|s| s["values"].as_array().map_or(0, Vec::len))
-                    .sum();
-                if n > 0 {
-                    return n;
-                }
-            }
+    let end = now_unix_nanos();
+    if let Ok(resp) = http
+        .get(format!("{base}/loki/api/v1/query_range"))
+        .query(&[
+            ("query", logql),
+            ("start", &start_ns.to_string()),
+            ("end", &end.to_string()),
+            ("limit", "1000"),
+        ])
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+    {
+        if let Ok(json) = resp.json::<serde_json::Value>().await {
+            return json["data"]["result"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|s| s["values"].as_array().map_or(0, Vec::len))
+                .sum();
         }
-        sleep(Duration::from_secs(2)).await;
     }
     0
 }
@@ -2461,13 +2455,29 @@ async fn test_obs_k8s_logs_land() {
         return;
     }
 
-    // Generate activity so there are recent server logs to ship.
+    // Run-specific check over a fixed window: count udex-server logs now, make a
+    // request (each authenticated request emits an authz audit info log that
+    // reaches Loki), then assert the count increases - so pre-existing logs cannot
+    // satisfy the test on their own.
+    let query = "{service_name=\"udex-server\"}";
+    let start_ns = now_unix_nanos();
+    let baseline = loki_count_since(start_ns, query).await;
+
     client
         .list_indices()
         .await
         .expect("list_indices for obs log test");
 
-    // The server's OTLP logs reach Loki tagged with the OTel service name.
-    let lines = loki_line_count("{service_name=\"udex-server\"}").await;
-    assert!(lines > 0, "no udex-server logs found in Loki");
+    let mut increased = false;
+    for _ in 0..30u32 {
+        if loki_count_since(start_ns, query).await > baseline {
+            increased = true;
+            break;
+        }
+        sleep(Duration::from_secs(2)).await;
+    }
+    assert!(
+        increased,
+        "udex-server logs in Loki did not increase after the request (baseline {baseline})"
+    );
 }
