@@ -303,8 +303,14 @@ fn build_log_exporter(
 
 /// Extract the host from a `scheme://host:port/...` endpoint, for TLS SNI.
 fn host_of(endpoint: &str) -> Option<String> {
-    let after = endpoint.split("://").nth(1)?;
-    let host = after.split('/').next()?.split(':').next()?;
+    let uri = endpoint.parse::<http::Uri>().ok()?;
+    let host = uri.host()?;
+    // Uri::host() returns IPv6 hosts wrapped in brackets ("[::1]"); strip them so
+    // the value is usable as a TLS domain name. Non-IPv6 hosts are unchanged.
+    let host = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
     (!host.is_empty()).then(|| host.to_string())
 }
 
@@ -409,7 +415,11 @@ mod tests {
             host_of("http://localhost:4318/v1/logs").as_deref(),
             Some("localhost")
         );
-        assert_eq!(host_of("not-a-url"), None);
+        // IPv6 endpoints must parse (brackets stripped), not break on the colons.
+        assert_eq!(host_of("https://[::1]:4317").as_deref(), Some("::1"));
+        // A URI with no authority has no host. (host_of is only ever called for
+        // https:// endpoints, which always carry a host.)
+        assert_eq!(host_of("/path/only"), None);
     }
 
     #[test]
