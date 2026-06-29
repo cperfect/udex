@@ -17,13 +17,7 @@ WORKSPACE_DIR="$(cd "${OBS_DIR}/../.." && pwd)"
 ENV_FILE="${WORKSPACE_DIR}/.env"
 OBS_COMPOSE="${OBS_DIR}/docker-compose.observability.yml"
 BASE_COMPOSE="${WORKSPACE_DIR}/projects/compose/docker-compose.yml"
-# Derive a checkout-specific compose project name so multiple checkouts on the
-# same daemon manage independent stacks. Default from this checkout's devcontainer
-# compose project (our own container's label); override with OBS_PROJECT.
-# down.sh derives the same value the same way.
-SELF_PROJECT="$(docker inspect "$(hostname)" \
-  --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)"
-PROJECT="${OBS_PROJECT:-udex-observability${SELF_PROJECT:+-$SELF_PROJECT}}"
+PROJECT="udex-observability"
 PROFILE="observability"
 RETRIES="${RETRIES:-60}"
 
@@ -38,11 +32,13 @@ for f in ca.crt collector.crt collector.key; do
 done
 
 # --- Ensure the base stack is up and find its network ----------------------
-# Scope container discovery to THIS checkout's compose project (SELF_PROJECT,
-# derived above) when we can identify our own container (i.e. running inside the
-# devcontainer), so a second checkout's `postgres`/`devcontainer` services on the
-# same daemon are not matched by mistake. On a bare host (no self-container) we
-# fall back to a daemon-wide match, which is unambiguous for a single running stack.
+# Scope container discovery to THIS checkout's compose project when we can identify
+# our own container (i.e. running inside the devcontainer), so a second checkout's
+# `postgres`/`devcontainer` services on the same daemon are not matched by mistake.
+# On a bare host (no self-container) we fall back to a daemon-wide match, which is
+# unambiguous for a single running stack.
+SELF_PROJECT="$(docker inspect "$(hostname)" \
+  --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)"
 PROJECT_FILTER=()
 if [[ -n "${SELF_PROJECT}" ]]; then
   PROJECT_FILTER=(--filter "label=com.docker.compose.project=${SELF_PROJECT}")

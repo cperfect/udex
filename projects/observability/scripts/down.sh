@@ -13,11 +13,7 @@ WORKSPACE_DIR="$(cd "${OBS_DIR}/../.." && pwd)"
 
 ENV_FILE="${WORKSPACE_DIR}/.env"
 OBS_COMPOSE="${OBS_DIR}/docker-compose.observability.yml"
-# Derive the checkout-specific compose project name the same way up.sh does, so
-# this targets the same stack. Override with OBS_PROJECT.
-SELF_PROJECT="$(docker inspect "$(hostname)" \
-  --format '{{index .Config.Labels "com.docker.compose.project"}}' 2>/dev/null || true)"
-PROJECT="${OBS_PROJECT:-udex-observability${SELF_PROJECT:+-$SELF_PROJECT}}"
+PROJECT="udex-observability"
 PROFILE="observability"
 
 # OBS_NETWORK is only needed so the compose file's `external` network reference
