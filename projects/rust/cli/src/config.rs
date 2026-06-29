@@ -252,6 +252,14 @@ impl UdexConfig {
             );
         }
 
+        // observability: apply the same TelemetryConfig validation the server runs
+        // at startup, so `udex config validate` matches `serve` behaviour.
+        if let Some(obs) = &self.server.observability {
+            if let Err(e) = obs.validate() {
+                errors.push(format!("server.observability: {e}"));
+            }
+        }
+
         if errors.is_empty() {
             Ok(())
         } else {
@@ -624,5 +632,20 @@ datastore:
         let cfg: UdexConfig =
             serde_saphyr::from_str(yaml).expect("config without observability must parse");
         assert!(cfg.server.observability.is_none());
+    }
+
+    #[test]
+    fn test_invalid_observability_is_rejected() {
+        // `udex config validate` must reject an invalid observability block, like
+        // the server does at startup.
+        let mut cfg = UdexConfig::default();
+        cfg.server.observability = Some(TelemetryConfig {
+            enabled: true,
+            otlp_endpoint: Some("https://otel-collector:4317".to_string()),
+            sample_ratio: 2.0, // out of range
+            ..Default::default()
+        });
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("observability"), "got: {err}");
     }
 }
