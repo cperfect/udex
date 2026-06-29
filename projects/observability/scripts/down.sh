@@ -29,7 +29,14 @@ DOWN_ARGS=(--profile "${PROFILE}" down --remove-orphans)
 [[ "${KEEP_VOLUMES:-1}" == "0" ]] && DOWN_ARGS+=(--volumes)
 
 ENV_ARG=()
-[[ -f "${ENV_FILE}" ]] && ENV_ARG=(--env-file "${ENV_FILE}")
+if [[ -f "${ENV_FILE}" ]]; then
+  ENV_ARG=(--env-file "${ENV_FILE}")
+else
+  # No env file present: provide a placeholder so the compose file's required
+  # `GRAFANA_ADMIN_PASSWORD` interpolation parses. `down` never starts Grafana,
+  # so the value is irrelevant — it only needs to be non-empty to tear down.
+  export GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD:-unused-for-down}"
+fi
 
 echo "==> Stopping observability stack..."
 docker compose -p "${PROJECT}" -f "${OBS_COMPOSE}" "${ENV_ARG[@]}" "${DOWN_ARGS[@]}"
