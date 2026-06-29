@@ -39,7 +39,7 @@ The workspace has five crates. New code goes in the crate that owns its layer �
 
 | Concern | Module | Notes |
 | ------- | ------ | ----- |
-| Telemetry init for binaries | `udex_telemetry` (lib.rs) | `init(config, identity) -> TelemetryGuard` — builds the combined `tracing-subscriber` (always-on JSON stdout + optional OTLP traces/metrics/logs), sets global providers, graceful flush on guard drop. Used by `udex-server` and `udex-cli` |
+| Telemetry init for binaries | `udex_telemetry` (lib.rs) | `init(config, identity) -> Result<TelemetryGuard, TelemetryError>` — builds the combined `tracing-subscriber` (always-on JSON stdout + optional OTLP traces/metrics/logs), sets global providers, graceful flush on guard drop. Used by `udex-server` and `udex-cli` |
 | Telemetry configuration contract | `udex_telemetry::TelemetryConfig` | Open-standard, serde-deserialisable config: `enabled`, `otlp_endpoint`, `otlp_ca`, `sample_ratio`, per-signal flags, `resource_attributes`. Embedded by `udex_server::config` as the `observability` section |
 | Telemetry error type | `udex_telemetry::TelemetryError` | `thiserror`; never exposes raw opentelemetry/exporter errors |
 
