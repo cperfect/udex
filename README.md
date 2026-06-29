@@ -19,6 +19,8 @@ It has been built with the following integration and data management use cases i
 2. Replacing a sensitive primary key with an non-sensitive one - e.g. use a UUID rather than a Credit Card number (PAN, which is PCI-DSS restricted) as keys to interact with Credit Card accounts.
 3. Attaching arbitrary metadata to an entity when the native store doesn't support it - for example data classification and leasing information.
 
+> Why isn't this kust a KV store? See [this design decision](./docs/DESIGN_DECISIONS.md#why-is-this-not-just-a-kv-store).
+
 It is not intended to be a generic entity database and aggregate queries are deliberately not supported.
 
 For full detail on the data model, operations, components, security model, and design principles, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
