@@ -43,14 +43,16 @@ services:
     volumes:
       - ${OBS_HOST_DIR:-.}/collector/config.yaml:/etc/otel/config.yaml:ro
       - ${OBS_HOST_DIR:-.}/certs:/etc/otel/certs:ro
+    # Ports publish on all interfaces (not 127.0.0.1): k3d pods reach the OTLP
+    # endpoints via host.k3d.internal (a non-loopback host IP), and the
+    # devcontainer host (OrbStack/docker-outside-of-docker) only forwards
+    # all-interface ports to the host's localhost. OrbStack already restricts
+    # published ports to the host loopback, so this is not a LAN exposure there.
     ports:
-      # OTLP endpoints stay on all interfaces: k3d pods reach them via
-      # host.k3d.internal (a non-loopback host IP), so 127.0.0.1 would break them.
-      - "4317:4317" # OTLP gRPC (TLS)
-      - "4318:4318" # OTLP HTTP (TLS)
-      # Host-debug only (Prometheus scrapes :8889 in-network by service name).
-      - "127.0.0.1:8889:8889"   # Prometheus exporter
-      - "127.0.0.1:13133:13133" # health_check extension
+      - "4317:4317"   # OTLP gRPC (TLS)
+      - "4318:4318"   # OTLP HTTP (TLS)
+      - "8889:8889"   # Prometheus exporter (host debug)
+      - "13133:13133" # health_check extension
     depends_on:
       - tempo
       - prometheus
@@ -65,7 +67,7 @@ services:
     volumes:
       - ${OBS_HOST_DIR:-.}/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
     ports:
-      - "127.0.0.1:3200:3200" # Tempo query API
+      - "3200:3200"   # Tempo query API
     restart: unless-stopped
 
   # Metrics store; scrapes the collector's Prometheus exporter.
@@ -78,7 +80,7 @@ services:
     volumes:
       - ${OBS_HOST_DIR:-.}/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "127.0.0.1:9090:9090" # Prometheus UI + query API
+      - "9090:9090"   # Prometheus UI + query API
     restart: unless-stopped
 
   # Log aggregation backend (OTLP ingest + Vector sink target).
@@ -89,7 +91,7 @@ services:
     volumes:
       - ${OBS_HOST_DIR:-.}/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
     ports:
-      - "127.0.0.1:3100:3100" # Loki push/query + OTLP (/otlp/v1/logs)
+      - "3100:3100"   # Loki push/query + OTLP (/otlp/v1/logs)
     restart: unless-stopped
 
   # Container-log shipper: tails Docker container stdout (udex app, postgres,
@@ -119,12 +121,13 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required (run scripts/gen-env.sh)}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      # Editor (not Viewer) so anonymous users get Explore - local dev only.
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Editor
     volumes:
       - ${OBS_HOST_DIR:-.}/grafana/provisioning:/etc/grafana/provisioning:ro
       - ${OBS_HOST_DIR:-.}/grafana/dashboards:/etc/grafana/dashboards:ro
     ports:
-      - "127.0.0.1:3000:3000" # Grafana UI
+      - "3000:3000"   # Grafana UI
     depends_on:
       - prometheus
       - tempo
