@@ -64,7 +64,8 @@ bash projects/observability/scripts/down.sh
 ```
 
 Then open Grafana at <http://localhost:3000> (user `admin`, password from
-`GRAFANA_ADMIN_PASSWORD` in `.env`; anonymous viewer access is also enabled).
+`GRAFANA_ADMIN_PASSWORD` in `.env`; anonymous **Editor** access is also enabled,
+so Explore works without logging in). See [Viewing telemetry](#viewing-telemetry).
 
 ### Default-on in the devcontainer; opt-in otherwise
 
@@ -98,6 +99,81 @@ would break the `./collector/config.yaml`-style mounts here. A single-file
 project keeps those paths correct, and the external-network attachment still
 gives full in-network reachability.
 
+## Viewing telemetry
+
+All three signals are explored through **Grafana** at <http://localhost:3000>.
+Anonymous **Editor** access is enabled, so no login is needed (the admin login is
+`admin` / `GRAFANA_ADMIN_PASSWORD` from `.env`). The Tempo, Prometheus, and Loki
+datasources are provisioned automatically.
+
+> Telemetry only exists for requests made **while telemetry was active**. The k3d
+> deployment is observability-enabled, so traffic to it produces signals tagged
+> `deployment.environment=k3d`; for a local CLI run, set `UDEX_OTLP_ENDPOINT`
+> (and `UDEX_OTLP_CA`). Generate some traffic first, e.g.
+> `cargo test -p udex-sdk --test integration_tests test_obs_k8s`, then search a
+> recent time range (local retention is short).
+
+In Grafana, open **Explore** (left nav) and pick the datasource:
+
+### Traces (Tempo)
+
+Explore -> **Tempo** -> **Search** (Service Name `udex-server`) or the **TraceQL**
+tab:
+
+```text
+{ resource.service.name = "udex-server" }     # all server traces
+{ resource.deployment.environment = "k3d" }   # only the k3d deployment
+{ span.index = "<index-name>" }                # by datastore span attribute
+{ span.key = "<entry-uuid>" }                  # a specific entry operation
+```
+
+Open a trace to see the gRPC request span with the nested `db.*` datastore spans
+(and, from an OTel-enabled client, the `sdk.*` client span as the root).
+
+Direct API:
+
+```bash
+curl -s -G http://localhost:3200/api/search \
+  --data-urlencode 'q={ resource.service.name = "udex-server" }' | jq '.traces[].traceID'
+curl -s http://localhost:3200/api/traces/<traceID> | jq -r '.batches[].scopeSpans[].spans[].name'
+```
+
+### Metrics (Prometheus)
+
+Explore -> **Prometheus**, or the Prometheus UI at <http://localhost:9090>.
+Example queries:
+
+```text
+udex_rpc_requests_total                                                            # gRPC requests, by method + status
+rate(udex_rpc_requests_total[1m])                                                  # request rate
+histogram_quantile(0.95, sum by (le) (rate(udex_rpc_duration_seconds_bucket[5m]))) # p95 request latency
+postgresql_backends                                                                # PostgreSQL receiver metrics
+```
+
+Direct API:
+
+```bash
+curl -s -G http://localhost:9090/api/v1/query \
+  --data-urlencode 'query=udex_rpc_requests_total' | jq '.data.result'
+```
+
+### Logs (Loki)
+
+Explore -> **Loki**. Example LogQL:
+
+```text
+{service_name="udex-server"}                   # OTLP logs from the server
+{service_name="udex-server"} |= "error"        # filter by content
+{container="udex_devcontainer-postgres-1"}     # postgres container logs (via Vector)
+```
+
+Direct API:
+
+```bash
+curl -s -G http://localhost:3100/loki/api/v1/query_range \
+  --data-urlencode 'query={service_name="udex-server"}' | jq '.data.result'
+```
+
 ## Configuration layout
 
 ```text
@@ -120,7 +196,7 @@ The app -> Collector OTLP hop uses TLS, consistent with the project's
 TLS-everywhere principle. `certs/regenerate_certs.sh` (invoked by
 `scripts/gen-keys-and-certs.sh`) generates a self-contained OTLP CA and a
 collector server cert with SANs for `otel-collector`, `localhost`,
-`host.docker.internal`, `127.0.0.1`, and `::1`. The app trusts `certs/ca.crt`
+`host.docker.internal`, `host.k3d.internal`, `127.0.0.1`, and `::1`. The app trusts `certs/ca.crt`
 via its `observability.otlp_ca` setting. These certs are gitignored and for local
 development only.
 
