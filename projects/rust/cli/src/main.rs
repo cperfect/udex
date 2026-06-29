@@ -162,14 +162,19 @@ fn init_cli_telemetry() -> anyhow::Result<Option<udex_telemetry::TelemetryGuard>
     let Ok(endpoint) = std::env::var("UDEX_OTLP_ENDPOINT") else {
         return Ok(None);
     };
+    // Fail fast on a malformed UDEX_TRACE_SAMPLE_RATIO rather than silently
+    // enabling full sampling.
+    let sample_ratio: f64 = match std::env::var("UDEX_TRACE_SAMPLE_RATIO") {
+        Ok(s) => s.parse().map_err(|_| {
+            anyhow::anyhow!("invalid UDEX_TRACE_SAMPLE_RATIO '{s}': expected a number in 0.0..=1.0")
+        })?,
+        Err(_) => 1.0,
+    };
     let cfg = udex_telemetry::TelemetryConfig {
         enabled: true,
         otlp_endpoint: Some(endpoint),
         otlp_ca: std::env::var("UDEX_OTLP_CA").ok(),
-        sample_ratio: std::env::var("UDEX_TRACE_SAMPLE_RATIO")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(1.0),
+        sample_ratio,
         ..Default::default()
     };
     let guard = udex_telemetry::init(
