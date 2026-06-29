@@ -362,11 +362,18 @@ pub(crate) fn make_auth_interceptor(
 mod tests {
     use super::*;
     use opentelemetry::trace::{TraceContextExt, TracerProvider as _};
+    use std::sync::Mutex;
     use tracing_opentelemetry::OpenTelemetrySpanExt;
     use tracing_subscriber::prelude::*;
 
+    // Both tests below read/write the process-wide OpenTelemetry text-map
+    // propagator. Serialise them so the parallel test runner cannot interleave
+    // one test's global state with the other's assertions.
+    static OTEL_STATE: Mutex<()> = Mutex::new(());
+
     #[test]
     fn auth_interceptor_injects_traceparent_from_current_span() {
+        let _serial = OTEL_STATE.lock().unwrap_or_else(|e| e.into_inner());
         opentelemetry::global::set_text_map_propagator(
             opentelemetry_sdk::propagation::TraceContextPropagator::new(),
         );
@@ -403,6 +410,7 @@ mod tests {
 
     #[test]
     fn auth_interceptor_omits_traceparent_without_otel_context() {
+        let _serial = OTEL_STATE.lock().unwrap_or_else(|e| e.into_inner());
         // With no active OTel span (non-OTel host), nothing is injected.
         let interceptor = make_auth_interceptor(None);
         let req = interceptor(Request::new(())).expect("interceptor ok");
