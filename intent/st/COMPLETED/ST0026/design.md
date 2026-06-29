@@ -138,12 +138,18 @@ projects/observability/
 
 ### K8s deployment
 
-- OTel Collector runs in-cluster (Deployment; `postgresqlreceiver` points at the
-  Compose Postgres via `host.k3d.internal`, matching the existing
-  datastore/authz pattern). Tempo/Prometheus/Loki/Grafana remain local-stack for
-  dev viewing, or are added to the cluster if needed - decided in WP05.
-- App pods get `observability.enabled=true`, the in-cluster OTLP endpoint, OTLP
-  CA, and **full** trace + metric sampling (`sample_ratio: 1.0`) via Helm values.
+> As shipped in WP05 (the planning text below originally assumed an in-cluster
+> Collector; the decision recorded in WP05 was to reuse the local stack):
+
+- No in-cluster Collector. The app pods export OTLP directly to the **local-stack
+  Collector** (`projects/observability`) via `host.k3d.internal:4317` - the same
+  host bridge the chart already uses for PostgreSQL and Hydra. The local Collector
+  already runs `postgresqlreceiver` and fans out to Tempo/Prometheus/Loki, so a
+  second in-cluster Collector would be pure duplication. Tempo/Prometheus/Loki/
+  Grafana stay local-stack for the k8s path too.
+- App pods get `observability.enabled=true`, that OTLP endpoint, the OTLP CA
+  (mounted from the Secret), and **full** trace + metric sampling
+  (`sample_ratio: 1.0`) via Helm values, tagged `deployment.environment=k3d`.
 
 ## Alternatives Considered
 
