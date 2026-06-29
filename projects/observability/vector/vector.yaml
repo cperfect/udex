@@ -1,15 +1,19 @@
-# Vector - ships Docker container stdout (udex app, postgres, hydra) to Loki.
-# This is the durable "floor" of the hybrid log design: the app always writes
-# JSON to stdout regardless of whether the OTLP log path is enabled.
+# Vector - ships the Udex base-stack containers' stdout (postgres, hydra) to Loki.
+# This is the durable "floor" of the hybrid log design alongside the app's own OTLP
+# logs. (The Udex server runs in-process or in k3d, not as a host container, so the
+# always-present host containers to collect are postgres and hydra.)
 
 data_dir: /vector-data-dir
 
 sources:
   docker:
     type: docker_logs
-    # Avoid a feedback loop (Vector shipping its own logs).
-    exclude_containers:
-      - vector
+    # Scope to the Udex containers by their Compose service labels so unrelated
+    # containers on the daemon are not shipped to Loki. (Also excludes the obs
+    # stack's own containers, avoiding a feedback loop.)
+    include_labels:
+      - "com.docker.compose.service=postgres"
+      - "com.docker.compose.service=hydra"
 
 transforms:
   # The udex server emits JSON logs; lift those fields to the top level so they
