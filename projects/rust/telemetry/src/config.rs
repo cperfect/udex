@@ -103,13 +103,18 @@ impl TelemetryConfig {
             )));
         }
 
-        if let Some(ca) = &self.otlp_ca {
-            // Open for reading (not just stat) so the check matches the "not
-            // readable" message and init()'s std::fs::read of the CA.
-            if std::fs::File::open(ca).is_err() {
-                return Err(TelemetryError::Config(format!(
-                    "otlp_ca '{ca}' is not readable"
-                )));
+        // The CA is only consulted for TLS (https) endpoints by tls_config(); a
+        // plaintext (http) endpoint never reads it, so don't reject a config that
+        // names a CA it will never use.
+        if endpoint.starts_with("https://") {
+            if let Some(ca) = &self.otlp_ca {
+                // Open for reading (not just stat) so the check matches the "not
+                // readable" message and init()'s std::fs::read of the CA.
+                if std::fs::File::open(ca).is_err() {
+                    return Err(TelemetryError::Config(format!(
+                        "otlp_ca '{ca}' is not readable"
+                    )));
+                }
             }
         }
 
@@ -191,6 +196,18 @@ mod tests {
         };
         let err = cfg.validate().unwrap_err().to_string();
         assert!(err.contains("otlp_ca"), "got: {err}");
+    }
+
+    #[test]
+    fn unreadable_ca_ignored_for_plaintext_endpoint() {
+        // tls_config() never reads the CA for an http:// endpoint, so an
+        // unreadable CA must not fail validation in that case.
+        let cfg = TelemetryConfig {
+            otlp_endpoint: Some("http://otel-collector:4317".to_string()),
+            otlp_ca: Some("/nonexistent/ca.crt".to_string()),
+            ..enabled_cfg()
+        };
+        assert!(cfg.validate().is_ok());
     }
 
     #[test]
