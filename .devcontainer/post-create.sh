@@ -94,6 +94,15 @@ rm get_helm.sh
 
 
 # ── Observability stack ───────────────────────────────────────────────────────
+# Backfill the Grafana credential into an existing .env. gen-env.sh only runs when
+# .env is absent, so an .env that predates this key would be missing the now-
+# required GRAFANA_ADMIN_PASSWORD and the stack would fail to start. Add it if
+# absent (idempotent), so upgraded devcontainers start the stack by default.
+if [[ -f .env ]] && ! grep -q '^GRAFANA_ADMIN_PASSWORD=' .env; then
+  echo "Backfilling GRAFANA_ADMIN_PASSWORD into existing .env..."
+  printf 'GRAFANA_ADMIN_PASSWORD=%s\n' "$(openssl rand -hex 16)" >>.env
+fi
+
 # Bring up the local observability stack (OTel Collector, Tempo, Prometheus,
 # Loki, Grafana, Vector) so it is available by default in the devcontainer. It
 # runs as its own compose project attached to this devcontainer's network
