@@ -5,7 +5,7 @@ This document captures the rationale behind Udex's core design choices — why t
 ## Data model and invariants
 
 ### Why is this not just a KV-store?
-Firstly I wanted it to be highly opinionated about keys, contexts, hashes and the mappings between them to fit the use cases without it becoming a free-for-all. Secondly because most KV-stores aren't transactional (which is really just a special case of the former).
+Firstly because there are *two keys* per entry;the arbitrary unique key and the context hash and both are valid for lookup purposes. Secondly I wanted it to be highly opinionated about keys, contexts, hashes and the mappings between them to fit the use cases without it becoming a free-for-all. Thirdly because most KV-stores aren't transactional (which is really just a special case of the former).
 
 ### Why is it transactional?
 Transactions enforce data quality and make reasoning and implementation of state management much easier, especially in the kind of distributed systems that integration scenarios involve. Ultimately [state is *hard*](https://istheenemyofgood.medium.com/001-state-is-hard-18fa3b1812ae). Modern transactional datastores are highly-performant and I don't think the tradeoff with non-transactional implementations is worth it for Udex.

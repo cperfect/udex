@@ -11,7 +11,7 @@ Udex
 
 ## Overview
 
-Udex is a universal index that maps arbitrary unique keys against contexts. It is lightweight, fast, and efficient for high transaction volumes and for managing unique entity identifiers across organisational and regulatory boundaries.
+Udex is a universal index that maps contexts to arbitrary unique keys via an identity hash of the context. It is lightweight, fast, and efficient for high transaction volumes and for managing unique entity identifiers across organisational and regulatory boundaries.
 
 It has been built with the following integration and data management use cases in mind:
 
@@ -30,7 +30,7 @@ For common questions, see the [FAQs](docs/FAQ.md).
 There are four core domain concepts:
 
 - **Index** — a named, configured namespace for entries. Indices are independent: the same context can appear in multiple indices with different keys. Index names may contain Unicode letters, digits, hyphens and underscores, and are immutable once set.
-- **Context** — a set of key-value pairs that uniquely identifies an entity. Udex hashes the pairs to produce a stable **context fingerprint**. Contexts are immutable — they cannot be updated, only deleted and recreated.
+- **Context** — a set of key-value pairs that uniquely identifies an entity. Udex hashes the pairs to produce a stable **context identity**. Contexts are immutable — they cannot be updated, only deleted and recreated.
 - **Key** — a server-generated UUIDv4 assigned to a context within an index. Keys are globally unique across all indices and permanent for the lifetime of the entry.
 - **Entry** — the binding of a key to a context within an index. The 1:1 invariant ensures that one context fingerprint maps to exactly one key within any given index (see [The 1:1 Entry–Context Model](#the-11-entrycontext-model) below).
 
