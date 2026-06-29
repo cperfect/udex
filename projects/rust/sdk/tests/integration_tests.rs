@@ -2349,14 +2349,16 @@ async fn loki_count_since(start_ns: u128, logql: &str) -> usize {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_obs_k8s_traces_land() {
-    let fixture = data_k8s().await;
-    let Some((client, index_name)) = fixture.as_ref() else {
-        return;
-    };
+    // Check the obs backends first: if they are unreachable this test cannot run,
+    // and short-circuiting here avoids the expensive `data_k8s()` server redeploy.
     if !obs_stack_ready().await {
         eprintln!("observability stack not reachable — skipping test_obs_k8s_traces_land");
         return;
     }
+    let fixture = data_k8s().await;
+    let Some((client, index_name)) = fixture.as_ref() else {
+        return;
+    };
 
     // A unique context yields a new entry with a server-generated key; the server
     // stamps that key onto the db.create_entry span as the `key` attribute, giving
@@ -2387,14 +2389,16 @@ async fn test_obs_k8s_traces_land() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_obs_k8s_metrics_land() {
-    let fixture = data_k8s().await;
-    let Some((client, _index_name)) = fixture.as_ref() else {
-        return;
-    };
+    // Check the obs backends first: if they are unreachable this test cannot run,
+    // and short-circuiting here avoids the expensive `data_k8s()` server redeploy.
     if !obs_stack_ready().await {
         eprintln!("observability stack not reachable — skipping test_obs_k8s_metrics_land");
         return;
     }
+    let fixture = data_k8s().await;
+    let Some((client, _index_name)) = fixture.as_ref() else {
+        return;
+    };
 
     // Run-specific check: capture the ListIndices counter, make the call, then poll
     // for an increase - so a stale series left from a prior run cannot satisfy the
@@ -2446,14 +2450,16 @@ async fn test_obs_k8s_metrics_land() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_obs_k8s_logs_land() {
-    let fixture = data_k8s().await;
-    let Some((client, _index_name)) = fixture.as_ref() else {
-        return;
-    };
+    // Check the obs backends first: if they are unreachable this test cannot run,
+    // and short-circuiting here avoids the expensive `data_k8s()` server redeploy.
     if !obs_stack_ready().await {
         eprintln!("observability stack not reachable — skipping test_obs_k8s_logs_land");
         return;
     }
+    let fixture = data_k8s().await;
+    let Some((client, _index_name)) = fixture.as_ref() else {
+        return;
+    };
 
     // Run-specific check over a fixed window: count udex-server logs now, make a
     // request (each authenticated request emits an authz audit info log that
