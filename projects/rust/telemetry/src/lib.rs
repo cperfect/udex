@@ -224,15 +224,22 @@ pub fn init(
     })
 }
 
+/// Reserved resource keys owned by [`ServiceIdentity`]; user `resource_attributes`
+/// may not override them.
+const RESERVED_RESOURCE_KEYS: [&str; 3] =
+    ["service.name", "service.version", "service.instance.id"];
+
 fn build_resource(identity: &ServiceIdentity, attrs: &BTreeMap<String, String>) -> Resource {
-    let mut kvs = vec![
-        KeyValue::new("service.name", identity.name.clone()),
-        KeyValue::new("service.version", identity.version.clone()),
-        KeyValue::new("service.instance.id", identity.instance_id.clone()),
-    ];
-    for (k, v) in attrs {
-        kvs.push(KeyValue::new(k.clone(), v.clone()));
-    }
+    // User attributes first, with the reserved identity keys filtered out, then the
+    // ServiceIdentity entries - so the exported identity is never ambiguous.
+    let mut kvs: Vec<KeyValue> = attrs
+        .iter()
+        .filter(|(k, _)| !RESERVED_RESOURCE_KEYS.contains(&k.as_str()))
+        .map(|(k, v)| KeyValue::new(k.clone(), v.clone()))
+        .collect();
+    kvs.push(KeyValue::new("service.name", identity.name.clone()));
+    kvs.push(KeyValue::new("service.version", identity.version.clone()));
+    kvs.push(KeyValue::new("service.instance.id", identity.instance_id.clone()));
     Resource::builder().with_attributes(kvs).build()
 }
 
@@ -420,6 +427,34 @@ mod tests {
         // A URI with no authority has no host. (host_of is only ever called for
         // https:// endpoints, which always carry a host.)
         assert_eq!(host_of("/path/only"), None);
+    }
+
+    #[test]
+    fn build_resource_identity_wins_over_attrs() {
+        use opentelemetry::Key;
+        let mut attrs = BTreeMap::new();
+        attrs.insert("service.name".to_string(), "evil".to_string());
+        attrs.insert("deployment.environment".to_string(), "test".to_string());
+        let identity = ServiceIdentity {
+            name: "udex-server".to_string(),
+            version: "1.2.3".to_string(),
+            instance_id: "abc".to_string(),
+        };
+        let resource = build_resource(&identity, &attrs);
+        // Reserved key: identity wins over the user attribute.
+        assert_eq!(
+            resource
+                .get(&Key::from_static_str("service.name"))
+                .map(|v| v.to_string()),
+            Some("udex-server".to_string())
+        );
+        // Non-reserved user attribute is preserved.
+        assert_eq!(
+            resource
+                .get(&Key::from_static_str("deployment.environment"))
+                .map(|v| v.to_string()),
+            Some("test".to_string())
+        );
     }
 
     #[test]
