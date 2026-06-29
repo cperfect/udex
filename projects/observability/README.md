@@ -67,6 +67,17 @@ Then open Grafana at <http://localhost:3000> (user `admin`, password from
 `GRAFANA_ADMIN_PASSWORD` in `.env`; anonymous **Editor** access is also enabled,
 so Explore works without logging in). See [Viewing telemetry](#viewing-telemetry).
 
+> **Host binding.** The host-facing ports (Grafana, Prometheus, Loki, Tempo, and
+> the collector debug/health endpoints) publish on all interfaces by default
+> (`OBS_HOST_BIND=0.0.0.0`). That default is required under OrbStack /
+> docker-outside-of-docker, which only forwards all-interface ports to the host's
+> localhost (and already restricts them to the host loopback, so they are not
+> LAN-reachable there). If you run Docker **directly on a Linux host**, set
+> `OBS_HOST_BIND=127.0.0.1` (in `.env` or your shell) so these endpoints — Grafana
+> has anonymous Editor access — stay off the LAN. The OTLP ingest ports
+> (`4317`/`4318`) always publish on all interfaces, because k3d pods reach them
+> via `host.k3d.internal`, a non-loopback host IP.
+
 ### Default-on in the devcontainer; opt-in otherwise
 
 In the **devcontainer** this stack starts automatically: `post-create.sh` runs

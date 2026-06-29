@@ -43,16 +43,18 @@ services:
     volumes:
       - ${OBS_HOST_DIR:-.}/collector/config.yaml:/etc/otel/config.yaml:ro
       - ${OBS_HOST_DIR:-.}/certs:/etc/otel/certs:ro
-    # Ports publish on all interfaces (not 127.0.0.1): k3d pods reach the OTLP
-    # endpoints via host.k3d.internal (a non-loopback host IP), and the
-    # devcontainer host (OrbStack/docker-outside-of-docker) only forwards
-    # all-interface ports to the host's localhost. OrbStack already restricts
-    # published ports to the host loopback, so this is not a LAN exposure there.
+    # OTLP ingest (4317/4318) MUST publish on all interfaces: k3d pods reach it
+    # via host.k3d.internal, a non-loopback host IP. The other host-facing ports
+    # bind to ${OBS_HOST_BIND:-0.0.0.0}. The 0.0.0.0 default is required under
+    # OrbStack/docker-outside-of-docker (it only forwards all-interface ports to
+    # the host's localhost, and already restricts them to the host loopback, so
+    # no LAN exposure there). On a plain Docker host run directly, set
+    # OBS_HOST_BIND=127.0.0.1 to keep these endpoints off the LAN.
     ports:
-      - "4317:4317"   # OTLP gRPC (TLS)
-      - "4318:4318"   # OTLP HTTP (TLS)
-      - "8889:8889"   # Prometheus exporter (host debug)
-      - "13133:13133" # health_check extension
+      - "4317:4317"                             # OTLP gRPC (TLS) - all ifaces (k3d)
+      - "4318:4318"                             # OTLP HTTP (TLS) - all ifaces (k3d)
+      - "${OBS_HOST_BIND:-0.0.0.0}:8889:8889"   # Prometheus exporter (host debug)
+      - "${OBS_HOST_BIND:-0.0.0.0}:13133:13133" # health_check extension
     depends_on:
       - tempo
       - prometheus
@@ -67,7 +69,7 @@ services:
     volumes:
       - ${OBS_HOST_DIR:-.}/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
     ports:
-      - "3200:3200"   # Tempo query API
+      - "${OBS_HOST_BIND:-0.0.0.0}:3200:3200"   # Tempo query API
     restart: unless-stopped
 
   # Metrics store; scrapes the collector's Prometheus exporter.
@@ -80,7 +82,7 @@ services:
     volumes:
       - ${OBS_HOST_DIR:-.}/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "9090:9090"   # Prometheus UI + query API
+      - "${OBS_HOST_BIND:-0.0.0.0}:9090:9090"   # Prometheus UI + query API
     restart: unless-stopped
 
   # Log aggregation backend (OTLP ingest + Vector sink target).
@@ -91,7 +93,7 @@ services:
     volumes:
       - ${OBS_HOST_DIR:-.}/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
     ports:
-      - "3100:3100"   # Loki push/query + OTLP (/otlp/v1/logs)
+      - "${OBS_HOST_BIND:-0.0.0.0}:3100:3100"   # Loki push/query + OTLP (/otlp/v1/logs)
     restart: unless-stopped
 
   # Container-log shipper: tails Docker container stdout (udex app, postgres,
@@ -127,7 +129,7 @@ services:
       - ${OBS_HOST_DIR:-.}/grafana/provisioning:/etc/grafana/provisioning:ro
       - ${OBS_HOST_DIR:-.}/grafana/dashboards:/etc/grafana/dashboards:ro
     ports:
-      - "3000:3000"   # Grafana UI
+      - "${OBS_HOST_BIND:-0.0.0.0}:3000:3000"   # Grafana UI
     depends_on:
       - prometheus
       - tempo
