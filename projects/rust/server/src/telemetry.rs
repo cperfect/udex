@@ -55,10 +55,15 @@ where
         let mut inner = std::mem::replace(&mut self.inner, clone);
 
         Box::pin(async move {
-            let response = inner.call(req).await?;
-            let code = grpc_status_code(response.headers());
+            let result = inner.call(req).await;
+            let code = match &result {
+                Ok(response) => grpc_status_code(response.headers()),
+                // Transport/middleware failure before any gRPC status exists -
+                // record as UNKNOWN (2) so failed requests still appear in the metric.
+                Err(_) => 2,
+            };
             udex_telemetry::record_request(&method, code, start.elapsed());
-            Ok(response)
+            result
         })
     }
 }
