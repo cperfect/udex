@@ -158,6 +158,29 @@ async fn build_client(
 /// traces/metrics/logs as `udex-cli` so commands can be traced end to end against
 /// the observability stack. `serve` is excluded — it initialises its own
 /// telemetry from the server config.
+/// Parses `UDEX_OTLP_HEADERS` (comma-separated `key=value` pairs) into the
+/// telemetry header map. Each entry is split on its first `=`, so values may
+/// contain `=` (e.g. base64), but not `,`. Empty/absent input yields no headers.
+fn parse_otlp_headers(
+    raw: Option<&str>,
+) -> anyhow::Result<std::collections::BTreeMap<String, String>> {
+    let mut headers = std::collections::BTreeMap::new();
+    let Some(raw) = raw else {
+        return Ok(headers);
+    };
+    for entry in raw.split(',') {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+        let (key, value) = entry.split_once('=').ok_or_else(|| {
+            anyhow::anyhow!("invalid UDEX_OTLP_HEADERS entry '{entry}': expected key=value")
+        })?;
+        headers.insert(key.trim().to_string(), value.trim().to_string());
+    }
+    Ok(headers)
+}
+
 fn init_cli_telemetry() -> anyhow::Result<Option<udex_telemetry::TelemetryGuard>> {
     let Ok(endpoint) = std::env::var("UDEX_OTLP_ENDPOINT") else {
         return Ok(None);
@@ -175,6 +198,9 @@ fn init_cli_telemetry() -> anyhow::Result<Option<udex_telemetry::TelemetryGuard>
         otlp_endpoint: Some(endpoint),
         otlp_ca: std::env::var("UDEX_OTLP_CA").ok(),
         sample_ratio,
+        // Optional headers for a header-authed backend, e.g.
+        // UDEX_OTLP_HEADERS="authorization=<key>" (comma-separated key=value).
+        otlp_headers: parse_otlp_headers(std::env::var("UDEX_OTLP_HEADERS").ok().as_deref())?,
         ..Default::default()
     };
     let guard = udex_telemetry::init(
@@ -276,6 +302,33 @@ async fn run(cli: Cli) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_otlp_headers_none_and_empty() {
+        assert!(parse_otlp_headers(None).unwrap().is_empty());
+        assert!(parse_otlp_headers(Some("")).unwrap().is_empty());
+        assert!(parse_otlp_headers(Some("  ,  ")).unwrap().is_empty());
+    }
+
+    #[test]
+    fn parse_otlp_headers_pairs() {
+        let h = parse_otlp_headers(Some("authorization=Bearer abc, x-tenant = acme ")).unwrap();
+        assert_eq!(h.get("authorization").unwrap(), "Bearer abc");
+        assert_eq!(h.get("x-tenant").unwrap(), "acme");
+        assert_eq!(h.len(), 2);
+    }
+
+    #[test]
+    fn parse_otlp_headers_value_may_contain_equals() {
+        // split on the FIRST '=' so base64-ish values survive.
+        let h = parse_otlp_headers(Some("authorization=a=b=c")).unwrap();
+        assert_eq!(h.get("authorization").unwrap(), "a=b=c");
+    }
+
+    #[test]
+    fn parse_otlp_headers_missing_equals_errs() {
+        assert!(parse_otlp_headers(Some("noequals")).is_err());
+    }
 
     fn anyhow_from_status(code: tonic::Code) -> anyhow::Error {
         anyhow::Error::from(tonic::Status::new(code, "test")).context("rpc failed")

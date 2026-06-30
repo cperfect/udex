@@ -48,6 +48,16 @@ Mongo is kept **ephemeral** (no volume) so the sources always re-seed fresh from
 - **k8s flipped to plaintext** (overlaps WP06, needed for the k8s obs tests): `values.yaml` `otlpEndpoint -> http://host.k3d.internal:4317`; removed `otlp_ca` from the configmap, the OTLP-CA volume/mount from the deployment, and the `otlp-ca.crt` secret. `helm template` renders clean. The k8s obs tests were not *run* here (need a k3d redeploy with the new config) — to validate after WP06.
 - Benign teardown noise on the obs run (`BatchLogProcessor`/meter-provider shutdown timeout as the guard drops at process exit) — cosmetic; the data lands and the test passes.
 
+### WP05 — Agnostic `otlp_headers` config (as-built)
+
+- Added `otlp_headers: BTreeMap<String, String>` to `TelemetryConfig` (serde default empty). Flows automatically into the server YAML (`observability:`) and the CLI config, since both embed the shared type — no separate plumbing.
+- `lib.rs`: a `build_metadata()` builds a `tonic::MetadataMap` from the headers (via `http::HeaderName`/`HeaderValue` -> `MetadataMap::from_headers`) and is attached to all three OTLP exporters (`.with_metadata()` from `WithTonicConfig`). The headers apply to traces, metrics, and logs.
+- **Secret hygiene:** header values are commonly API keys, so `TelemetryConfig` has a **manual `Debug`** that shows header names but redacts values (`<redacted>`); `validate()` rejects malformed names/values **without echoing the value**. (Nothing logs the config via Debug today, so this is defensive — satisfies the "header values not in logs" criterion regardless.)
+- **CLI env:** `UDEX_OTLP_HEADERS` (comma-separated `key=value`, split on the first `=` so base64 survives) parsed by `parse_otlp_headers` in `init_cli_telemetry`.
+- **Default behaviour unchanged:** empty headers -> empty `MetadataMap` -> identical to before. Our keyless fixture is unaffected.
+- **Verification:** unit tests cover the mechanism (`build_metadata_carries_headers` proves the header reaches the exporter metadata), redaction (`debug_redacts_header_values`), validation (bad name/value rejected, value not leaked), and CLI parsing. A full live check against a header-requiring receiver is the documented manual path — the spike already proved the ClickStack all-in-one accepts a raw `authorization` key, and the README documents pointing Udex at it.
+- **Docs:** `projects/rust/telemetry/README.md` gains a "Bringing your own OTLP backend" section (Honeycomb/Grafana-Cloud/ClickStack examples, incl. the all-in-one's raw-`authorization`/no-`Bearer` quirk); the `otlp_headers` field and `UDEX_OTLP_HEADERS` env are documented inline.
+
 ## Technical Details
 
 - **Database pre-creation:** the exporter's `create_schema` makes the tables but **not** the database, and it connects with `otel` as the session default — so `otel` must exist first. Created via `CLICKHOUSE_DB=otel` (env, no bind mount) rather than an `initdb.d` SQL file, because bind mounts misresolve under docker-outside-of-docker (see Challenges). `restart: unless-stopped` + the exporter's `retry_on_failure` self-heal any brief startup race.

@@ -28,6 +28,7 @@ use opentelemetry_sdk::Resource;
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 use std::time::Duration;
+use tonic::metadata::MetadataMap;
 use tonic::transport::{Certificate, ClientTlsConfig};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::layer::SubscriberExt;
@@ -127,11 +128,14 @@ pub fn init(
         })?),
         None => None,
     };
+    // Optional headers (e.g. an API key) attached to every OTLP export as gRPC
+    // metadata. Empty for the local fixture; non-empty for a header-authed backend.
+    let metadata = build_metadata(&config.otlp_headers)?;
     let resource = build_resource(&identity, &config.resource_attributes);
 
     // Traces -> Tempo.
     let (tracer_provider, trace_layer) = if config.traces {
-        let exporter = build_span_exporter(&endpoint, ca_pem.as_deref())?;
+        let exporter = build_span_exporter(&endpoint, ca_pem.as_deref(), metadata.clone())?;
         let provider = SdkTracerProvider::builder()
             .with_batch_exporter(exporter)
             .with_sampler(Sampler::ParentBased(Box::new(Sampler::TraceIdRatioBased(
@@ -150,7 +154,7 @@ pub fn init(
 
     // Metrics -> Prometheus (via the collector).
     let meter_provider = if config.metrics {
-        let exporter = build_metric_exporter(&endpoint, ca_pem.as_deref())?;
+        let exporter = build_metric_exporter(&endpoint, ca_pem.as_deref(), metadata.clone())?;
         Some(
             SdkMeterProvider::builder()
                 .with_periodic_exporter(exporter)
@@ -163,7 +167,7 @@ pub fn init(
 
     // Logs -> Loki (hybrid: stdout JSON is still on via fmt_layer).
     let (logger_provider, logs_layer) = if config.logs {
-        let exporter = build_log_exporter(&endpoint, ca_pem.as_deref())?;
+        let exporter = build_log_exporter(&endpoint, ca_pem.as_deref(), metadata)?;
         let provider = SdkLoggerProvider::builder()
             .with_batch_exporter(exporter)
             .with_resource(resource.clone())
@@ -275,13 +279,38 @@ fn tls_config(endpoint: &str, ca_pem: Option<&[u8]>) -> Option<ClientTlsConfig> 
     Some(tls)
 }
 
+/// Builds the gRPC metadata attached to OTLP exports from the configured headers.
+/// Header format is validated here (and in `TelemetryConfig::validate`) so a bad
+/// header fails init with a clear, value-free message (values are often secrets).
+fn build_metadata(
+    headers: &std::collections::BTreeMap<String, String>,
+) -> Result<MetadataMap, TelemetryError> {
+    let mut hmap = http::HeaderMap::with_capacity(headers.len());
+    for (key, value) in headers {
+        let name = http::HeaderName::from_bytes(key.as_bytes()).map_err(|_| {
+            TelemetryError::Config(format!(
+                "otlp_headers key '{key}' is not a valid header name"
+            ))
+        })?;
+        let value = http::HeaderValue::from_str(value).map_err(|_| {
+            TelemetryError::Config(format!(
+                "otlp_headers value for '{key}' is not a valid header value"
+            ))
+        })?;
+        hmap.insert(name, value);
+    }
+    Ok(MetadataMap::from_headers(hmap))
+}
+
 fn build_span_exporter(
     endpoint: &str,
     ca_pem: Option<&[u8]>,
+    metadata: MetadataMap,
 ) -> Result<opentelemetry_otlp::SpanExporter, TelemetryError> {
     let mut builder = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
-        .with_endpoint(endpoint);
+        .with_endpoint(endpoint)
+        .with_metadata(metadata);
     if let Some(tls) = tls_config(endpoint, ca_pem) {
         builder = builder.with_tls_config(tls);
     }
@@ -294,10 +323,12 @@ fn build_span_exporter(
 fn build_metric_exporter(
     endpoint: &str,
     ca_pem: Option<&[u8]>,
+    metadata: MetadataMap,
 ) -> Result<opentelemetry_otlp::MetricExporter, TelemetryError> {
     let mut builder = opentelemetry_otlp::MetricExporter::builder()
         .with_tonic()
-        .with_endpoint(endpoint);
+        .with_endpoint(endpoint)
+        .with_metadata(metadata);
     if let Some(tls) = tls_config(endpoint, ca_pem) {
         builder = builder.with_tls_config(tls);
     }
@@ -310,10 +341,12 @@ fn build_metric_exporter(
 fn build_log_exporter(
     endpoint: &str,
     ca_pem: Option<&[u8]>,
+    metadata: MetadataMap,
 ) -> Result<opentelemetry_otlp::LogExporter, TelemetryError> {
     let mut builder = opentelemetry_otlp::LogExporter::builder()
         .with_tonic()
-        .with_endpoint(endpoint);
+        .with_endpoint(endpoint)
+        .with_metadata(metadata);
     if let Some(tls) = tls_config(endpoint, ca_pem) {
         builder = builder.with_tls_config(tls);
     }
@@ -426,6 +459,32 @@ pub fn record_request(method: &str, grpc_status_code: i64, elapsed: Duration) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_metadata_carries_headers() {
+        let headers = BTreeMap::from([
+            ("authorization".to_string(), "Bearer xyz".to_string()),
+            ("x-tenant".to_string(), "acme".to_string()),
+        ]);
+        let md = build_metadata(&headers).expect("valid headers");
+        assert_eq!(md.len(), 2);
+        assert_eq!(
+            md.get("authorization").unwrap().to_str().unwrap(),
+            "Bearer xyz"
+        );
+        assert_eq!(md.get("x-tenant").unwrap().to_str().unwrap(), "acme");
+    }
+
+    #[test]
+    fn build_metadata_empty_is_empty() {
+        assert!(build_metadata(&BTreeMap::new()).expect("ok").is_empty());
+    }
+
+    #[test]
+    fn build_metadata_rejects_invalid_header_name() {
+        let headers = BTreeMap::from([("bad name".to_string(), "v".to_string())]);
+        assert!(build_metadata(&headers).is_err());
+    }
 
     #[test]
     fn host_of_parses_endpoints() {

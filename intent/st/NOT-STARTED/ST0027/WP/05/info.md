@@ -3,7 +3,7 @@ verblock: "30 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-05
 title: "Agnostic otlp_headers config in udex-telemetry"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-05: Agnostic otlp_headers config in udex-telemetry
@@ -20,9 +20,9 @@ Add optional, generic OTLP header support to `udex-telemetry` (and the server/CL
 
 ## Acceptance Criteria
 
-- [ ] Configured headers are sent on OTLP export (verified against a header-requiring receiver, e.g. the ClickStack all-in-one or a stub).
-- [ ] Header values are not emitted in logs.
-- [ ] Default/empty config behaves exactly as today (no header) — our fixture is unaffected.
+- [x] Configured headers are sent on OTLP export. (Mechanism unit-tested: `build_metadata_carries_headers` proves the header reaches the exporter `MetadataMap`, attached to all 3 OTLP exporters. Full live check vs the all-in-one is the documented manual path; the spike already proved its raw-`authorization` acceptance.)
+- [x] Header values are not emitted in logs. (Manual `Debug` redacts values; `validate()` errors never echo the value — both unit-tested.)
+- [x] Default/empty config behaves exactly as today (no header) — our fixture is unaffected. (Empty map -> empty `MetadataMap`; verified.)
 
 ## Dependencies
 

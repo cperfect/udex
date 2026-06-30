@@ -7,13 +7,55 @@ This crate is the **only** place in the workspace that configures an OpenTelemet
 ## What it provides
 
 - `init(&TelemetryConfig, ServiceIdentity) -> Result<TelemetryGuard, TelemetryError>` — builds one combined `tracing-subscriber`: always-on JSON-to-stdout (the durable log floor) plus optional OTLP traces, metrics, and logs when an endpoint is configured. Installs the global tracer/meter/logger providers and the W3C `TraceContextPropagator`. Returns an error if config is invalid, the OTLP CA cannot be read, or an exporter cannot be built; otherwise the returned guard flushes and shuts the providers down on drop.
-- `TelemetryConfig` — the serde-deserialisable configuration contract embedded by the server/CLI as their `observability` section: `enabled`, `otlp_endpoint`, `otlp_ca`, `sample_ratio`, per-signal toggles, and `resource_attributes`.
+- `TelemetryConfig` — the serde-deserialisable configuration contract embedded by the server/CLI as their `observability` section: `enabled`, `otlp_endpoint`, `otlp_ca`, `sample_ratio`, per-signal toggles, `resource_attributes`, and `otlp_headers`.
 - `make_request_span(method, headers)` / `record_request(method, status, elapsed)` — server-side helpers used by the gRPC middleware to create the per-request span (continuing an inbound `traceparent`) and record per-method request metrics, keeping all OpenTelemetry usage inside this crate.
 - `TelemetryError` — a `thiserror` type that never exposes third-party errors.
 
+## Bringing your own OTLP backend
+
+The application emits **plain OTLP** and is backend-agnostic — point the server or
+CLI at any OTLP-compatible backend by changing the endpoint, never the code. The
+local dev/CI fixture (ST0027) is a keyless ClickHouse-backed collector, but
+header-authed backends (Honeycomb, Grafana Cloud, the ClickStack all-in-one) are
+supported via `otlp_headers`. Header values are commonly secrets, so they are
+**redacted in `Debug`** and never echoed in validation errors.
+
+Server config:
+
+```yaml
+observability:
+  enabled: true
+  otlp_endpoint: "https://api.honeycomb.io:443"
+  otlp_headers:
+    x-honeycomb-team: "<api-key>"
+```
+
+CLI (opt-in via env; `UDEX_OTLP_HEADERS` is comma-separated `key=value`, split on
+the first `=` so base64 values survive):
+
+```bash
+export UDEX_OTLP_ENDPOINT="https://api.honeycomb.io:443"
+export UDEX_OTLP_HEADERS="x-honeycomb-team=<api-key>"
+```
+
+**ClickStack / HyperDX all-in-one** gates ingestion behind a per-team key sent as
+a **raw** `authorization` header — **no `Bearer ` prefix** (its bundled collector
+uses `bearertokenauth` with an empty scheme):
+
+```yaml
+observability:
+  enabled: true
+  otlp_endpoint: "http://<host>:4317"
+  otlp_headers:
+    authorization: "<ingestion-api-key>"   # raw key, NOT "Bearer <key>"
+```
+
+`otlp_headers` exists precisely so users can plug into such backends without any
+application change; our own dev/CI prefers the keyless modular collector.
+
 ## Hybrid logging
 
-JSON logs are **always** written to stdout (a durable floor that survives a Collector outage). When an OTLP endpoint is configured, logs are *also* exported over OTLP for trace/log correlation. OTLP transport uses TLS.
+JSON logs are **always** written to stdout (a durable floor that survives a Collector outage). When an OTLP endpoint is configured, logs are *also* exported over OTLP for trace/log correlation. OTLP transport uses TLS for `https://` endpoints (with `otlp_ca`); `http://` endpoints are plaintext (the local dev/CI fixture).
 
 ## Who does not use this crate
 
