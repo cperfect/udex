@@ -53,6 +53,11 @@ async fn obs_local_traces_metrics_logs_land() {
     let jwt_audience = "sdk-obs-audience".to_string();
     let bind_address: SocketAddr = OBS_BIND_ADDR.parse().unwrap();
 
+    // A unique resource attribute tags THIS run's telemetry, so the metric/log
+    // assertions match only this server's exports (not concurrent k8s traffic or a
+    // previous run) in the shared ClickHouse.
+    let run_id = format!("obs-run-{}", now_unix_nanos());
+
     let server_config = udex_server::config::ServerConfig {
         bind_address,
         request_timeout: std::time::Duration::from_secs(30),
@@ -75,6 +80,11 @@ async fn obs_local_traces_metrics_logs_land() {
             ),
             // The local fixture's collector terminates no TLS — opt into plaintext.
             dangerous_allow_non_tls: true,
+            // Tag every signal from this run so the assertions are run-specific.
+            resource_attributes: std::collections::BTreeMap::from([(
+                "udex.test.run".to_string(),
+                run_id.clone(),
+            )]),
             ..Default::default()
         }),
         init_indexes: vec![CreateIndexRequest {
@@ -140,24 +150,24 @@ async fn obs_local_traces_metrics_logs_land() {
         .expect("create_entry");
     let key = resp.key;
 
-    // Baselines BEFORE the ListIndices traffic, scoped to NON-k3d so concurrent
-    // k8s telemetry in the shared ClickHouse cannot satisfy the increase.
+    // Baselines BEFORE the ListIndices traffic. Both queries are scoped to THIS
+    // run's resource tag (`udex.test.run`), so only this server's exports can
+    // advance the count — concurrent k8s traffic or a prior run cannot.
     let metric_query = format!(
         "SELECT sum(v) FROM ( \
            SELECT argMax(Value, TimeUnix) AS v FROM otel.otel_metrics_sum \
            WHERE MetricName = 'udex.rpc.requests' \
              AND Attributes['rpc.method'] = '{LIST_METHOD}' \
-             AND ResourceAttributes['deployment.environment'] != 'k3d' \
+             AND ResourceAttributes['udex.test.run'] = '{run_id}' \
            GROUP BY ResourceAttributes['service.instance.id'], \
                     Attributes['rpc.grpc.status_code'] )"
     );
-    // Scoped to NON-k3d (like the metric query) so concurrent k8s telemetry in the
-    // shared ClickHouse can't satisfy the increase — this local server is the only
-    // non-k3d udex-server emitting OTLP logs.
-    let log_query = "SELECT count() FROM otel.otel_logs WHERE ServiceName = 'udex-server' \
-                     AND ResourceAttributes['deployment.environment'] != 'k3d'";
+    let log_query = format!(
+        "SELECT count() FROM otel.otel_logs \
+         WHERE ServiceName = 'udex-server' AND ResourceAttributes['udex.test.run'] = '{run_id}'"
+    );
     let metric_baseline = clickhouse_scalar_f64(&metric_query).await.unwrap_or(0.0);
-    let log_baseline = clickhouse_scalar_f64(log_query).await.unwrap_or(0.0);
+    let log_baseline = clickhouse_scalar_f64(&log_query).await.unwrap_or(0.0);
 
     // Drive request traffic: each authed ListIndices increments the request
     // counter and emits a "request authenticated" audit log.
@@ -194,13 +204,13 @@ async fn obs_local_traces_metrics_logs_land() {
     }
     assert!(
         metric_increased,
-        "udex.rpc.requests (non-k3d) for {LIST_METHOD} did not increase (baseline {metric_baseline})"
+        "udex.rpc.requests (this run) for {LIST_METHOD} did not increase (baseline {metric_baseline})"
     );
 
     // ── logs ── the audit logs export via the batch log processor (sub-second).
     let mut log_increased = false;
     for _ in 0..30u32 {
-        if let Some(v) = clickhouse_scalar_f64(log_query).await {
+        if let Some(v) = clickhouse_scalar_f64(&log_query).await {
             if v > log_baseline {
                 log_increased = true;
                 break;
