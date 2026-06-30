@@ -83,7 +83,11 @@ services:
       # must exist first. CLICKHOUSE_DB creates it on init with no bind mount.
       - CLICKHOUSE_DB=otel
     ports:
-      - "8123:8123"   # HTTP query API (tests + host debugging)
+      # Loopback-only: the default user has no password (CLICKHOUSE_SKIP_USER_SETUP),
+      # so this is unauthenticated full SQL access — never expose it on the LAN.
+      # Tests reach it in-network by service name (devcontainer) or via the
+      # runner's localhost (CI); host debugging from the same machine still works.
+      - "127.0.0.1:8123:8123"   # HTTP query API
     ulimits:
       nofile:
         soft: 262144
@@ -108,9 +112,9 @@ services:
       # .env that feeds the postgres service's password.
       - POSTGRES_PASSWORD_SECRET=${POSTGRES_PASSWORD_SECRET}
     ports:
-      - "4317:4317"   # OTLP gRPC - in-network + k3d via host.k3d.internal
+      - "4317:4317"   # OTLP gRPC - all ifaces: k3d pods reach it via host.k3d.internal
       - "4318:4318"   # OTLP HTTP
-      - "13133:13133" # health_check extension (readiness probe)
+      - "127.0.0.1:13133:13133" # health_check (readiness probe) - loopback only
     depends_on:
       clickhouse:
         condition: service_healthy
