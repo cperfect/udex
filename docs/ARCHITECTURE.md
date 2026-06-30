@@ -109,7 +109,7 @@ Udex configuration only supports secrets by injection (e.g. environment variable
 
 ## Observability
 
-Udex is instrumented with [OpenTelemetry](https://opentelemetry.io/) for distributed tracing, metrics, and log aggregation. The application is coupled only to the open OTel standard (OTLP) — never to a specific backend — so it can be pointed at any OTLP-compatible system. A local ClickHouse-backed fixture (part of the base [`projects/compose`](../projects/compose/README.md#observability) stack) is provided for development.
+Udex is instrumented with [OpenTelemetry](https://opentelemetry.io/) for distributed tracing, metrics, and log aggregation. The application is coupled only to the open OTel standard (OTLP) — never to a specific backend — so it can be pointed at any OTLP-compatible system. A local ClickHouse-backed fixture (part of the base [`projects/compose`](../projects/compose/README.md#observability) stack) is provided for development. For *why* it is ClickHouse-backed and modular (rather than the original Grafana stack or the ClickStack all-in-one), see [Design Decisions › Observability](DESIGN_DECISIONS.md#observability).
 
 ### Open-standard boundary
 
