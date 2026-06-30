@@ -32,7 +32,7 @@ export UDEX_OTLP_ENDPOINT="https://api.honeycomb.io:443"
 export UDEX_OTLP_HEADERS="x-honeycomb-team=<api-key>"
 ```
 
-**ClickStack / HyperDX all-in-one** gates ingestion behind a per-team key sent as a **raw** `authorization` header — **no `Bearer ` prefix** (its bundled collector uses `bearertokenauth` with an empty scheme):
+**ClickStack / HyperDX all-in-one** gates ingestion behind a per-team key sent as a **raw** `authorization` header — the value is the bare key with **no `Bearer` prefix** (its bundled collector uses `bearertokenauth` with an empty scheme):
 
 ```yaml
 observability:
