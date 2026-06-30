@@ -60,7 +60,9 @@ pub struct AuthzConfig {
     pub jwt_audience: Option<String>,
     /// Allow plain HTTP for jwks_url. MUST NOT be set in production; intended for
     /// local development environments (e.g. Hydra without TLS).
-    #[serde(default)]
+    // `alias` keeps configs using the pre-rename key (`danger_allow_non_tls`)
+    // deserialising for a migration window.
+    #[serde(default, alias = "danger_allow_non_tls")]
     pub dangerous_allow_non_tls: bool,
     /// Name of the JWT claim that carries the OAuth 2.0 scope list.
     ///
