@@ -152,6 +152,10 @@ pub async fn clickhouse_query(sql: &str) -> String {
             "ClickHouse query failed — is the observability fixture (ClickHouse) reachable? \
              It is an always-on dev/CI dependency, like Hydra.",
         )
+        // Surface a 4xx/5xx (e.g. a SQL error) immediately rather than reading the
+        // error page as if it were a result and wasting the poll budget.
+        .error_for_status()
+        .expect("ClickHouse returned an error status")
         .text()
         .await
         .expect("ClickHouse response body")
