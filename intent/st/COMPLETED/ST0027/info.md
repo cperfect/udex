@@ -1,10 +1,10 @@
 ---
 verblock: "30 Jun 2026:v0.1: vscode - Initial version"
 intent_version: 2.4.0
-status: Not Started
+status: Completed
 slug: clickhouse-observability-as-an-always-on-compose
 created: 20260630
-completed:
+completed: 20260630
 ---
 
 # ST0027: ClickHouse observability as an always-on compose fixture
