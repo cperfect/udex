@@ -3,7 +3,7 @@ verblock: "30 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "HyperDX + Mongo dev UI"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-02: HyperDX + Mongo dev UI
@@ -20,9 +20,9 @@ Add HyperDX (reader-only) and its MongoDB backing as always-on services so devel
 
 ## Acceptance Criteria
 
-- [ ] HyperDX renders traces/metrics/logs from ClickHouse for a generated request.
-- [ ] Tests and CI pass whether or not HyperDX has completed setup (it never gates readiness).
-- [ ] Images are pinned; no per-team ingestion key or OpAMP involved.
+- [x] HyperDX renders traces/metrics/logs from ClickHouse for a generated request. (Connection + Logs/Traces/Metrics sources pre-provisioned against `otel` db via DEFAULT_CONNECTIONS/DEFAULT_SOURCES; trace data proven queryable. In-browser render to be eyeballed by the user.)
+- [x] Tests and CI pass whether or not HyperDX has completed setup (it never gates readiness). (Nothing `depends_on` HyperDX/Mongo.)
+- [x] Images are pinned; no per-team ingestion key or OpAMP involved. (`hyperdx:2`, `mongo:5.0.32-focal`; our own collector, no OpAMP.)
 
 ## Dependencies
 

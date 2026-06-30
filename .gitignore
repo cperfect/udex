@@ -16,10 +16,6 @@ projects/observability/certs/*.key
 projects/observability/certs/*.crt
 projects/observability/certs/*.csr
 projects/observability/certs/*.srl
-projects/compose/otel-collector/certs/*.key
-projects/compose/otel-collector/certs/*.crt
-projects/compose/otel-collector/certs/*.csr
-projects/compose/otel-collector/certs/*.srl
 
 # ignore mcp state
 .mcp/

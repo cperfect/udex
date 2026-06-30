@@ -59,7 +59,16 @@ services:
   # ── Observability fixture (ST0027) ──────────────────────────────────────────
   # Always-on like postgres/hydra: the obs tests assume it is present and FAIL
   # (never skip) if it is not. ClickHouse is the unified telemetry store; the
-  # collector ingests the app's OTLP (over TLS) and exports to it.
+  # collector ingests the app's OTLP and exports to it.
+  #
+  # Everything here is configured WITHOUT bind mounts (inline `configs` content +
+  # env vars only). The base compose is consumed in two contexts with different
+  # project directories — standalone/CI (project dir projects/compose/) and the
+  # devcontainer (project dir .devcontainer/) — so a relative bind-mount path
+  # would resolve to two different places and break in one of them. The OTLP hop
+  # is plaintext for the same reason: TLS would require mounting cert files. This
+  # is a local dev/CI posture; the app itself stays OTLP-standard and can be
+  # pointed at a TLS-terminating collector in any real deployment.
 
   # Unified store for traces/metrics/logs (replaces Tempo/Prometheus/Loki).
   clickhouse:
@@ -71,8 +80,7 @@ services:
       # Pre-create the observability database the collector's clickhouse exporter
       # targets. The exporter's create_schema makes the tables but NOT the
       # database, and it connects with `otel` as the session default, so the DB
-      # must exist first. CLICKHOUSE_DB creates it on init with no bind mount
-      # (robust under docker-outside-of-docker, where bind mounts can misresolve).
+      # must exist first. CLICKHOUSE_DB creates it on init with no bind mount.
       - CLICKHOUSE_DB=otel
     ports:
       - "8123:8123"   # HTTP query API (tests + host debugging)
@@ -87,21 +95,109 @@ services:
       retries: 45
     restart: unless-stopped
 
-  # Single OTLP ingest (TLS) for the app's traces/metrics/logs -> ClickHouse.
-  # Static, version-controlled config (no OpAMP / no runtime mutation).
+  # Single OTLP ingest (plaintext) for the app's traces/metrics/logs -> ClickHouse.
+  # Static config supplied inline via `configs` (no bind mount, no OpAMP).
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.119.0
     command: ["--config=/etc/otel/config.yaml"]
+    configs:
+      - source: otelcol_config
+        target: /etc/otel/config.yaml
     ports:
-      - "4317:4317"   # OTLP gRPC (TLS) - in-network + k3d via host.k3d.internal
-      - "4318:4318"   # OTLP HTTP (TLS)
-    volumes:
-      - ./otel-collector/config.yaml:/etc/otel/config.yaml:ro
-      - ./otel-collector/certs:/etc/otel/certs:ro
+      - "4317:4317"   # OTLP gRPC - in-network + k3d via host.k3d.internal
+      - "4318:4318"   # OTLP HTTP
     depends_on:
       clickhouse:
         condition: service_healthy
     restart: unless-stopped
+
+  # HyperDX dev UI over ClickHouse (reader-only). A developer convenience — the
+  # obs tests query ClickHouse directly and do NOT depend on it, so nothing
+  # `depends_on` HyperDX/Mongo and they never gate the stack's readiness.
+
+  # HyperDX application state (saved searches, dashboards). Ephemeral: no volume,
+  # because DEFAULT_CONNECTIONS/DEFAULT_SOURCES re-seed the source on every boot.
+  mongo:
+    image: mongo:5.0.32-focal
+    restart: unless-stopped
+
+  hyperdx:
+    image: docker.hyperdx.io/hyperdx/hyperdx:2
+    # Inline env (no env_file) so there is no project-dir-relative path to
+    # misresolve. DEFAULT_CONNECTIONS/DEFAULT_SOURCES pre-provision the ClickHouse
+    # connection + Logs/Traces/Metrics sources against our `otel` database, so the
+    # UI needs no manual setup; IS_LOCAL_APP_MODE skips the login flow (dev only).
+    environment:
+      MONGO_URI: mongodb://mongo:27017/hyperdx
+      FRONTEND_URL: http://localhost:8080
+      HYPERDX_APP_URL: http://localhost
+      HYPERDX_APP_PORT: "8080"
+      HYPERDX_API_PORT: "8000"
+      HYPERDX_LOG_LEVEL: info
+      IS_LOCAL_APP_MODE: "DANGEROUSLY_is_local_app_mode💀"
+      DEFAULT_CONNECTIONS: '[{"name":"Local ClickHouse","host":"http://clickhouse:8123","username":"default","password":""}]'
+      DEFAULT_SOURCES: '[{"from":{"databaseName":"otel","tableName":"otel_logs"},"kind":"log","timestampValueExpression":"Timestamp","name":"Logs","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"Body","serviceNameExpression":"ServiceName","bodyExpression":"Body","eventAttributesExpression":"LogAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,SeverityText,Body","severityTextExpression":"SeverityText","traceIdExpression":"TraceId","spanIdExpression":"SpanId","connection":"Local ClickHouse","traceSourceId":"Traces","metricSourceId":"Metrics"},{"from":{"databaseName":"otel","tableName":"otel_traces"},"kind":"trace","timestampValueExpression":"Timestamp","name":"Traces","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"SpanName","serviceNameExpression":"ServiceName","eventAttributesExpression":"SpanAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName","traceIdExpression":"TraceId","spanIdExpression":"SpanId","durationExpression":"Duration","durationPrecision":9,"parentSpanIdExpression":"ParentSpanId","spanNameExpression":"SpanName","spanKindExpression":"SpanKind","statusCodeExpression":"StatusCode","statusMessageExpression":"StatusMessage","connection":"Local ClickHouse","logSourceId":"Logs","metricSourceId":"Metrics"},{"from":{"databaseName":"otel","tableName":""},"kind":"metric","timestampValueExpression":"TimeUnix","name":"Metrics","resourceAttributesExpression":"ResourceAttributes","metricTables":{"gauge":"otel_metrics_gauge","histogram":"otel_metrics_histogram","sum":"otel_metrics_sum","summary":"otel_metrics_summary","exponentialHistogram":"otel_metrics_exponential_histogram"},"connection":"Local ClickHouse","logSourceId":"Logs","traceSourceId":"Traces"}]'
+    ports:
+      - "8080:8080"   # HyperDX UI
+      - "8000:8000"   # HyperDX API (called by the UI)
+    depends_on:
+      - mongo
+      - clickhouse
+    restart: unless-stopped
+
+configs:
+  # Inline OTel Collector config (no bind mount). OTLP (plaintext) in,
+  # ClickHouse out. create_schema lets the exporter own the OTel table schema
+  # (otel_traces / otel_logs / otel_metrics_*), which is exactly what HyperDX
+  # reads. postgresqlreceiver + the container-log floor are added in WP03.
+  otelcol_config:
+    content: |
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+      processors:
+        batch: {}
+      exporters:
+        clickhouse:
+          endpoint: tcp://clickhouse:9000?dial_timeout=10s
+          database: otel
+          username: default
+          password: ""
+          create_schema: true
+          ttl: 72h
+          logs_table_name: otel_logs
+          traces_table_name: otel_traces
+          timeout: 10s
+          retry_on_failure:
+            enabled: true
+            initial_interval: 5s
+            max_interval: 30s
+            max_elapsed_time: 300s
+      extensions:
+        health_check:
+          endpoint: 0.0.0.0:13133
+      service:
+        extensions: [health_check]
+        pipelines:
+          traces:
+            receivers: [otlp]
+            processors: [batch]
+            exporters: [clickhouse]
+          metrics:
+            receivers: [otlp]
+            processors: [batch]
+            exporters: [clickhouse]
+          logs:
+            receivers: [otlp]
+            processors: [batch]
+            exporters: [clickhouse]
+        telemetry:
+          metrics:
+            address: 0.0.0.0:8888
 
 # volumes:
 #   pg_data:

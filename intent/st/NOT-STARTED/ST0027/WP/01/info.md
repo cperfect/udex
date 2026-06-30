@@ -8,6 +8,8 @@ status: Done
 
 # WP-01: ClickHouse + collector fixture in compose
 
+> **Note (superseded in WP02):** the TLS receiver + collector-cert parts below were reverted when WP02 reworked the fixture to be bind-mount-free (the devcontainer resolves bind-mount paths to `.devcontainer/`, breaking them). The OTLP hop is now **plaintext** and the collector config is supplied inline via Compose `configs.content`. See impl.md "WP02 — the bind-mount pivot". The ClickHouse store and the schema de-risk below still stand.
+
 ## Objective
 
 Stand up ClickHouse and a reconfigured stock `otel/opentelemetry-collector-contrib` as always-on services in `projects/compose/docker-compose.yml`, exporting OTLP traces/metrics/logs to ClickHouse, and prove the end-to-end data path. This WP de-risks the steel thread by resolving the primary unknown: the ClickHouse table schema the contrib exporter writes vs. what HyperDX expects to read.

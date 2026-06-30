@@ -13,6 +13,18 @@
 
 The contrib `clickhouse` exporter creates the **exact** OTel schema HyperDX reads — `otel_traces`, `otel_logs`, `otel_metrics_{gauge,sum,histogram,exponential_histogram,summary}` (plus trace-id materialized views) — in the `otel` database. This matches what the spike observed inside the HyperDX all-in-one's ClickHouse. **No schema reconciliation is needed**; WP02 simply points HyperDX's source at the `otel` database. This was the primary risk for the whole steel thread and it is closed.
 
+### WP02 — HyperDX + Mongo dev UI (as-built) + the bind-mount pivot
+
+A devcontainer-rebuild bug surfaced while wiring HyperDX: the base compose is consumed with **two different project directories** (standalone/CI = `projects/compose/`, devcontainer = `.devcontainer/` since it is the first `-f` file and the overlay's own relative paths forbid reordering). Proof: the running postgres mounts `.devcontainer/postgres/...` (an empty stub), not `projects/compose/postgres/`. So every relative bind-mount path (the WP01 collector config + certs, and the HyperDX `env_file`) resolves to a non-existent `.devcontainer/...` location on a real devcontainer bring-up. Per the user decision (Path fix → "relax TLS, go bind-mount-free") the whole fixture was reworked to use **no bind mounts**:
+
+- **otel-collector:** config inlined via Compose top-level `configs:` (`content:`), receiver is now **plaintext** (no TLS block, no certs). WP01's cert machinery was reverted: deleted `projects/compose/otel-collector/`, removed the OTLP wiring from `scripts/gen-keys-and-certs.sh`, reverted the `.gitignore` cert entries.
+- **clickhouse:** unchanged (env-only, `CLICKHOUSE_DB=otel`).
+- **mongo** (`mongo:5.0.32-focal`) + **hyperdx** (`docker.hyperdx.io/hyperdx/hyperdx:2`): HyperDX configured by **inline env** (no `env_file`). `DEFAULT_CONNECTIONS`/`DEFAULT_SOURCES` (format lifted from the ClickStack all-in-one entrypoint, retargeted to our `otel` db and the `clickhouse` service; session/rollup tables our stock collector does not create were dropped) pre-provision the connection + Logs/Traces/Metrics sources. `IS_LOCAL_APP_MODE` requests local single-user mode. Nothing `depends_on` HyperDX/Mongo, so they never gate readiness.
+
+Verified cold, **with no path override**, in-context: collector ready, **plaintext** OTLP `POST -> 200 -> otel.otel_traces`; HyperDX boots, connects to Mongo, and on team creation seeds exactly: connection "Local ClickHouse" -> `http://clickhouse:8123`, and sources Logs/Traces/Metrics all on db `otel`.
+
+Open UX note: `DEFAULT_*` seed only when the first team is created. A browser visit in local mode is expected to auto-bootstrap; headless, a one-time registration (POST `/api/register/password`, password >= 12 chars) creates the team and triggers the seed. Mongo is kept **ephemeral** (no volume) so the sources always re-seed fresh from the (git) env on each boot rather than drifting — the cost is re-bootstrapping the local user per fresh stack, which only affects the dev UI (CI does not use it). Confirm the in-browser auto-login behaviour and revisit if a volume is warranted.
+
 ## Technical Details
 
 - **Database pre-creation:** the exporter's `create_schema` makes the tables but **not** the database, and it connects with `otel` as the session default — so `otel` must exist first. Created via `CLICKHOUSE_DB=otel` (env, no bind mount) rather than an `initdb.d` SQL file, because bind mounts misresolve under docker-outside-of-docker (see Challenges). `restart: unless-stopped` + the exporter's `retry_on_failure` self-heal any brief startup race.
