@@ -126,7 +126,9 @@ services:
     # Inline env (no env_file) so there is no project-dir-relative path to
     # misresolve. DEFAULT_CONNECTIONS/DEFAULT_SOURCES pre-provision the ClickHouse
     # connection + Logs/Traces/Metrics sources against our `otel` database, so the
-    # UI needs no manual setup; IS_LOCAL_APP_MODE skips the login flow (dev only).
+    # UI needs no manual datasource setup. This image has no no-auth mode, so a
+    # login is required; the hyperdx-init service registers the local user for you
+    # (log in with admin@udex.local / UdexLocalDev1!).
     environment:
       MONGO_URI: mongodb://mongo:27017/hyperdx
       FRONTEND_URL: http://localhost:8080
@@ -134,7 +136,6 @@ services:
       HYPERDX_APP_PORT: "8080"
       HYPERDX_API_PORT: "8000"
       HYPERDX_LOG_LEVEL: info
-      IS_LOCAL_APP_MODE: "DANGEROUSLY_is_local_app_mode💀"
       DEFAULT_CONNECTIONS: '[{"name":"Local ClickHouse","host":"http://clickhouse:8123","username":"default","password":""}]'
       DEFAULT_SOURCES: '[{"from":{"databaseName":"otel","tableName":"otel_logs"},"kind":"log","timestampValueExpression":"Timestamp","name":"Logs","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"Body","serviceNameExpression":"ServiceName","bodyExpression":"Body","eventAttributesExpression":"LogAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,SeverityText,Body","severityTextExpression":"SeverityText","traceIdExpression":"TraceId","spanIdExpression":"SpanId","connection":"Local ClickHouse","traceSourceId":"Traces","metricSourceId":"Metrics"},{"from":{"databaseName":"otel","tableName":"otel_traces"},"kind":"trace","timestampValueExpression":"Timestamp","name":"Traces","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"SpanName","serviceNameExpression":"ServiceName","eventAttributesExpression":"SpanAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName","traceIdExpression":"TraceId","spanIdExpression":"SpanId","durationExpression":"Duration","durationPrecision":9,"parentSpanIdExpression":"ParentSpanId","spanNameExpression":"SpanName","spanKindExpression":"SpanKind","statusCodeExpression":"StatusCode","statusMessageExpression":"StatusMessage","connection":"Local ClickHouse","logSourceId":"Logs","metricSourceId":"Metrics"},{"from":{"databaseName":"otel","tableName":""},"kind":"metric","timestampValueExpression":"TimeUnix","name":"Metrics","resourceAttributesExpression":"ResourceAttributes","metricTables":{"gauge":"otel_metrics_gauge","histogram":"otel_metrics_histogram","sum":"otel_metrics_sum","summary":"otel_metrics_summary","exponentialHistogram":"otel_metrics_exponential_histogram"},"connection":"Local ClickHouse","logSourceId":"Logs","traceSourceId":"Traces"}]'
     ports:
@@ -143,7 +144,49 @@ services:
     depends_on:
       - mongo
       - clickhouse
+    # Readiness gate so hyperdx-init runs only once the API is actually serving
+    # (the app's boot is slow and variable). `wget` ships in the image.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
     restart: unless-stopped
+
+  # One-shot: register the local HyperDX user so a dev never meets a signup form
+  # — just open http://localhost:8080 and log in with the documented credentials
+  # (admin@udex.local / UdexLocalDev1!). This image has no no-auth mode, and the
+  # DEFAULT_* source seeding only fires when the first team is created, so this
+  # both removes the signup step and triggers the seed. Gated on hyperdx being
+  # healthy (no boot race); idempotent via the installation check. Local dev only.
+  hyperdx-init:
+    image: curlimages/curl:8.11.1
+    depends_on:
+      hyperdx:
+        condition: service_healthy
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - |
+        if curl -sf --max-time 10 http://hyperdx:8080/api/installation | grep -q '"isTeamExisting":true'; then
+          echo "hyperdx: team already present, nothing to do"; exit 0
+        fi
+        # Register the local user. The server-side work (create team + seed the
+        # DEFAULT_* sources) can outlast the client read, so don't trust the POST
+        # return code — confirm success by polling the installation state instead.
+        curl -s --max-time 60 -o /dev/null \
+          -X POST http://hyperdx:8080/api/register/password \
+          -H 'Content-Type: application/json' \
+          -d '{"email":"admin@udex.local","password":"UdexLocalDev1!","confirmPassword":"UdexLocalDev1!","name":"udex"}' || true
+        for i in $(seq 1 15); do
+          if curl -sf --max-time 10 http://hyperdx:8080/api/installation | grep -q '"isTeamExisting":true'; then
+            echo "hyperdx: local user registered + sources seeded"; exit 0
+          fi
+          sleep 2
+        done
+        echo "hyperdx-init: registration did not take" >&2; exit 1
 
 configs:
   # Inline OTel Collector config (no bind mount). OTLP (plaintext) in,

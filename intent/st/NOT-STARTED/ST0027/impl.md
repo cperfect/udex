@@ -23,7 +23,12 @@ A devcontainer-rebuild bug surfaced while wiring HyperDX: the base compose is co
 
 Verified cold, **with no path override**, in-context: collector ready, **plaintext** OTLP `POST -> 200 -> otel.otel_traces`; HyperDX boots, connects to Mongo, and on team creation seeds exactly: connection "Local ClickHouse" -> `http://clickhouse:8123`, and sources Logs/Traces/Metrics all on db `otel`.
 
-Open UX note: `DEFAULT_*` seed only when the first team is created. A browser visit in local mode is expected to auto-bootstrap; headless, a one-time registration (POST `/api/register/password`, password >= 12 chars) creates the team and triggers the seed. Mongo is kept **ephemeral** (no volume) so the sources always re-seed fresh from the (git) env on each boot rather than drifting — the cost is re-bootstrapping the local user per fresh stack, which only affects the dev UI (CI does not use it). Confirm the in-browser auto-login behaviour and revisit if a volume is warranted.
+Auth/bootstrap (resolved): the modular `hyperdx:2` image has **no no-auth mode** — `IS_LOCAL_APP_MODE` exists only in the all-in-one's wrapper and is a no-op here (confirmed: the literal appears nowhere in the image), and there is no auth-disable env. So a login is required. A one-shot **`hyperdx-init`** service auto-registers the local user (`admin@udex.local` / `UdexLocalDev1!`) so a dev never meets a signup form — just log in. The seed is tied to first team creation, so this registration also triggers it. Hardening that mattered:
+- HyperDX boot is slow/variable, so `hyperdx-init` is gated on a **healthcheck** (`wget .../health`) via `depends_on: condition: service_healthy` — no boot race.
+- The register's server-side work (team + 3 sources) can outlast curl's read, returning an empty code despite succeeding; the init therefore confirms success by polling `/api/installation` for `isTeamExisting`, not the POST return code. Idempotent (skips if a team already exists).
+- HyperDX password policy is >= 12 chars with upper + lower + digit + **special** (all four required).
+
+Mongo is kept **ephemeral** (no volume) so the sources always re-seed fresh from the (git) env each boot rather than drifting; the cost is re-running the (automatic) bootstrap per fresh stack, which only affects the dev UI (CI does not use it). Browser render of the seeded sources still to be eyeballed by the user.
 
 ## Technical Details
 
