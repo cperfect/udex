@@ -126,7 +126,7 @@ async fn init_server() -> MaybeOnceType {
             jwt_public_key: Some(bind_file_secret("tests/jwt/signing_public_key.pem")),
             jwt_issuer: Some(jwt_issuer.clone()),
             jwt_audience: Some(jwt_audience.clone()),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,
@@ -238,7 +238,7 @@ async fn init_server_hydra() -> HydraFixtureType {
             jwt_issuer: Some(issuer),
             jwt_audience: Some(audience.clone()),
             // Local Hydra runs over plain HTTP; allow it in test-only config.
-            danger_allow_non_tls: true,
+            dangerous_allow_non_tls: true,
             // Hydra uses "scp" (array) instead of the RFC 8693 default "scope".
             scope_claim_name: Some("scp".to_string()),
             mask_subject_in_logs: false,

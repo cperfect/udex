@@ -18,12 +18,12 @@ server:
 
 authz:
   # Hydra JWKS endpoint reachable from inside k3d pods via host.k3d.internal.
-  # danger_allow_non_tls is required because the local Compose Hydra has no TLS.
+  # dangerous_allow_non_tls is required because the local Compose Hydra has no TLS.
   jwksUrl: "http://host.k3d.internal:4444/.well-known/jwks.json"
   # Must match URLS_SELF_ISSUER in the Compose Hydra config.
   jwtIssuer: "http://localhost:4444/"
   jwtAudience: "udex"
-  dangerAllowNonTls: true
+  dangerousAllowNonTls: true
   # Hydra uses "scp" (array) instead of the RFC 8693 "scope" claim.
   scopeClaimName: "scp"
   maskSubjectInLogs: false
@@ -38,17 +38,23 @@ datastore:
   # Apply pending migrations on startup — acceptable for local dev.
   applyMigrations: true
 
-# OpenTelemetry observability. The dev cluster exports OTLP to the local
-# observability stack (projects/observability) running on the host, reached from
-# k3d pods via host.k3d.internal — the same bridge used for postgres and Hydra.
-# Full sampling for dev. Bring the stack up first: projects/observability/scripts/up.sh
+# OpenTelemetry observability. The dev cluster exports OTLP to the ClickHouse-
+# backed collector in the base compose stack (projects/compose), running on the
+# host and reached from k3d pods via host.k3d.internal — the same bridge used for
+# postgres and Hydra. Full sampling for dev. The collector is always-on with the
+# base stack (`docker compose -f projects/compose/docker-compose.yml up -d`).
 observability:
   enabled: true
-  # Local-stack OTel Collector, published on the host at :4317 (OTLP gRPC, TLS).
-  otlpEndpoint: "https://host.k3d.internal:4317"
+  # Compose OTel Collector, reachable from k3d pods via the host. OTLP over gRPC
+  # (port 4317); `http://` = plaintext — the local dev/CI fixture terminates no
+  # TLS (see ST0027).
+  otlpEndpoint: "http://host.k3d.internal:4317"
+  # The collector terminates no TLS, so plaintext OTLP must be opted into
+  # (mirrors authz.dangerousAllowNonTls / datastore.dangerousAllowNonTls). Dev only.
+  dangerousAllowNonTls: true
   # Full trace + metric sampling in dev.
   sampleRatio: 1.0
-  # Tags cluster-originated telemetry so it is distinguishable in Grafana.
+  # Tags cluster-originated telemetry so it is distinguishable (deployment.environment).
   deploymentEnvironment: "k3d"
 
 # Secrets — never store real values here.
@@ -64,6 +70,3 @@ secrets:
   # TLS at the ingress (projects/k8s/traefik/certs). PEM-encoded (raw PEM).
   traefikTlsCrt: ""
   traefikTlsKey: ""
-  # OTLP CA — the CA that signed the observability Collector's cert
-  # (projects/observability/certs/ca.crt). Required when observability.enabled.
-  otlpCa: ""

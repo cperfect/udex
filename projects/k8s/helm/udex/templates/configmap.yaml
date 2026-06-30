@@ -28,16 +28,18 @@ data:
         jwks_url: {{ .Values.authz.jwksUrl | quote }}
         jwt_issuer: {{ .Values.authz.jwtIssuer | quote }}
         jwt_audience: {{ .Values.authz.jwtAudience | quote }}
-        danger_allow_non_tls: {{ .Values.authz.dangerAllowNonTls }}
+        dangerous_allow_non_tls: {{ .Values.authz.dangerousAllowNonTls }}
         scope_claim_name: {{ .Values.authz.scopeClaimName | quote }}
         mask_subject_in_logs: {{ .Values.authz.maskSubjectInLogs }}
 {{- if .Values.observability.enabled }}
-      # OpenTelemetry export. otlp_ca is the OTLP CA mounted from the Secret (see
-      # secret.yaml / deployment.yaml). JSON stdout logging stays on regardless.
+      # OpenTelemetry export to the compose collector (plaintext OTLP/gRPC on
+      # :4317 — the local dev/CI fixture terminates no TLS, so no otlp_ca). JSON
+      # stdout logging stays on regardless.
       observability:
         enabled: true
         otlp_endpoint: {{ .Values.observability.otlpEndpoint | quote }}
-        otlp_ca: "/etc/udex/otel/ca.crt"
+        # The local dev/CI collector terminates no TLS; opt into plaintext OTLP.
+        dangerous_allow_non_tls: {{ .Values.observability.dangerousAllowNonTls }}
         sample_ratio: {{ .Values.observability.sampleRatio }}
         resource_attributes:
           deployment.environment: {{ .Values.observability.deploymentEnvironment | quote }}

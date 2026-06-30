@@ -322,7 +322,6 @@ fi
 JWT_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/jwt"
 TLS_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/certs"
 EDGE_TLS_DIR="${WORKSPACE_DIR}/projects/k8s/traefik/certs"
-OTLP_TLS_DIR="${WORKSPACE_DIR}/projects/observability/certs"
 ALL_KEYS=true
 for f in \
   "${JWT_DIR}/signing_private_key.pem" \
@@ -336,26 +335,14 @@ for f in \
   "${EDGE_TLS_DIR}/ca.key" \
   "${EDGE_TLS_DIR}/ca.crt" \
   "${EDGE_TLS_DIR}/tls.key" \
-  "${EDGE_TLS_DIR}/tls.crt" \
-  "${OTLP_TLS_DIR}/ca.key" \
-  "${OTLP_TLS_DIR}/ca.crt" \
-  "${OTLP_TLS_DIR}/collector.key" \
-  "${OTLP_TLS_DIR}/collector.crt"; do
+  "${EDGE_TLS_DIR}/tls.crt"; do
   [[ -f "$f" ]] || { ALL_KEYS=false; break; }
 done
 if [[ "${ALL_KEYS}" == true ]]; then
-  pass "key material present (TLS certs + Traefik edge certs + OTLP certs + JWT signing keys)"
+  pass "key material present (TLS certs + Traefik edge certs + JWT signing keys)"
 else
   fail "key material missing" \
     "Run: bash scripts/gen-keys-and-certs.sh"
-fi
-
-# Grafana admin credential (observability stack) — sourced from .env above.
-if [[ -n "${GRAFANA_ADMIN_PASSWORD:-}" ]]; then
-  pass "GRAFANA_ADMIN_PASSWORD set"
-else
-  fail "GRAFANA_ADMIN_PASSWORD not set" \
-    "Run: bash scripts/gen-env.sh --force  (adds the observability Grafana credential)"
 fi
 
 # --- Services --------------------------------------------------------------

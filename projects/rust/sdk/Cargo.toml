@@ -43,6 +43,9 @@ path = "examples/envelope_write.rs"
 udex-test-utils = { path = "../test-utils" }
 udex-server = { path = "../server" }
 udex-datastore = { path = "../datastore", features = ["integration_test"] }
+# For the non-k8s observability test (tests/obs.rs): builds a TelemetryConfig to
+# enable OTLP export on an in-process server.
+udex-telemetry = { path = "../telemetry" }
 opentelemetry_sdk = "0.32"
 tokio-shared-rt = { workspace = true }
 maybe-once = { workspace = true }

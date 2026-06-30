@@ -121,7 +121,7 @@ async fn init_server() {
             jwt_public_key: Some(bind_file_secret(JWT_PUBLIC_KEY)),
             jwt_issuer: Some("cli-health-test-issuer".to_string()),
             jwt_audience: Some("cli-health-test-audience".to_string()),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,

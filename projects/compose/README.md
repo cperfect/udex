@@ -35,9 +35,46 @@ docker compose -f projects/compose/docker-compose.yml down
 
 When using the devcontainer, services start automatically and the above commands are not needed.
 
-### Observability stack
+## Observability
 
-A plain `up` starts only PostgreSQL and Hydra. The local observability stack (OpenTelemetry Collector, Tempo, Prometheus, Loki, Vector, Grafana) lives in its own project. In the **devcontainer it starts automatically** (via `post-create.sh`); outside the devcontainer bring it up with `bash projects/observability/scripts/up.sh`. See [`projects/observability/README.md`](../observability/README.md).
+The observability fixture is **part of this base stack** (ST0027) — it comes up with everything else, always-on like PostgreSQL and Hydra (no separate project, no opt-in). It is a single ClickHouse-backed OpenTelemetry pipeline:
+
+| Service | Role |
+|---|---|
+| `otel-collector` (`opentelemetry-collector-contrib`) | OTLP ingest (plaintext gRPC/HTTP) + PostgreSQL server metrics; exports to ClickHouse |
+| `clickhouse` | Unified store for traces, metrics, and logs |
+| `vector` | Ships postgres/hydra container stdout into ClickHouse (the durable log "floor") |
+| `hyperdx` + `mongo` | Reader-only dev UI over ClickHouse (developer convenience) |
+
+- **App telemetry is opt-in:** the server/SDK/CLI only emit OTLP when an `observability.otlp_endpoint` is configured (server) or `UDEX_OTLP_ENDPOINT` is set (CLI). The collector is **keyless and plaintext** locally — the application stays standard OTLP and can target any backend (see [`projects/rust/telemetry/README.md`](../rust/telemetry/README.md)).
+- **HyperDX UI:** <http://localhost:8080>. A local user is auto-registered by the `hyperdx-init` service — log in with `admin@udex.local` / `UdexLocalDev1!`; the ClickHouse datasource (Logs / Traces / Metrics) is pre-provisioned.
+- **Tests** query ClickHouse directly (HTTP on `:8123`); they treat the fixture as a hard dependency (fail, never skip) like the Hydra tests.
+
+The collector config and Vector config are inlined in `docker-compose.yml` (no bind mounts, so they resolve identically in the devcontainer and standalone/CI); ClickHouse pre-creates the `otel` database via `CLICKHOUSE_DB`.
+
+### Charting metrics in HyperDX
+
+The Logs/Traces/Metrics sources are pre-provisioned, but **dashboards are not** (HyperDX has no dashboard-seeding hook). Build charts yourself: **Traces and Logs** are explored from the **Search** page (pick the source in the search bar); **Metrics** are charted from **Dashboards → add a tile → source = Metrics**, then choose the metric, its **type** (must match below), an aggregation, and a group-by. Note the udex/postgres counters are **cumulative** — use a **rate** aggregation for per-second values (the raw value is the running total). Recipes:
+
+**Udex services**
+
+| Chart | Metric | Type | Aggregation | Group by / filter |
+|---|---|---|---|---|
+| Request rate per operation | `udex.rpc.requests` | Sum | rate | group by `rpc.method` |
+| Errors per operation | `udex.rpc.requests` | Sum | rate | group by `rpc.method`, `rpc.grpc.status_code` (non-zero = error) |
+| p95 latency per operation | `udex.rpc.duration` | Histogram | p95 (quantile) | group by `rpc.method` |
+
+**PostgreSQL** (from the collector's `postgresqlreceiver`)
+
+| Chart | Metric | Type | Aggregation |
+|---|---|---|---|
+| Active backends (connections) | `postgresql.backends` | Sum | latest / avg |
+| Transaction rate | `postgresql.commits`, `postgresql.rollbacks` | Sum | rate |
+| Disk block reads | `postgresql.blocks_read` | Sum | rate |
+| Database size | `postgresql.db_size` | Sum | latest |
+| Max connections | `postgresql.connection.max` | Gauge | latest |
+
+Other `postgresql.*` series (bgwriter, index/table stats, rows, operations) are all **Sum** metrics and follow the same pattern.
 
 ## Service URLs
 
@@ -46,6 +83,9 @@ A plain `up` starts only PostgreSQL and Hydra. The local observability stack (Op
 | PostgreSQL | `postgres://postgres:<password>@localhost:5432/postgres` |
 | Hydra public (token issuance) | `http://localhost:4444` |
 | Hydra admin (client management) | `http://localhost:4445` |
+| ClickHouse (HTTP query API) | `http://localhost:8123` (loopback-only — no-auth, not LAN-exposed) |
+| OTLP collector (gRPC / HTTP) | `localhost:4317` / `localhost:4318` |
+| HyperDX UI | `http://localhost:8080` |
 
 The full `DATABASE_URL` is written into `.env` by `gen-env.sh` and picked up automatically by `cargo test` and the CLI.
 

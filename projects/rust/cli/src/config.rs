@@ -85,7 +85,7 @@ impl Default for UdexConfig {
                     ),
                     jwt_issuer: Some("https://auth.example.com".to_string()),
                     jwt_audience: Some("udex".to_string()),
-                    danger_allow_non_tls: false,
+                    dangerous_allow_non_tls: false,
                     scope_claim_name: None,
                     mask_subject_in_logs: false,
                     jwks_max_failed_refreshes: None,

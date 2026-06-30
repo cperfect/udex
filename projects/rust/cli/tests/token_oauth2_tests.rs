@@ -92,7 +92,7 @@ async fn init_fixture() -> Fixture {
             // The Hydra client is registered with AUDIENCE so Hydra includes it
             // in every issued JWT automatically — no explicit audience request needed.
             jwt_audience: Some(AUDIENCE.to_string()),
-            danger_allow_non_tls: true,
+            dangerous_allow_non_tls: true,
             scope_claim_name: Some("scp".to_string()),
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,

@@ -110,15 +110,11 @@ Edit `helm/udex/values.yaml` or pass `--set` overrides, then re-run `deploy.sh`.
 
 ## Observability
 
-The deployment runs with OpenTelemetry **enabled** and full sampling (`observability` in `values.yaml`). The pods export OTLP traces, metrics, and logs to the **local observability stack** ([`projects/observability/`](../observability/README.md)) via `host.k3d.internal:4317` — the same host bridge used for PostgreSQL and Hydra — rather than a second in-cluster Collector. The OTLP CA (`projects/observability/certs/ca.crt`) is mounted into the pods and passed by `deploy.sh` via `--set-file secrets.otlpCa`; cluster telemetry is tagged `deployment.environment=k3d`.
+The deployment runs with OpenTelemetry **enabled** and full sampling (`observability` in `values.yaml`). The pods export OTLP traces, metrics, and logs to the **ClickHouse-backed observability fixture** (part of the base [`projects/compose`](../compose/README.md#observability) stack) via `host.k3d.internal:4317` — the same host bridge used for PostgreSQL and Hydra — rather than a second in-cluster Collector. The local collector is **plaintext** (no OTLP CA mount), so the OTLP hop is unauthenticated and untls'd in dev; cluster telemetry is tagged `deployment.environment=k3d`.
 
-To view the data, bring the stack up before (or after) deploying:
+The fixture is always-on with the base stack, so there is nothing extra to start. View the data in HyperDX at <http://localhost:8080> (login `admin@udex.local` / `UdexLocalDev1!`), or query ClickHouse directly on `:8123`.
 
-```bash
-bash projects/observability/scripts/up.sh   # Grafana at http://localhost:3000
-```
-
-Telemetry export is best-effort: if the stack is down the pods keep serving and simply cannot export. The `test_obs_k8s_*` integration tests assert the signals land (see [projects/rust/CONTRIBUTING.md](../rust/CONTRIBUTING.md)).
+Telemetry export is best-effort: if the collector is down the pods keep serving and simply cannot export. The `test_obs_k8s_*` integration tests assert the signals land in ClickHouse (see [projects/rust/CONTRIBUTING.md](../rust/CONTRIBUTING.md)).
 
 ## Teardown
 

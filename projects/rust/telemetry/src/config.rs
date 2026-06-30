@@ -19,7 +19,8 @@ fn default_sample_ratio() -> f64 {
 /// Telemetry configuration. Defaults to disabled - when `enabled` is false (or no
 /// `otlp_endpoint` is set) the binary runs with JSON stdout logging only and no
 /// OTLP exporters.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+// Debug is implemented manually (below) to redact secret header values.
+#[derive(Clone, Deserialize, Serialize)]
 pub struct TelemetryConfig {
     /// Master switch. When false, no OTLP exporters are created.
     #[serde(default)]
@@ -33,6 +34,13 @@ pub struct TelemetryConfig {
     /// omitted for an `https://` endpoint, the system/native roots are used.
     #[serde(default)]
     pub otlp_ca: Option<String>,
+
+    /// Permit a plaintext (`http://`) OTLP endpoint. TLS (`https://`) is required
+    /// by default; set this to allow exporting to a non-TLS collector. Local/dev
+    /// only - never in production. Mirrors the `dangerous_allow_non_tls` opt-ins
+    /// on the datastore and authz configs.
+    #[serde(default)]
+    pub dangerous_allow_non_tls: bool,
 
     /// Head trace sampling ratio in `0.0..=1.0` (applied to root spans;
     /// parent-based otherwise). Defaults to 1.0 (sample everything).
@@ -56,6 +64,14 @@ pub struct TelemetryConfig {
     /// `deployment.environment: local`).
     #[serde(default)]
     pub resource_attributes: BTreeMap<String, String>,
+
+    /// Extra headers attached to every OTLP export (sent as gRPC metadata) — e.g.
+    /// an API key for a header-authed backend such as Honeycomb, Grafana Cloud, or
+    /// the ClickStack all-in-one (`authorization: <ingestion-key>`). Empty by
+    /// default; the local fixture needs none. Values are commonly secrets and are
+    /// redacted by this type's `Debug` impl.
+    #[serde(default)]
+    pub otlp_headers: BTreeMap<String, String>,
 }
 
 impl Default for TelemetryConfig {
@@ -64,12 +80,38 @@ impl Default for TelemetryConfig {
             enabled: false,
             otlp_endpoint: None,
             otlp_ca: None,
+            dangerous_allow_non_tls: false,
             sample_ratio: default_sample_ratio(),
             traces: true,
             metrics: true,
             logs: true,
             resource_attributes: BTreeMap::new(),
+            otlp_headers: BTreeMap::new(),
         }
+    }
+}
+
+// Manual Debug so secret OTLP header values (commonly an API key) never leak
+// through Debug formatting. Header names are shown; values are redacted.
+impl std::fmt::Debug for TelemetryConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let redacted: BTreeMap<&String, &str> = self
+            .otlp_headers
+            .keys()
+            .map(|k| (k, "<redacted>"))
+            .collect();
+        f.debug_struct("TelemetryConfig")
+            .field("enabled", &self.enabled)
+            .field("otlp_endpoint", &self.otlp_endpoint)
+            .field("otlp_ca", &self.otlp_ca)
+            .field("dangerous_allow_non_tls", &self.dangerous_allow_non_tls)
+            .field("sample_ratio", &self.sample_ratio)
+            .field("traces", &self.traces)
+            .field("metrics", &self.metrics)
+            .field("logs", &self.logs)
+            .field("resource_attributes", &self.resource_attributes)
+            .field("otlp_headers", &redacted)
+            .finish()
     }
 }
 
@@ -93,6 +135,13 @@ impl TelemetryConfig {
         if !(endpoint.starts_with("http://") || endpoint.starts_with("https://")) {
             return Err(TelemetryError::Config(format!(
                 "otlp_endpoint '{endpoint}' must start with http:// or https://"
+            )));
+        }
+        if !self.dangerous_allow_non_tls && !endpoint.starts_with("https://") {
+            return Err(TelemetryError::Config(format!(
+                "otlp_endpoint '{endpoint}' must use https://; set \
+                 dangerous_allow_non_tls = true to permit plaintext OTLP \
+                 (local/dev only, never in production)"
             )));
         }
 
@@ -126,6 +175,21 @@ impl TelemetryConfig {
             ));
         }
 
+        // Fail fast on malformed OTLP headers (they become gRPC metadata). Don't
+        // echo the value in the error - it is commonly a secret.
+        for (name, value) in &self.otlp_headers {
+            if http::HeaderName::from_bytes(name.as_bytes()).is_err() {
+                return Err(TelemetryError::Config(format!(
+                    "otlp_headers key '{name}' is not a valid header name"
+                )));
+            }
+            if http::HeaderValue::from_str(value).is_err() {
+                return Err(TelemetryError::Config(format!(
+                    "otlp_headers value for '{name}' is not a valid header value"
+                )));
+            }
+        }
+
         Ok(())
     }
 
@@ -150,6 +214,57 @@ mod tests {
             otlp_endpoint: Some("https://otel-collector:4317".to_string()),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn debug_redacts_header_values() {
+        let cfg = TelemetryConfig {
+            otlp_headers: BTreeMap::from([(
+                "authorization".to_string(),
+                "super-secret-key".to_string(),
+            )]),
+            ..enabled_cfg()
+        };
+        let dbg = format!("{cfg:?}");
+        assert!(!dbg.contains("super-secret-key"), "secret leaked: {dbg}");
+        assert!(dbg.contains("authorization"), "header name hidden: {dbg}");
+        assert!(dbg.contains("<redacted>"), "value not redacted: {dbg}");
+    }
+
+    #[test]
+    fn valid_headers_ok() {
+        let cfg = TelemetryConfig {
+            otlp_headers: BTreeMap::from([(
+                "authorization".to_string(),
+                "Bearer abc123".to_string(),
+            )]),
+            ..enabled_cfg()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn invalid_header_name_is_err() {
+        let cfg = TelemetryConfig {
+            otlp_headers: BTreeMap::from([("bad header name".to_string(), "v".to_string())]),
+            ..enabled_cfg()
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("otlp_headers"), "got: {err}");
+    }
+
+    #[test]
+    fn invalid_header_value_is_err_without_leaking_value() {
+        let cfg = TelemetryConfig {
+            otlp_headers: BTreeMap::from([(
+                "authorization".to_string(),
+                "bad\nsecretvalue".to_string(),
+            )]),
+            ..enabled_cfg()
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("otlp_headers"), "got: {err}");
+        assert!(!err.contains("secretvalue"), "value leaked in error: {err}");
     }
 
     #[test]
@@ -201,10 +316,33 @@ mod tests {
     #[test]
     fn unreadable_ca_ignored_for_plaintext_endpoint() {
         // tls_config() never reads the CA for an http:// endpoint, so an
-        // unreadable CA must not fail validation in that case.
+        // unreadable CA must not fail validation in that case (plaintext is
+        // opted into via dangerous_allow_non_tls).
         let cfg = TelemetryConfig {
             otlp_endpoint: Some("http://otel-collector:4317".to_string()),
             otlp_ca: Some("/nonexistent/ca.crt".to_string()),
+            dangerous_allow_non_tls: true,
+            ..enabled_cfg()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn plaintext_endpoint_requires_flag() {
+        let cfg = TelemetryConfig {
+            otlp_endpoint: Some("http://otel-collector:4317".to_string()),
+            ..enabled_cfg()
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("https://"), "got: {err}");
+        assert!(err.contains("dangerous_allow_non_tls"), "got: {err}");
+    }
+
+    #[test]
+    fn plaintext_endpoint_with_flag_ok() {
+        let cfg = TelemetryConfig {
+            otlp_endpoint: Some("http://otel-collector:4317".to_string()),
+            dangerous_allow_non_tls: true,
             ..enabled_cfg()
         };
         assert!(cfg.validate().is_ok());

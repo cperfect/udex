@@ -36,7 +36,7 @@ server:
     jwt_issuer: "https://auth.example.com"
     jwt_audience: "udex"
     # Allow plain HTTP for jwks_url — never set to true in production.
-    danger_allow_non_tls: false
+    dangerous_allow_non_tls: false
     # JWT claim name for OAuth 2.0 scopes. RFC 8693 §4.2 default is "scope".
     # Set to "scp" when using Hydra (which uses an array-valued "scp" claim).
     # scope_claim_name: "scope"
