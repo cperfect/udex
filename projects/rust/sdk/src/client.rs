@@ -16,7 +16,7 @@ pub struct ClientOptions {
     pub(crate) endpoint: String,
     pub(crate) ca_cert: CaCert,
     pub(crate) auth: AuthConfig,
-    pub(crate) danger_allow_non_tls: bool,
+    pub(crate) dangerous_allow_non_tls: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -89,7 +89,7 @@ pub struct ClientOptionsBuilder {
     endpoint: Option<String>,
     ca_cert: CaCert,
     auth: AuthConfig,
-    danger_allow_non_tls: bool,
+    dangerous_allow_non_tls: bool,
 }
 
 impl ClientOptionsBuilder {
@@ -172,22 +172,22 @@ impl ClientOptionsBuilder {
     /// **Development only.** By default the SDK rejects any non-TLS URL so that
     /// credentials and tokens are never transmitted in plaintext. Set this flag
     /// only when connecting to a local dev or test server that does not have TLS.
-    pub fn danger_allow_non_tls(mut self) -> Self {
-        self.danger_allow_non_tls = true;
+    pub fn dangerous_allow_non_tls(mut self) -> Self {
+        self.dangerous_allow_non_tls = true;
         self
     }
 
     /// Builds [`ClientOptions`], returning an error if required fields are missing
-    /// or if a non-TLS URL is used without [`Self::danger_allow_non_tls`].
+    /// or if a non-TLS URL is used without [`Self::dangerous_allow_non_tls`].
     pub fn build(self) -> Result<ClientOptions, Error> {
         let endpoint = self
             .endpoint
             .ok_or_else(|| Error::InvalidOptions("endpoint is required".into()))?;
 
-        if !self.danger_allow_non_tls {
+        if !self.dangerous_allow_non_tls {
             if !endpoint.starts_with("https://") {
                 return Err(Error::InvalidOptions(
-                    "endpoint must use HTTPS; call danger_allow_non_tls() to allow plain HTTP \
+                    "endpoint must use HTTPS; call dangerous_allow_non_tls() to allow plain HTTP \
                      (development only)"
                         .into(),
                 ));
@@ -195,7 +195,7 @@ impl ClientOptionsBuilder {
             if let AuthConfig::ClientCredentials(ref creds) = self.auth {
                 if !creds.token_url.starts_with("https://") {
                     return Err(Error::InvalidOptions(
-                        "token_url must use HTTPS; call danger_allow_non_tls() to allow plain \
+                        "token_url must use HTTPS; call dangerous_allow_non_tls() to allow plain \
                          HTTP (development only)"
                             .into(),
                     ));
@@ -207,7 +207,7 @@ impl ClientOptionsBuilder {
             endpoint,
             ca_cert: self.ca_cert,
             auth: self.auth,
-            danger_allow_non_tls: self.danger_allow_non_tls, // retained for Debug output
+            dangerous_allow_non_tls: self.dangerous_allow_non_tls, // retained for Debug output
         })
     }
 }
@@ -258,8 +258,8 @@ impl UdexClient {
             Error::InvalidOptions(format!("invalid endpoint URL: {}", opts.endpoint))
         })?;
 
-        let channel = if opts.danger_allow_non_tls && opts.endpoint.starts_with("http://") {
-            // Plain HTTP — permitted only when danger_allow_non_tls is set (enforced in build()).
+        let channel = if opts.dangerous_allow_non_tls && opts.endpoint.starts_with("http://") {
+            // Plain HTTP — permitted only when dangerous_allow_non_tls is set (enforced in build()).
             shared.connect().await?
         } else {
             let tls = match &opts.ca_cert {
@@ -285,7 +285,7 @@ impl UdexClient {
                     creds.client_secret,
                     creds.audience,
                     creds.scope,
-                    opts.danger_allow_non_tls,
+                    opts.dangerous_allow_non_tls,
                 );
                 // Eagerly fetch so the first RPC does not pay the token-fetch latency.
                 tm.token().await?;

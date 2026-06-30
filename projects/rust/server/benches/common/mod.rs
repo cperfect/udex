@@ -292,7 +292,7 @@ async fn start_server_and_connect() -> (
             jwt_public_key: Some(jwt_public_key),
             jwt_issuer: Some(format!("{}-issuer", ID_PREFIX)),
             jwt_audience: Some(format!("{}-audience", ID_PREFIX)),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,

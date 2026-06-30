@@ -237,7 +237,7 @@ async fn start_jwks_server(
             jwt_public_key: None,
             jwt_issuer: Some(TEST_ISSUER.to_string()),
             jwt_audience: Some(TEST_AUDIENCE.to_string()),
-            danger_allow_non_tls: true,
+            dangerous_allow_non_tls: true,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: max_failed_refreshes,

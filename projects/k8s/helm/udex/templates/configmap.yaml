@@ -28,7 +28,7 @@ data:
         jwks_url: {{ .Values.authz.jwksUrl | quote }}
         jwt_issuer: {{ .Values.authz.jwtIssuer | quote }}
         jwt_audience: {{ .Values.authz.jwtAudience | quote }}
-        danger_allow_non_tls: {{ .Values.authz.dangerAllowNonTls }}
+        dangerous_allow_non_tls: {{ .Values.authz.dangerousAllowNonTls }}
         scope_claim_name: {{ .Values.authz.scopeClaimName | quote }}
         mask_subject_in_logs: {{ .Values.authz.maskSubjectInLogs }}
 {{- if .Values.observability.enabled }}

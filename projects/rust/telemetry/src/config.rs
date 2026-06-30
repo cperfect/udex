@@ -37,8 +37,8 @@ pub struct TelemetryConfig {
 
     /// Permit a plaintext (`http://`) OTLP endpoint. TLS (`https://`) is required
     /// by default; set this to allow exporting to a non-TLS collector. Local/dev
-    /// only - never in production. Mirrors the `dangerous_allow_non_tls` /
-    /// `danger_allow_non_tls` opt-ins on the datastore and authz configs.
+    /// only - never in production. Mirrors the `dangerous_allow_non_tls` opt-ins
+    /// on the datastore and authz configs.
     #[serde(default)]
     pub dangerous_allow_non_tls: bool,
 

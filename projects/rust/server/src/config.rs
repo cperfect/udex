@@ -61,7 +61,7 @@ pub struct AuthzConfig {
     /// Allow plain HTTP for jwks_url. MUST NOT be set in production; intended for
     /// local development environments (e.g. Hydra without TLS).
     #[serde(default)]
-    pub danger_allow_non_tls: bool,
+    pub dangerous_allow_non_tls: bool,
     /// Name of the JWT claim that carries the OAuth 2.0 scope list.
     ///
     /// RFC 8693 §4.2 defines this as `"scope"` (a space-delimited string).
@@ -171,9 +171,9 @@ impl AuthzConfig {
                     "jwks_url cannot be empty".to_string(),
                 ));
             }
-            if !self.danger_allow_non_tls && !u.starts_with("https://") {
+            if !self.dangerous_allow_non_tls && !u.starts_with("https://") {
                 return Err(crate::Error::ConfigValidation(format!(
-                    "jwks_url '{u}' must use HTTPS; set danger_allow_non_tls = true \
+                    "jwks_url '{u}' must use HTTPS; set dangerous_allow_non_tls = true \
                      to permit plain HTTP (local/dev only, never in production)"
                 )));
             }
@@ -284,7 +284,7 @@ mod tests {
             )),
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,
@@ -299,7 +299,7 @@ mod tests {
             jwt_public_key: None,
             jwt_issuer: Some("https://hydra:4444".to_string()),
             jwt_audience: Some("udex".to_string()),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,
@@ -383,7 +383,7 @@ mod tests {
             )),
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,
@@ -404,7 +404,7 @@ mod tests {
             jwt_public_key: None,
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,
@@ -425,7 +425,7 @@ mod tests {
             jwt_public_key: None,
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,
@@ -446,7 +446,7 @@ mod tests {
             jwt_public_key: None,
             jwt_issuer: Some("udex".to_string()),
             jwt_audience: Some("udex".to_string()),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,
@@ -463,7 +463,7 @@ mod tests {
             jwt_public_key: None,
             jwt_issuer: Some("https://issuer.example.com".to_string()),
             jwt_audience: Some("udex".to_string()),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,
@@ -484,7 +484,7 @@ mod tests {
             jwt_public_key: None,
             jwt_issuer: Some("http://localhost:4444/".to_string()),
             jwt_audience: Some("udex".to_string()),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,
@@ -505,7 +505,7 @@ mod tests {
             jwt_public_key: None,
             jwt_issuer: Some("http://localhost:4444/".to_string()),
             jwt_audience: Some("udex".to_string()),
-            danger_allow_non_tls: true,
+            dangerous_allow_non_tls: true,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,
@@ -516,13 +516,13 @@ mod tests {
     }
 
     #[test]
-    fn authz_validate_jwks_danger_allow_non_tls_ok() {
+    fn authz_validate_jwks_dangerous_allow_non_tls_ok() {
         let cfg = AuthzConfig {
             jwks_url: Some("http://hydra:4444/.well-known/jwks.json".to_string()),
             jwt_public_key: None,
             jwt_issuer: Some("http://hydra:4444/".to_string()),
             jwt_audience: Some("udex".to_string()),
-            danger_allow_non_tls: true,
+            dangerous_allow_non_tls: true,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,

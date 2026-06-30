@@ -92,7 +92,7 @@ async fn obs_local_traces_metrics_logs_land() {
             jwt_public_key: Some(bind_file_secret(&jwt_key_path("signing_public_key.pem"))),
             jwt_issuer: Some(jwt_issuer.clone()),
             jwt_audience: Some(jwt_audience.clone()),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,

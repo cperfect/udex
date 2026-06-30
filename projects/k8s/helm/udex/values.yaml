@@ -18,12 +18,12 @@ server:
 
 authz:
   # Hydra JWKS endpoint reachable from inside k3d pods via host.k3d.internal.
-  # danger_allow_non_tls is required because the local Compose Hydra has no TLS.
+  # dangerous_allow_non_tls is required because the local Compose Hydra has no TLS.
   jwksUrl: "http://host.k3d.internal:4444/.well-known/jwks.json"
   # Must match URLS_SELF_ISSUER in the Compose Hydra config.
   jwtIssuer: "http://localhost:4444/"
   jwtAudience: "udex"
-  dangerAllowNonTls: true
+  dangerousAllowNonTls: true
   # Hydra uses "scp" (array) instead of the RFC 8693 "scope" claim.
   scopeClaimName: "scp"
   maskSubjectInLogs: false
@@ -50,7 +50,7 @@ observability:
   # TLS (see ST0027).
   otlpEndpoint: "http://host.k3d.internal:4317"
   # The collector terminates no TLS, so plaintext OTLP must be opted into
-  # (mirrors authz.dangerAllowNonTls / datastore.dangerousAllowNonTls). Dev only.
+  # (mirrors authz.dangerousAllowNonTls / datastore.dangerousAllowNonTls). Dev only.
   dangerousAllowNonTls: true
   # Full trace + metric sampling in dev.
   sampleRatio: 1.0

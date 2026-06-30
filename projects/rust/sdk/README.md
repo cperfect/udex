@@ -92,7 +92,7 @@ independently.
 
 For local dev environments where the server or auth service does not have TLS
 (e.g. a Hydra instance running on `http://localhost:4444`), call
-`danger_allow_non_tls()` to opt out:
+`dangerous_allow_non_tls()` to opt out:
 
 ```rust
 // Development only — never use against a production environment.
@@ -103,7 +103,7 @@ ClientOptions::builder()
         "my-client-id",
         "my-client-secret",
     )
-    .danger_allow_non_tls()
+    .dangerous_allow_non_tls()
     .build()?
 ```
 

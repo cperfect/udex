@@ -110,7 +110,7 @@ async fn init_jwt_fixture() -> JwtFixture {
             jwt_public_key: Some(bind_file_secret(&jwt_key_path("signing_public_key.pem"))),
             jwt_issuer: Some(jwt_issuer.clone()),
             jwt_audience: Some(jwt_audience.clone()),
-            danger_allow_non_tls: false,
+            dangerous_allow_non_tls: false,
             scope_claim_name: None,
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,
@@ -213,7 +213,7 @@ async fn init_hydra_fixture() -> HydraFixture {
             jwt_public_key: None,
             jwt_issuer: Some(issuer),
             jwt_audience: Some(audience.clone()),
-            danger_allow_non_tls: true,
+            dangerous_allow_non_tls: true,
             scope_claim_name: Some("scp".to_string()),
             mask_subject_in_logs: false,
             jwks_max_failed_refreshes: None,
@@ -273,7 +273,7 @@ async fn init_hydra_fixture() -> HydraFixture {
                  udex:entry:v1:{index_name}:write \
                  udex:entry:v1:{index_name}:delete"
             ))
-            .danger_allow_non_tls() // Hydra token endpoint is plain HTTP in the dev environment
+            .dangerous_allow_non_tls() // Hydra token endpoint is plain HTTP in the dev environment
             .build()
             .unwrap(),
     )
@@ -961,7 +961,7 @@ async fn test_sdk_oauth2_invalid_credentials_return_auth_error() {
             .ca_cert_pem_bytes(ca_pem)
             .client_credentials(&token_url, "nonexistent-client-id", "wrong-secret")
             .audience("wrong-audience")
-            .danger_allow_non_tls() // Hydra token endpoint is plain HTTP in the dev environment
+            .dangerous_allow_non_tls() // Hydra token endpoint is plain HTTP in the dev environment
             .build()
             .unwrap(),
     )
@@ -1608,7 +1608,7 @@ async fn init_k8s_fixture() -> Option<K8sFixture> {
                  udex:entry:v1:{index_name}:write \
                  udex:entry:v1:{index_name}:delete"
             ))
-            .danger_allow_non_tls() // Hydra token endpoint is plain HTTP in the dev environment
+            .dangerous_allow_non_tls() // Hydra token endpoint is plain HTTP in the dev environment
             .build()
             .unwrap(),
     )
@@ -1871,7 +1871,7 @@ async fn build_pod_client(
             .client_credentials(token_url.to_string(), client_id, client_secret)
             .audience(audience)
             .scope(scope.to_string())
-            .danger_allow_non_tls()
+            .dangerous_allow_non_tls()
             .build()
             .unwrap(),
     )

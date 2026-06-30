@@ -111,7 +111,7 @@ async fn build_unauthenticated_client(
         builder = builder.ca_cert_pem_file(ca);
     }
     if server.starts_with("http://") {
-        builder = builder.danger_allow_non_tls();
+        builder = builder.dangerous_allow_non_tls();
     }
     Ok(UdexClient::connect(builder.build()?).await?)
 }
