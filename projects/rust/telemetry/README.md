@@ -13,12 +13,7 @@ This crate is the **only** place in the workspace that configures an OpenTelemet
 
 ## Bringing your own OTLP backend
 
-The application emits **plain OTLP** and is backend-agnostic — point the server or
-CLI at any OTLP-compatible backend by changing the endpoint, never the code. The
-local dev/CI fixture (ST0027) is a keyless ClickHouse-backed collector, but
-header-authed backends (Honeycomb, Grafana Cloud, the ClickStack all-in-one) are
-supported via `otlp_headers`. Header values are commonly secrets, so they are
-**redacted in `Debug`** and never echoed in validation errors.
+The application emits **plain OTLP** and is backend-agnostic — point the server or CLI at any OTLP-compatible backend by changing the endpoint, never the code. The local dev/CI fixture (ST0027) is a keyless ClickHouse-backed collector, but header-authed backends (Honeycomb, Grafana Cloud, the ClickStack all-in-one) are supported via `otlp_headers`. Header values are commonly secrets, so they are **redacted in `Debug`** and never echoed in validation errors.
 
 Server config:
 
@@ -30,17 +25,14 @@ observability:
     x-honeycomb-team: "<api-key>"
 ```
 
-CLI (opt-in via env; `UDEX_OTLP_HEADERS` is comma-separated `key=value`, split on
-the first `=` so base64 values survive):
+CLI (opt-in via env; `UDEX_OTLP_HEADERS` is comma-separated `key=value`, split on the first `=` so base64 values survive):
 
 ```bash
 export UDEX_OTLP_ENDPOINT="https://api.honeycomb.io:443"
 export UDEX_OTLP_HEADERS="x-honeycomb-team=<api-key>"
 ```
 
-**ClickStack / HyperDX all-in-one** gates ingestion behind a per-team key sent as
-a **raw** `authorization` header — **no `Bearer ` prefix** (its bundled collector
-uses `bearertokenauth` with an empty scheme):
+**ClickStack / HyperDX all-in-one** gates ingestion behind a per-team key sent as a **raw** `authorization` header — **no `Bearer ` prefix** (its bundled collector uses `bearertokenauth` with an empty scheme):
 
 ```yaml
 observability:
@@ -51,8 +43,7 @@ observability:
     authorization: "<ingestion-api-key>"   # raw key, NOT "Bearer <key>"
 ```
 
-`otlp_headers` exists precisely so users can plug into such backends without any
-application change; our own dev/CI prefers the keyless modular collector.
+`otlp_headers` exists precisely so users can plug into such backends without any application change; our own dev/CI prefers the keyless modular collector.
 
 ## Hybrid logging
 
