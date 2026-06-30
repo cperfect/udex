@@ -49,6 +49,9 @@ observability:
   # (port 4317); `http://` = plaintext — the local dev/CI fixture terminates no
   # TLS (see ST0027).
   otlpEndpoint: "http://host.k3d.internal:4317"
+  # The collector terminates no TLS, so plaintext OTLP must be opted into
+  # (mirrors authz.dangerAllowNonTls / datastore.dangerousAllowNonTls). Dev only.
+  dangerousAllowNonTls: true
   # Full trace + metric sampling in dev.
   sampleRatio: 1.0
   # Tags cluster-originated telemetry so it is distinguishable (deployment.environment).

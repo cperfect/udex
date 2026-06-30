@@ -73,6 +73,8 @@ async fn obs_local_traces_metrics_logs_land() {
                 std::env::var("OTEL_COLLECTOR_OTLP_ENDPOINT")
                     .unwrap_or_else(|_| "http://otel-collector:4317".to_string()),
             ),
+            // The local fixture's collector terminates no TLS — opt into plaintext.
+            dangerous_allow_non_tls: true,
             ..Default::default()
         }),
         init_indexes: vec![CreateIndexRequest {

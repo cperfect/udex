@@ -198,6 +198,11 @@ fn init_cli_telemetry() -> anyhow::Result<Option<udex_telemetry::TelemetryGuard>
         otlp_endpoint: Some(endpoint),
         otlp_ca: std::env::var("UDEX_OTLP_CA").ok(),
         sample_ratio,
+        // TLS is required by default; opt into a plaintext (http://) collector with
+        // UDEX_OTLP_DANGEROUS_ALLOW_NON_TLS=1 (local/dev only).
+        dangerous_allow_non_tls: std::env::var("UDEX_OTLP_DANGEROUS_ALLOW_NON_TLS")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false),
         // Optional headers for a header-authed backend, e.g.
         // UDEX_OTLP_HEADERS="authorization=<key>" (comma-separated key=value).
         otlp_headers: parse_otlp_headers(std::env::var("UDEX_OTLP_HEADERS").ok().as_deref())?,

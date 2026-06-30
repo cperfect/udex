@@ -35,6 +35,13 @@ pub struct TelemetryConfig {
     #[serde(default)]
     pub otlp_ca: Option<String>,
 
+    /// Permit a plaintext (`http://`) OTLP endpoint. TLS (`https://`) is required
+    /// by default; set this to allow exporting to a non-TLS collector. Local/dev
+    /// only - never in production. Mirrors the `dangerous_allow_non_tls` /
+    /// `danger_allow_non_tls` opt-ins on the datastore and authz configs.
+    #[serde(default)]
+    pub dangerous_allow_non_tls: bool,
+
     /// Head trace sampling ratio in `0.0..=1.0` (applied to root spans;
     /// parent-based otherwise). Defaults to 1.0 (sample everything).
     #[serde(default = "default_sample_ratio")]
@@ -73,6 +80,7 @@ impl Default for TelemetryConfig {
             enabled: false,
             otlp_endpoint: None,
             otlp_ca: None,
+            dangerous_allow_non_tls: false,
             sample_ratio: default_sample_ratio(),
             traces: true,
             metrics: true,
@@ -96,6 +104,7 @@ impl std::fmt::Debug for TelemetryConfig {
             .field("enabled", &self.enabled)
             .field("otlp_endpoint", &self.otlp_endpoint)
             .field("otlp_ca", &self.otlp_ca)
+            .field("dangerous_allow_non_tls", &self.dangerous_allow_non_tls)
             .field("sample_ratio", &self.sample_ratio)
             .field("traces", &self.traces)
             .field("metrics", &self.metrics)
@@ -126,6 +135,13 @@ impl TelemetryConfig {
         if !(endpoint.starts_with("http://") || endpoint.starts_with("https://")) {
             return Err(TelemetryError::Config(format!(
                 "otlp_endpoint '{endpoint}' must start with http:// or https://"
+            )));
+        }
+        if !self.dangerous_allow_non_tls && !endpoint.starts_with("https://") {
+            return Err(TelemetryError::Config(format!(
+                "otlp_endpoint '{endpoint}' must use https://; set \
+                 dangerous_allow_non_tls = true to permit plaintext OTLP \
+                 (local/dev only, never in production)"
             )));
         }
 
@@ -300,10 +316,33 @@ mod tests {
     #[test]
     fn unreadable_ca_ignored_for_plaintext_endpoint() {
         // tls_config() never reads the CA for an http:// endpoint, so an
-        // unreadable CA must not fail validation in that case.
+        // unreadable CA must not fail validation in that case (plaintext is
+        // opted into via dangerous_allow_non_tls).
         let cfg = TelemetryConfig {
             otlp_endpoint: Some("http://otel-collector:4317".to_string()),
             otlp_ca: Some("/nonexistent/ca.crt".to_string()),
+            dangerous_allow_non_tls: true,
+            ..enabled_cfg()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn plaintext_endpoint_requires_flag() {
+        let cfg = TelemetryConfig {
+            otlp_endpoint: Some("http://otel-collector:4317".to_string()),
+            ..enabled_cfg()
+        };
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("https://"), "got: {err}");
+        assert!(err.contains("dangerous_allow_non_tls"), "got: {err}");
+    }
+
+    #[test]
+    fn plaintext_endpoint_with_flag_ok() {
+        let cfg = TelemetryConfig {
+            otlp_endpoint: Some("http://otel-collector:4317".to_string()),
+            dangerous_allow_non_tls: true,
             ..enabled_cfg()
         };
         assert!(cfg.validate().is_ok());

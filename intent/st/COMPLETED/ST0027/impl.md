@@ -72,6 +72,7 @@ Mongo is kept **ephemeral** (no volume) so the sources always re-seed fresh from
 
 - **Database pre-creation:** the exporter's `create_schema` makes the tables but **not** the database, and it connects with `otel` as the session default — so `otel` must exist first. Created via `CLICKHOUSE_DB=otel` (env, no bind mount) rather than an `initdb.d` SQL file, because bind mounts misresolve under docker-outside-of-docker (see Challenges). `restart: unless-stopped` + the exporter's `retry_on_failure` self-heal any brief startup race.
 - **TLS posture (final, after the WP02 bind-mount-free pivot):** app -> collector is **plaintext** OTLP/gRPC (`http://...:4317`) for the local dev/CI fixture — TLS would require mounting cert files, which hits the project-dir bind-mount trap. collector -> ClickHouse is in-network plaintext (`tcp://clickhouse:9000`). The app stays OTLP-standard and can target a TLS-terminating collector in any real deployment (and `otlp_ca` still applies for `https://` endpoints).
+- **Plaintext is opt-in (post-ST follow-up):** `TelemetryConfig` requires `https://` by default; a plaintext `http://` endpoint must set `dangerous_allow_non_tls = true`, mirroring the datastore (`dangerous_allow_non_tls`) and authz (`danger_allow_non_tls`) gates. The fixture users set it explicitly: `obs.rs`, the k8s configmap (`observability.dangerousAllowNonTls` in values), and the CLI (`UDEX_OTLP_DANGEROUS_ALLOW_NON_TLS`). A plaintext endpoint without the flag fails `validate()`.
 
 ## Challenges & Solutions
 

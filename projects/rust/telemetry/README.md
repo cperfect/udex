@@ -7,7 +7,7 @@ This crate is the **only** place in the workspace that configures an OpenTelemet
 ## What it provides
 
 - `init(&TelemetryConfig, ServiceIdentity) -> Result<TelemetryGuard, TelemetryError>` — builds one combined `tracing-subscriber`: always-on JSON-to-stdout (the durable log floor) plus optional OTLP traces, metrics, and logs when an endpoint is configured. Installs the global tracer/meter/logger providers and the W3C `TraceContextPropagator`. Returns an error if config is invalid, the OTLP CA cannot be read, or an exporter cannot be built; otherwise the returned guard flushes and shuts the providers down on drop.
-- `TelemetryConfig` — the serde-deserialisable configuration contract embedded by the server/CLI as their `observability` section: `enabled`, `otlp_endpoint`, `otlp_ca`, `sample_ratio`, per-signal toggles, `resource_attributes`, and `otlp_headers`.
+- `TelemetryConfig` — the serde-deserialisable configuration contract embedded by the server/CLI as their `observability` section: `enabled`, `otlp_endpoint`, `otlp_ca`, `dangerous_allow_non_tls` (TLS is required by default; opt into a plaintext `http://` endpoint, local/dev only — mirrors the datastore/authz non-TLS flags), `sample_ratio`, per-signal toggles, `resource_attributes`, and `otlp_headers`.
 - `make_request_span(method, headers)` / `record_request(method, status, elapsed)` — server-side helpers used by the gRPC middleware to create the per-request span (continuing an inbound `traceparent`) and record per-method request metrics, keeping all OpenTelemetry usage inside this crate.
 - `TelemetryError` — a `thiserror` type that never exposes third-party errors.
 
@@ -46,6 +46,7 @@ uses `bearertokenauth` with an empty scheme):
 observability:
   enabled: true
   otlp_endpoint: "http://<host>:4317"
+  dangerous_allow_non_tls: true            # the all-in-one terminates no TLS
   otlp_headers:
     authorization: "<ingestion-api-key>"   # raw key, NOT "Bearer <key>"
 ```
