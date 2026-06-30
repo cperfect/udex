@@ -58,10 +58,20 @@ Mongo is kept **ephemeral** (no volume) so the sources always re-seed fresh from
 - **Verification:** unit tests cover the mechanism (`build_metadata_carries_headers` proves the header reaches the exporter metadata), redaction (`debug_redacts_header_values`), validation (bad name/value rejected, value not leaked), and CLI parsing. A full live check against a header-requiring receiver is the documented manual path — the spike already proved the ClickStack all-in-one accepts a raw `authorization` key, and the README documents pointing Udex at it.
 - **Docs:** `projects/rust/telemetry/README.md` gains a "Bringing your own OTLP backend" section (Honeycomb/Grafana-Cloud/ClickStack examples, incl. the all-in-one's raw-`authorization`/no-`Bearer` quirk); the `otlp_headers` field and `UDEX_OTLP_HEADERS` env are documented inline.
 
+### WP06 — Decommission + CI + docs (as-built)
+
+- **Deleted `projects/observability/`** entirely (the ST0026 six-service stack, scripts, certs, README) and pruned its `.gitignore` cert entries. Live-reference grep is clean (only the ST planning docs mention it, as history).
+- **Scripts:** `dev-doctor.sh` drops the OTLP-cert + Grafana-credential checks; `gen-env.sh` drops `GRAFANA_ADMIN_PASSWORD` (the fixture needs no secrets); `.devcontainer/post-create.sh` drops the `up.sh` run (obs is part of the base compose, so it starts with the devcontainer); `projects/k8s/scripts/deploy.sh` drops the OTLP-CA `--set-file` and cert check.
+- **CI (`01-Validation.yml`):** the `test` and `k8s-test` jobs now start the obs services from the base compose and run the obs tests (reversing the prior "obs not in CI" stance). Addressing: the runner reaches the fixture by **localhost** (published ports), so the jobs set `CLICKHOUSE_URL=http://localhost:8123` and (test job) `OTEL_COLLECTOR_OTLP_ENDPOINT=http://localhost:4317`; `obs.rs` was made to honour that env (default stays the service name for the devcontainer). A ClickHouse readiness wait mirrors the Hydra one.
+- **CI starts a subset** (`postgres hydra clickhouse otel-collector vector`), **not** the HyperDX UI — `hyperdx-init`'s `depends_on: service_healthy` would gate the CI step on HyperDX's slow boot + a 1.8 GB pull, for zero test value. HyperDX stays always-on in local dev. (User-confirmed; design decision 5 updated.)
+- **Docs:** new "Observability" section in `projects/compose/README.md`; updated root `README.md`, `projects/k8s/README.md`, `projects/rust/CONTRIBUTING.md`, `.devcontainer/README.md`, `docs/ARCHITECTURE.md` (section + topology + test-suite row), `docs/SECRETS.md` (removed Grafana/OTLP-cert rows), the telemetry README link, and the stale `Tempo/Prometheus/Loki` code comments in `telemetry/src/lib.rs` -> ClickHouse.
+- **k8s obs validation (closes the WP04 caveat):** after a plaintext-config redeploy on a live k3d cluster, all 3 `test_obs_k8s_*` **pass (63.68s)** querying ClickHouse — the k8s OTLP-plaintext-gRPC path is confirmed end-to-end.
+- Verification: `fmt`/`clippy` clean, `obs.rs` passes with the env override, `helm template` renders `http://host.k3d.internal:4317` with no `otlp_ca`, `dev-doctor.sh` runs without the deleted refs.
+
 ## Technical Details
 
 - **Database pre-creation:** the exporter's `create_schema` makes the tables but **not** the database, and it connects with `otel` as the session default — so `otel` must exist first. Created via `CLICKHOUSE_DB=otel` (env, no bind mount) rather than an `initdb.d` SQL file, because bind mounts misresolve under docker-outside-of-docker (see Challenges). `restart: unless-stopped` + the exporter's `retry_on_failure` self-heal any brief startup race.
-- **TLS posture:** app -> collector is TLS (collector terminates with the generated cert; app trusts `ca.crt`). collector -> ClickHouse is in-network plaintext (`tcp://clickhouse:9000`), consistent with ST0026's internal hops.
+- **TLS posture (final, after the WP02 bind-mount-free pivot):** app -> collector is **plaintext** OTLP/gRPC (`http://...:4317`) for the local dev/CI fixture — TLS would require mounting cert files, which hits the project-dir bind-mount trap. collector -> ClickHouse is in-network plaintext (`tcp://clickhouse:9000`). The app stays OTLP-standard and can target a TLS-terminating collector in any real deployment (and `otlp_ca` still applies for `https://` endpoints).
 
 ## Challenges & Solutions
 

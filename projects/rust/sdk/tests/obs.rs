@@ -64,10 +64,15 @@ async fn obs_local_traces_metrics_logs_land() {
         },
         // The whole point of this test: OTLP export ON. The exporter speaks OTLP
         // over gRPC, so it targets 4317 (the gRPC port); `http://` = plaintext
-        // (no CA — the local fixture's collector terminates no TLS).
+        // (no CA — the local fixture's collector terminates no TLS). Reachable by
+        // service name in the devcontainer; CI overrides OTEL_COLLECTOR_OTLP_ENDPOINT
+        // to the runner-host published port (http://localhost:4317).
         observability: Some(TelemetryConfig {
             enabled: true,
-            otlp_endpoint: Some("http://otel-collector:4317".to_string()),
+            otlp_endpoint: Some(
+                std::env::var("OTEL_COLLECTOR_OTLP_ENDPOINT")
+                    .unwrap_or_else(|_| "http://otel-collector:4317".to_string()),
+            ),
             ..Default::default()
         }),
         init_indexes: vec![CreateIndexRequest {

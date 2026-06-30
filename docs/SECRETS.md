@@ -41,12 +41,11 @@ Public artefacts (certificates, public keys, client IDs, endpoint URLs) are mark
 
 ## Observability
 
-| Name | Type | Usage | Scope | Public | Source |
-|------|------|-------|-------|--------|--------|
-| `GRAFANA_ADMIN_USER` | Grafana admin username | Local observability stack — Grafana container (`GF_SECURITY_ADMIN_USER`) | Dev | Yes | `scripts/gen-env.sh` → `.env` (gitignored); defaults to `admin` |
-| `GRAFANA_ADMIN_PASSWORD` | Grafana admin password (hex) | Local observability stack — Grafana container (`GF_SECURITY_ADMIN_PASSWORD`) | Dev | No | `scripts/gen-env.sh` → `.env` (gitignored) |
-
-OTLP collector TLS certificates (`projects/observability/certs/`) are listed under [TLS Certificates & Keys](#tls-certificates--keys).
+The ClickHouse-backed observability fixture (ST0027; part of the base
+`projects/compose` stack) holds **no secrets**: the OTel collector is keyless and
+plaintext locally, and the HyperDX dev UI registers its own local user
+(`admin@udex.local`) rather than reading an env credential. The HyperDX login is a
+fixed dev-only convenience credential, not a generated secret.
 
 ## TLS Certificates & Keys
 
@@ -62,11 +61,6 @@ OTLP collector TLS certificates (`projects/observability/certs/`) are listed und
 | Traefik edge `tls.key` | RSA-4096 TLS private key | k8s — Traefik edge TLS (client-facing termination) | Dev | No | `scripts/gen-keys-and-certs.sh` → `projects/k8s/traefik/certs/` (gitignored) |
 | Traefik edge `tls.crt` | TLS edge certificate (signed by edge CA) | k8s — cert Traefik presents to clients at the ingress | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/k8s/traefik/certs/` (gitignored) |
 | Traefik edge `tls.csr` | TLS certificate signing request | Intermediate artefact — edge cert generation only | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/k8s/traefik/certs/` (gitignored) |
-| OTLP `ca.key` | RSA-4096 CA private key | OTLP collector certificate generation only | Dev | No | `scripts/gen-keys-and-certs.sh` → `projects/observability/certs/` (gitignored) |
-| OTLP `ca.crt` | Self-signed OTLP CA certificate (365-day) | Trust anchor the app uses to verify the observability Collector's OTLP TLS cert (`observability.otlp_ca`); mounted into k8s pods | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/observability/certs/` (gitignored) |
-| OTLP `collector.key` | RSA-4096 TLS private key | OTLP Collector TLS (server side of the OTLP endpoint) | Dev | No | `scripts/gen-keys-and-certs.sh` → `projects/observability/certs/` (gitignored) |
-| OTLP `collector.crt` | TLS certificate (signed by OTLP CA; SANs: otel-collector, localhost, host.docker.internal, host.k3d.internal) | OTLP Collector TLS — cert presented on the OTLP gRPC/HTTP endpoints | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/observability/certs/` (gitignored) |
-| OTLP `collector.csr` | TLS certificate signing request | Intermediate artefact — OTLP cert generation only | Dev | Yes | `scripts/gen-keys-and-certs.sh` → `projects/observability/certs/` (gitignored) |
 | `tls.cert` | `Secret<String>` holding a `urn:secrets-rs:file:` URN; resolved to PEM certificate at startup | Rust server/CLI — TLS configuration | Both | Yes | Config property; see `projects/rust/server/src/config.rs` |
 | `tls.key` | `Secret<String>` holding a `urn:secrets-rs:file:` URN; resolved to PEM private key at startup | Rust server/CLI — TLS configuration | Both | No | Config property; see `projects/rust/server/src/config.rs` |
 
@@ -74,10 +68,9 @@ OTLP collector TLS certificates (`projects/observability/certs/`) are listed und
 
 | Name | Type | Usage | Scope | Public | Source |
 |------|------|-------|-------|--------|--------|
-| `gen-env.sh` | Env var generation script | Dev — generate `.env` with DB passwords, Hydra secrets, and the Grafana admin credential | Dev | Yes | `scripts/gen-env.sh` |
-| `gen-keys-and-certs.sh` | Key/cert generation script (delegates to sub-scripts) | Dev/CI — generate server TLS certs, Traefik edge certs, OTLP collector certs, and JWT signing keys | Dev | Yes | `scripts/gen-keys-and-certs.sh` |
+| `gen-env.sh` | Env var generation script | Dev — generate `.env` with DB passwords and Hydra secrets | Dev | Yes | `scripts/gen-env.sh` |
+| `gen-keys-and-certs.sh` | Key/cert generation script (delegates to sub-scripts) | Dev/CI — generate server TLS certs, Traefik edge certs, and JWT signing keys | Dev | Yes | `scripts/gen-keys-and-certs.sh` |
 | `regenerate_jwt_signing_key_pair.sh` | Key generation script (ECDSA P-256, PKCS8) | Dev — rotate test JWT keys (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/rust/server/tests/jwt/regenerate_jwt_signing_key_pair.sh` |
 | `regenerate_certs.sh` (server) | Certificate generation script (RSA-4096, CA + server) | Dev — rotate pod TLS certs (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/rust/server/tests/certs/regenerate_certs.sh` |
 | `regenerate_certs.sh` (Traefik edge) | Certificate generation script (RSA-4096, CA + edge cert) | Dev — rotate Traefik edge TLS certs for k8s (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/k8s/traefik/certs/regenerate_certs.sh` |
-| `regenerate_certs.sh` (OTLP) | Certificate generation script (RSA-4096, CA + collector cert) | Dev — rotate OTLP collector TLS certs for the observability stack (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/observability/certs/regenerate_certs.sh` |
 | `hydra-create-client.sh` | Hydra OAuth2 client registration script | Dev — register a client in Hydra with specified scopes; prints env vars for CLI use | Dev | Yes | `scripts/hydra-create-client.sh` |

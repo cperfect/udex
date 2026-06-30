@@ -38,11 +38,11 @@ datastore:
   # Apply pending migrations on startup — acceptable for local dev.
   applyMigrations: true
 
-# OpenTelemetry observability. The dev cluster exports OTLP to the local
-# observability stack (projects/observability) running on the host, reached from
-# k3d pods via host.k3d.internal — the same bridge used for postgres and Hydra.
-# Full sampling for dev. The collector runs in the base compose stack; bring it
-# up with `docker compose -f projects/compose/docker-compose.yml up -d`.
+# OpenTelemetry observability. The dev cluster exports OTLP to the ClickHouse-
+# backed collector in the base compose stack (projects/compose), running on the
+# host and reached from k3d pods via host.k3d.internal — the same bridge used for
+# postgres and Hydra. Full sampling for dev. The collector is always-on with the
+# base stack (`docker compose -f projects/compose/docker-compose.yml up -d`).
 observability:
   enabled: true
   # Compose OTel Collector, reachable from k3d pods via the host. OTLP over gRPC

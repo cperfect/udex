@@ -61,4 +61,4 @@ JSON logs are **always** written to stdout (a durable floor that survives a Coll
 
 The SDK (`udex-sdk`) deliberately does **not** depend on `udex-telemetry`: as a client library it never installs a global provider. It uses only the `opentelemetry` API to emit client spans and inject `traceparent`, composing into a host application's own OpenTelemetry setup.
 
-See [docs/ARCHITECTURE.md#observability](../../../docs/ARCHITECTURE.md#observability) for the system-level design and the [observability stack](../../observability/README.md) for the local backends.
+See [docs/ARCHITECTURE.md#observability](../../../docs/ARCHITECTURE.md#observability) for the system-level design and the [compose observability fixture](../../compose/README.md#observability) for the local backend (ClickHouse + collector + HyperDX).

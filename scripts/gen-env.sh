@@ -42,15 +42,13 @@ echo "Generating secrets..."
 POSTGRES_PASSWORD_SECRET_VAL=$(openssl rand -hex 24)
 HYDRA_DB_PASSWORD_SECRET_VAL=$(openssl rand -hex 24)
 HYDRA_SECRETS_SYSTEM_SECRET_VAL=$(openssl rand -hex 32)
-GRAFANA_ADMIN_PASSWORD_VAL=$(openssl rand -hex 16)
 
 # Guard: if openssl is missing or fails, command substitution returns an empty
 # string. set -e won't catch that (it only catches non-zero exits at the
 # statement level). Fail fast here rather than writing a .env full of blanks.
 if [[ -z "${POSTGRES_PASSWORD_SECRET_VAL}" || \
       -z "${HYDRA_DB_PASSWORD_SECRET_VAL}" || \
-      -z "${HYDRA_SECRETS_SYSTEM_SECRET_VAL}" || \
-      -z "${GRAFANA_ADMIN_PASSWORD_VAL}" ]]; then
+      -z "${HYDRA_SECRETS_SYSTEM_SECRET_VAL}" ]]; then
   echo "ERROR: secret generation produced an empty value — is openssl installed?" >&2
   exit 1
 fi
@@ -94,14 +92,11 @@ HYDRA_DB_PASSWORD_SECRET=${HYDRA_DB_PASSWORD_SECRET_VAL}
 HYDRA_SECRETS_SYSTEM_SECRET=${HYDRA_SECRETS_SYSTEM_SECRET_VAL}
 
 # ------------------------------------------------------------
-# Observability (local Grafana stack — ST0026)
+# Observability (ST0027)
 # ------------------------------------------------------------
-# Consumed by projects/observability/docker-compose.observability.yml.
-# Public config
-GRAFANA_ADMIN_USER=admin
-
-# Secrets
-GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD_VAL}
+# The ClickHouse-backed obs fixture (collector + ClickHouse + Vector + HyperDX)
+# is part of the base projects/compose stack and needs no .env secrets: the
+# collector is keyless and the HyperDX dev UI registers its own local user.
 EOF
 
 chmod 600 "${ENV_FILE}"

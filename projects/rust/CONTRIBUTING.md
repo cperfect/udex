@@ -68,14 +68,15 @@ cargo clippy --all-targets -- -D warnings
 > visible through the other). Direct hops trust the pod cert (server CA, SNI
 > `localhost`); the load-balanced path uses the Traefik edge cert.
 >
-> **Observability tests** — Tests prefixed with `test_obs_k8s_` assert that
-> telemetry from the k3d deployment lands in the local observability stack (traces
-> in Tempo, metrics in Prometheus, logs in Loki). They reuse the k8s fixture, so
-> they skip when `K8S_SERVER_URL` is unset, and additionally skip (with a printed
-> message) when the observability stack is not reachable. Bring the stack up with
-> `bash projects/observability/scripts/up.sh` first; backend URLs default to the
-> devcontainer service names and are overridable via `TEMPO_URL` / `PROMETHEUS_URL`
-> / `LOKI_URL`.
+> **Observability tests** — The observability fixture (ClickHouse-backed; part of
+> the base `projects/compose` stack) is a hard dependency like Hydra: the obs
+> tests query ClickHouse and **fail, never skip**, if it is unreachable. The
+> always-run, non-k8s `obs.rs` test stands up a local server with OTLP export on
+> and asserts traces/metrics/logs land in ClickHouse on every `cargo test`. The
+> `test_obs_k8s_` tests additionally assert the k3d deployment's telemetry lands;
+> they reuse the k8s fixture, so they return early when `K8S_SERVER_URL` is unset.
+> ClickHouse is reached by the `clickhouse` service name in the devcontainer;
+> override with `CLICKHOUSE_URL` (CI uses `http://localhost:8123`).
 >
 > **Integration test naming** — Every integration test function must be prefixed
 > with a layer indicator: `test_sdk_`, `test_sdk_oauth2_`, `test_sdk_k8s_`,

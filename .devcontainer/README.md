@@ -39,7 +39,8 @@ The `Dockerfile` extends the Microsoft Rust devcontainer image (`bookworm`) and 
 3. Creates `.devcontainer/.env` as a symlink to `../.env` so the Compose env-file reference resolves correctly.
 4. Generates TLS certificates and JWT signing keys (via `scripts/gen-keys-and-certs.sh`) if they do not already exist.
 5. Installs the Intent Claude subagent and `in-essentials` skill.
-6. Starts the local observability stack (via `projects/observability/scripts/up.sh`) so Grafana, Prometheus, Tempo, Loki, and the OpenTelemetry Collector are available by default. This step is non-fatal — a transient failure prints a warning rather than aborting setup. Application/SDK telemetry export stays opt-in.
+
+The ClickHouse-backed observability fixture (collector + ClickHouse + Vector + the HyperDX UI) is part of the base `projects/compose` stack, so it comes up automatically with the devcontainer — no separate step. Application/SDK telemetry export stays opt-in.
 
 Re-creating the container re-runs the script. Because the setup scripts are idempotent, existing secrets and key material are left untouched unless `--force` is passed manually.
 
@@ -51,7 +52,7 @@ Re-creating the container re-runs the script. Because the setup scripts are idem
 | `4444` | Hydra public (token issuance) |
 | `4445` | Hydra admin (client management) |
 
-The observability stack publishes its own ports directly to the host (no `forwardPorts` entry needed): Grafana `3000`, Prometheus `9090`, Loki `3100`, Tempo `3200`, OTLP `4317`/`4318`.
+The observability fixture publishes its own ports directly to the host (no `forwardPorts` entry needed): ClickHouse `8123`, OTLP `4317`/`4318`, HyperDX UI `8080`.
 
 ## Environment variables
 
