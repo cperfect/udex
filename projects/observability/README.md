@@ -63,6 +63,19 @@ bash projects/observability/scripts/rebuild.sh
 bash projects/observability/scripts/down.sh
 ```
 
+> **After a `down`/`up` cycle, refresh the host port-forward.** `down` removes
+> the containers and `up` creates fresh ones, so the host-side forward of
+> `localhost:3000` (and the other ports) points at the old, now-deleted container.
+> The scripts are working correctly — re-binding the host forward to the new
+> container is the host tooling's job, not the script's. If Grafana stops
+> responding on <http://localhost:3000> after a down/up: reload the dev container
+> window (Command Palette → *Dev Containers: Reload Window*), re-forward `3000` in
+> VS Code's **Ports** panel, or reach the container directly via OrbStack
+> (`http://udex-observability-grafana-1.orb.local:3000`). Note that `up.sh`'s
+> readiness check verifies the **in-network** path (`grafana:3000`) only — from
+> inside the devcontainer it cannot confirm the Mac-side forward — so a green
+> "stack is up" does not by itself guarantee the browser URL is wired up.
+
 Then open Grafana at <http://localhost:3000> (user `admin`, password from
 `GRAFANA_ADMIN_PASSWORD` in `.env`; anonymous **Editor** access is also enabled,
 so Explore works without logging in). See [Viewing telemetry](#viewing-telemetry).
