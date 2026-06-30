@@ -151,7 +151,11 @@ async fn obs_local_traces_metrics_logs_land() {
            GROUP BY ResourceAttributes['service.instance.id'], \
                     Attributes['rpc.grpc.status_code'] )"
     );
-    let log_query = "SELECT count() FROM otel.otel_logs WHERE ServiceName = 'udex-server'";
+    // Scoped to NON-k3d (like the metric query) so concurrent k8s telemetry in the
+    // shared ClickHouse can't satisfy the increase — this local server is the only
+    // non-k3d udex-server emitting OTLP logs.
+    let log_query = "SELECT count() FROM otel.otel_logs WHERE ServiceName = 'udex-server' \
+                     AND ResourceAttributes['deployment.environment'] != 'k3d'";
     let metric_baseline = clickhouse_scalar_f64(&metric_query).await.unwrap_or(0.0);
     let log_baseline = clickhouse_scalar_f64(log_query).await.unwrap_or(0.0);
 
