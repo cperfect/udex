@@ -30,6 +30,14 @@ Auth/bootstrap (resolved): the modular `hyperdx:2` image has **no no-auth mode**
 
 Mongo is kept **ephemeral** (no volume) so the sources always re-seed fresh from the (git) env each boot rather than drifting; the cost is re-running the (automatic) bootstrap per fresh stack, which only affects the dev UI (CI does not use it). Browser render of the seeded sources still to be eyeballed by the user.
 
+### WP03 — Postgres metrics + container-log floor (as-built)
+
+- **Postgres metrics:** added the `postgresql` receiver to the inline collector config and wired it into the `metrics` pipeline -> `clickhouse`. Password read via the OTel env provider `$${env:POSTGRES_PASSWORD_SECRET}` (the `$$` escapes `$` past compose interpolation; the collector service gets `POSTGRES_PASSWORD_SECRET` from the same `.env` as the postgres service). Verified: 17 `postgresql.*` metrics land in `otel.otel_metrics_*`.
+- **Container-log floor:** done with a slim **Vector** service, not the collector. The OTel `filelog` receiver was tried first and rejected: docker `json-file` logs carry no container identity (only `log`/`stream`/`time`; the name lives in the sibling `config.v2.json`), `add_metadata_from_filepath` only understands k8s paths, the files are root-only (needs `user: 0:0`), and a file reader slurps the *whole daemon* (all projects + k3d), unnamed. This is generic to Docker's json-file driver, not OrbStack. Container *names* require the Docker API, which Vector/Fluent Bit speak.
+- Vector is **bind-mount-free in spirit**: config inlined via Compose `configs.content`; the only mount is the **absolute** `/var/run/docker.sock` (project-dir-independent). It tails via the Docker API, **filters by `com.docker.compose.service` to just `postgres`/`hydra`** (no obs-stack/k3d/other-project noise), and writes into `otel.otel_logs` with `ServiceName` = the compose service, so the floor shows up in HyperDX's Logs view next to app telemetry. Verified: postgres + hydra logs land named and scoped; nothing else.
+- Severity note: postgres and hydra both log to **stderr** regardless of level, so stream != severity. `SeverityText` is left unset (the level is in the body) rather than mislabeling everything; the stream is kept as the `log.io.stream` log attribute.
+- Net: `filelog` removed, collector back to its non-root default user. The user chose Vector over dropping the floor because postgres/hydra logs in ClickHouse were wanted.
+
 ## Technical Details
 
 - **Database pre-creation:** the exporter's `create_schema` makes the tables but **not** the database, and it connects with `otel` as the session default — so `otel` must exist first. Created via `CLICKHOUSE_DB=otel` (env, no bind mount) rather than an `initdb.d` SQL file, because bind mounts misresolve under docker-outside-of-docker (see Challenges). `restart: unless-stopped` + the exporter's `retry_on_failure` self-heal any brief startup race.

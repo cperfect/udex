@@ -3,7 +3,7 @@ verblock: "30 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-03
 title: "postgresqlreceiver + container-log floor in collector"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: postgresqlreceiver + container-log floor in collector
@@ -15,14 +15,16 @@ Fold the two ingestion paths the current stack handles outside plain OTLP into t
 ## Deliverables
 
 - `postgresql` receiver in the collector config -> ClickHouse (mirrors ST0026's `postgresql_backends`-style metrics), password from `.env`.
-- A container-log receiver (`filelog` or docker-logs) -> ClickHouse, with the docker-outside-of-docker host log-path mount solved; Vector removed.
-- A `metrics/postgresql` (and `logs/...`) pipeline wired to the `clickhouse` exporter.
+- Container-stdout log floor -> ClickHouse `otel_logs`, named and scoped to postgres/hydra.
+- `postgresql` wired into the `metrics` pipeline; the floor handled by a slim Vector service.
+
+> **Decision:** the `filelog`-in-collector route was tried and rejected — docker `json-file` logs carry no container identity, so it can't name or scope logs (it would slurp the whole daemon, unnamed) and needs a root collector. This is generic to Docker, not OrbStack. The documented fallback was taken: a slim, **bind-mount-free** Vector (inline config + absolute `docker.sock`) that uses the Docker API to get names and filter by compose service. The user chose this over dropping the floor because postgres/hydra logs in ClickHouse were wanted.
 
 ## Acceptance Criteria
 
-- [ ] PostgreSQL server metrics are queryable in ClickHouse.
-- [ ] postgres/hydra/app container stdout lands in ClickHouse logs (the floor is preserved), with the obs stack's own containers excluded (no feedback loop).
-- [ ] The Vector service is gone; no functionality regressed vs ST0026.
+- [x] PostgreSQL server metrics are queryable in ClickHouse. (17 `postgresql.*` metrics in `otel.otel_metrics_*`.)
+- [x] postgres/hydra container stdout lands in ClickHouse logs (the floor is preserved), scoped to only those services — obs stack / k3d / other-project containers excluded (no feedback loop). (App logs arrive via OTLP; there is no app *container* in the compose stack.)
+- [x] Vector decision recorded; no functionality regressed vs ST0026. (Vector **retained** as the named/scoped floor — see Decision above; the collector is back to its non-root default.)
 
 ## Dependencies
 

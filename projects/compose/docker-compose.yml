@@ -103,6 +103,10 @@ services:
     configs:
       - source: otelcol_config
         target: /etc/otel/config.yaml
+    environment:
+      # For the postgresqlreceiver (WP03). Interpolated by compose from the same
+      # .env that feeds the postgres service's password.
+      - POSTGRES_PASSWORD_SECRET=${POSTGRES_PASSWORD_SECRET}
     ports:
       - "4317:4317"   # OTLP gRPC - in-network + k3d via host.k3d.internal
       - "4318:4318"   # OTLP HTTP
@@ -188,11 +192,32 @@ services:
         done
         echo "hyperdx-init: registration did not take" >&2; exit 1
 
+  # Container-stdout log floor (WP03): ship postgres + hydra container logs into
+  # ClickHouse's otel_logs so they sit alongside the app's telemetry in HyperDX.
+  # Uses the Docker API via docker.sock — the only way to get container *names*
+  # (the OTel filelog receiver can't: docker json-file logs carry no identity and
+  # a file reader would slurp the whole daemon, unnamed). Scoped by compose
+  # service to just postgres/hydra. Config is inline (no bind mount); the
+  # docker.sock mount is an absolute path, so it is project-dir-independent.
+  vector:
+    image: timberio/vector:0.44.0-debian
+    command: ["--config", "/etc/vector/vector.yaml"]
+    configs:
+      - source: vector_config
+        target: /etc/vector/vector.yaml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
 configs:
   # Inline OTel Collector config (no bind mount). OTLP (plaintext) in,
   # ClickHouse out. create_schema lets the exporter own the OTel table schema
   # (otel_traces / otel_logs / otel_metrics_*), which is exactly what HyperDX
-  # reads. postgresqlreceiver + the container-log floor are added in WP03.
+  # reads. Postgres server metrics come from the postgresqlreceiver here; the
+  # container-stdout log floor is handled by the Vector service (see below).
   otelcol_config:
     content: |
       receivers:
@@ -202,6 +227,18 @@ configs:
               endpoint: 0.0.0.0:4317
             http:
               endpoint: 0.0.0.0:4318
+        # PostgreSQL server metrics. The local dev Postgres has no TLS, so
+        # tls.insecure; the password is read from the collector's environment by
+        # the OTel env provider (the $$ escapes the $ past compose interpolation).
+        postgresql:
+          endpoint: postgres:5432
+          transport: tcp
+          username: postgres
+          password: $${env:POSTGRES_PASSWORD_SECRET}
+          databases: [postgres]
+          collection_interval: 10s
+          tls:
+            insecure: true
       processors:
         batch: {}
       exporters:
@@ -231,7 +268,7 @@ configs:
             processors: [batch]
             exporters: [clickhouse]
           metrics:
-            receivers: [otlp]
+            receivers: [otlp, postgresql]
             processors: [batch]
             exporters: [clickhouse]
           logs:
@@ -241,6 +278,50 @@ configs:
         telemetry:
           metrics:
             address: 0.0.0.0:8888
+
+  # Inline Vector config (no bind mount): tail postgres/hydra container stdout via
+  # the Docker API and write it into ClickHouse's otel_logs, so the floor shows up
+  # in HyperDX's Logs view (ServiceName = the compose service). Only the four
+  # otel_logs columns we populate are emitted; the rest take ClickHouse defaults.
+  vector_config:
+    content: |
+      sources:
+        docker:
+          type: docker_logs
+      transforms:
+        floor:
+          type: filter
+          inputs: [docker]
+          condition: |
+            svc = string(.label."com.docker.compose.service") ?? ""
+            svc == "postgres" || svc == "hydra"
+        to_otel_logs:
+          type: remap
+          inputs: [floor]
+          source: |
+            # Keep it to the columns we can populate honestly: postgres and hydra
+            # both log to stderr regardless of level, so stream is NOT severity —
+            # leave SeverityText unset (the level is in the body) rather than
+            # mislabel everything. The original stream is kept as a log attribute.
+            svc = string(.label."com.docker.compose.service") ?? (string(.container_name) ?? "")
+            stream = string(.stream) ?? ""
+            . = {
+              "Timestamp": .timestamp,
+              "ServiceName": svc,
+              "Body": string(.message) ?? "",
+              "LogAttributes": { "log.io.stream": stream }
+            }
+      sinks:
+        clickhouse:
+          type: clickhouse
+          inputs: [to_otel_logs]
+          endpoint: http://clickhouse:8123
+          database: otel
+          table: otel_logs
+          skip_unknown_fields: true
+          date_time_best_effort: true
+          healthcheck:
+            enabled: false
 
 # volumes:
 #   pg_data:
