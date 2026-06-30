@@ -37,9 +37,7 @@ When using the devcontainer, services start automatically and the above commands
 
 ## Observability
 
-The observability fixture is **part of this base stack** (ST0027) — it comes up
-with everything else, always-on like PostgreSQL and Hydra (no separate project,
-no opt-in). It is a single ClickHouse-backed OpenTelemetry pipeline:
+The observability fixture is **part of this base stack** (ST0027) — it comes up with everything else, always-on like PostgreSQL and Hydra (no separate project, no opt-in). It is a single ClickHouse-backed OpenTelemetry pipeline:
 
 | Service | Role |
 |---|---|
@@ -48,20 +46,11 @@ no opt-in). It is a single ClickHouse-backed OpenTelemetry pipeline:
 | `vector` | Ships postgres/hydra container stdout into ClickHouse (the durable log "floor") |
 | `hyperdx` + `mongo` | Reader-only dev UI over ClickHouse (developer convenience) |
 
-- **App telemetry is opt-in:** the server/SDK/CLI only emit OTLP when an
-  `observability.otlp_endpoint` is configured (server) or `UDEX_OTLP_ENDPOINT` is
-  set (CLI). The collector is **keyless and plaintext** locally — the application
-  stays standard OTLP and can target any backend (see
-  [`projects/rust/telemetry/README.md`](../rust/telemetry/README.md)).
-- **HyperDX UI:** <http://localhost:8080>. A local user is auto-registered by the
-  `hyperdx-init` service — log in with `admin@udex.local` / `UdexLocalDev1!`; the
-  ClickHouse datasource (Logs / Traces / Metrics) is pre-provisioned.
-- **Tests** query ClickHouse directly (HTTP on `:8123`); they treat the fixture as
-  a hard dependency (fail, never skip) like the Hydra tests.
+- **App telemetry is opt-in:** the server/SDK/CLI only emit OTLP when an `observability.otlp_endpoint` is configured (server) or `UDEX_OTLP_ENDPOINT` is set (CLI). The collector is **keyless and plaintext** locally — the application stays standard OTLP and can target any backend (see [`projects/rust/telemetry/README.md`](../rust/telemetry/README.md)).
+- **HyperDX UI:** <http://localhost:8080>. A local user is auto-registered by the `hyperdx-init` service — log in with `admin@udex.local` / `UdexLocalDev1!`; the ClickHouse datasource (Logs / Traces / Metrics) is pre-provisioned.
+- **Tests** query ClickHouse directly (HTTP on `:8123`); they treat the fixture as a hard dependency (fail, never skip) like the Hydra tests.
 
-The collector config and Vector config are inlined in `docker-compose.yml` (no
-bind mounts, so they resolve identically in the devcontainer and standalone/CI);
-ClickHouse pre-creates the `otel` database via `CLICKHOUSE_DB`.
+The collector config and Vector config are inlined in `docker-compose.yml` (no bind mounts, so they resolve identically in the devcontainer and standalone/CI); ClickHouse pre-creates the `otel` database via `CLICKHOUSE_DB`.
 
 ## Service URLs
 
