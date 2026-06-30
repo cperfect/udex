@@ -1,0 +1,72 @@
+# OpenTelemetry Collector (contrib) config for the local Udex dev/CI fixture
+# (ST0027). An always-on peer of postgres/hydra in projects/compose.
+#
+# Single OTLP ingest for the app's traces/metrics/logs (over TLS), exported to
+# ClickHouse - the unified store that replaces Tempo/Prometheus/Loki. The config
+# is fully static and version-controlled (no OpAMP, no runtime mutation).
+#
+# PostgreSQL server metrics (postgresqlreceiver) and the container-stdout log
+# floor are added in WP03; the agnostic header-auth knob is app-side (WP05).
+
+receivers:
+  # App-facing OTLP endpoints, TLS-terminated with the generated collector cert
+  # (projects/compose/otel-collector/certs). The app trusts ca.crt via otlp_ca.
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        tls:
+          cert_file: /etc/otel/certs/collector.crt
+          key_file: /etc/otel/certs/collector.key
+      http:
+        endpoint: 0.0.0.0:4318
+        tls:
+          cert_file: /etc/otel/certs/collector.crt
+          key_file: /etc/otel/certs/collector.key
+
+processors:
+  batch: {}
+
+exporters:
+  # Unified store. In-network plaintext to ClickHouse's native port is acceptable
+  # for local dev (consistent with how ST0026 treated the internal Tempo/Loki/
+  # Prometheus hops). create_schema lets the exporter own the OTel table schema
+  # (otel_traces / otel_logs / otel_metrics_*), which is what HyperDX reads.
+  clickhouse:
+    endpoint: tcp://clickhouse:9000?dial_timeout=10s
+    database: otel
+    username: default
+    password: ""
+    create_schema: true
+    ttl: 72h
+    logs_table_name: otel_logs
+    traces_table_name: otel_traces
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhouse]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhouse]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhouse]
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8888

@@ -55,7 +55,54 @@ services:
     depends_on:
       hydra-migrate:
         condition: service_completed_successfully
-  
+
+  # ── Observability fixture (ST0027) ──────────────────────────────────────────
+  # Always-on like postgres/hydra: the obs tests assume it is present and FAIL
+  # (never skip) if it is not. ClickHouse is the unified telemetry store; the
+  # collector ingests the app's OTLP (over TLS) and exports to it.
+
+  # Unified store for traces/metrics/logs (replaces Tempo/Prometheus/Loki).
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    environment:
+      # Local dev fixture: allow the default user to connect with no password
+      # from the in-network collector/HyperDX. Not a production posture.
+      - CLICKHOUSE_SKIP_USER_SETUP=1
+      # Pre-create the observability database the collector's clickhouse exporter
+      # targets. The exporter's create_schema makes the tables but NOT the
+      # database, and it connects with `otel` as the session default, so the DB
+      # must exist first. CLICKHOUSE_DB creates it on init with no bind mount
+      # (robust under docker-outside-of-docker, where bind mounts can misresolve).
+      - CLICKHOUSE_DB=otel
+    ports:
+      - "8123:8123"   # HTTP query API (tests + host debugging)
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 2s
+      timeout: 5s
+      retries: 45
+    restart: unless-stopped
+
+  # Single OTLP ingest (TLS) for the app's traces/metrics/logs -> ClickHouse.
+  # Static, version-controlled config (no OpAMP / no runtime mutation).
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.119.0
+    command: ["--config=/etc/otel/config.yaml"]
+    ports:
+      - "4317:4317"   # OTLP gRPC (TLS) - in-network + k3d via host.k3d.internal
+      - "4318:4318"   # OTLP HTTP (TLS)
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otel/config.yaml:ro
+      - ./otel-collector/certs:/etc/otel/certs:ro
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
 # volumes:
 #   pg_data:
 #     driver: local

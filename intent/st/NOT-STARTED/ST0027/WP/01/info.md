@@ -3,7 +3,7 @@ verblock: "30 Jun 2026:v0.1: vscode - Initial version"
 wp_id: WP-01
 title: "ClickHouse + collector fixture in compose"
 scope: Medium
-status: Not Started
+status: Done
 ---
 
 # WP-01: ClickHouse + collector fixture in compose
@@ -21,10 +21,10 @@ Stand up ClickHouse and a reconfigured stock `otel/opentelemetry-collector-contr
 
 ## Acceptance Criteria
 
-- [ ] `docker compose up` in `projects/compose` starts `clickhouse` + `otel-collector` alongside postgres/hydra, both reaching ready without manual steps.
-- [ ] A real OTLP trace/metric/log from the udex app (TLS) lands and is queryable in ClickHouse via SQL.
-- [ ] The collector config is fully static (no OpAMP, no runtime mutation) and committed.
-- [ ] The schema-vs-HyperDX decision is recorded in the ST design/impl notes.
+- [x] `docker compose up` in `projects/compose` starts `clickhouse` + `otel-collector` alongside postgres/hydra, both reaching ready without manual steps. (Cold start clean; `CLICKHOUSE_DB=otel` + `depends_on: healthy`.)
+- [x] A real OTLP trace/metric/log from the udex app (TLS) lands and is queryable in ClickHouse via SQL. (Verified: OTLP/TLS POST -> 200 -> `otel.otel_traces` row.)
+- [x] The collector config is fully static (no OpAMP, no runtime mutation) and committed.
+- [x] The schema-vs-HyperDX decision is recorded in the ST design/impl notes. (Schemas aligned; no reconciliation needed — see impl.md.)
 
 ## Dependencies
 

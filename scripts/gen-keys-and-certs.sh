@@ -28,7 +28,7 @@ done
 JWT_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/jwt"
 TLS_DIR="${WORKSPACE_DIR}/projects/rust/server/tests/certs"
 EDGE_TLS_DIR="${WORKSPACE_DIR}/projects/k8s/traefik/certs"
-OTLP_TLS_DIR="${WORKSPACE_DIR}/projects/observability/certs"
+OTLP_TLS_DIR="${WORKSPACE_DIR}/projects/compose/otel-collector/certs"
 
 ALL_EXIST=true
 for f in \
@@ -70,7 +70,7 @@ bash "${WORKSPACE_DIR}/projects/rust/server/tests/jwt/regenerate_jwt_signing_key
 
 echo ""
 echo "==> Generating OTLP collector TLS certificates..."
-bash "${WORKSPACE_DIR}/projects/observability/certs/regenerate_certs.sh"
+bash "${WORKSPACE_DIR}/projects/compose/otel-collector/certs/regenerate_certs.sh"
 
 echo ""
 echo "All key material generated successfully."
