@@ -121,12 +121,17 @@ pub fn init(
         .map(str::trim)
         .expect("active() guarantees an endpoint")
         .to_string();
+    // Only read the CA for a TLS (https) endpoint. tls_config() ignores it for a
+    // plaintext http:// endpoint, so a plaintext config (dangerous_allow_non_tls)
+    // must not attempt to load a CA it would never use.
     let ca_pem = match &config.otlp_ca {
-        Some(path) => Some(std::fs::read(path).map_err(|e| TelemetryError::CaRead {
-            path: path.clone(),
-            source: e,
-        })?),
-        None => None,
+        Some(path) if endpoint.starts_with("https://") => {
+            Some(std::fs::read(path).map_err(|e| TelemetryError::CaRead {
+                path: path.clone(),
+                source: e,
+            })?)
+        }
+        _ => None,
     };
     // Optional headers (e.g. an API key) attached to every OTLP export as gRPC
     // metadata. Empty for the local fixture; non-empty for a header-authed backend.
