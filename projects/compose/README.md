@@ -52,6 +52,30 @@ The observability fixture is **part of this base stack** (ST0027) — it comes u
 
 The collector config and Vector config are inlined in `docker-compose.yml` (no bind mounts, so they resolve identically in the devcontainer and standalone/CI); ClickHouse pre-creates the `otel` database via `CLICKHOUSE_DB`.
 
+### Charting metrics in HyperDX
+
+The Logs/Traces/Metrics sources are pre-provisioned, but **dashboards are not** (HyperDX has no dashboard-seeding hook). Build charts yourself: **Traces and Logs** are explored from the **Search** page (pick the source in the search bar); **Metrics** are charted from **Dashboards → add a tile → source = Metrics**, then choose the metric, its **type** (must match below), an aggregation, and a group-by. Note the udex/postgres counters are **cumulative** — use a **rate** aggregation for per-second values (the raw value is the running total). Recipes:
+
+**Udex services**
+
+| Chart | Metric | Type | Aggregation | Group by / filter |
+|---|---|---|---|---|
+| Request rate per operation | `udex.rpc.requests` | Sum | rate | group by `rpc.method` |
+| Errors per operation | `udex.rpc.requests` | Sum | rate | group by `rpc.method`, `rpc.grpc.status_code` (non-zero = error) |
+| p95 latency per operation | `udex.rpc.duration` | Histogram | p95 (quantile) | group by `rpc.method` |
+
+**PostgreSQL** (from the collector's `postgresqlreceiver`)
+
+| Chart | Metric | Type | Aggregation |
+|---|---|---|---|
+| Active backends (connections) | `postgresql.backends` | Sum | latest / avg |
+| Transaction rate | `postgresql.commits`, `postgresql.rollbacks` | Sum | rate |
+| Disk block reads | `postgresql.blocks_read` | Sum | rate |
+| Database size | `postgresql.db_size` | Sum | latest |
+| Max connections | `postgresql.connection.max` | Gauge | latest |
+
+Other `postgresql.*` series (bgwriter, index/table stats, rows, operations) are all **Sum** metrics and follow the same pattern.
+
 ## Service URLs
 
 | Endpoint | URL |
@@ -59,7 +83,7 @@ The collector config and Vector config are inlined in `docker-compose.yml` (no b
 | PostgreSQL | `postgres://postgres:<password>@localhost:5432/postgres` |
 | Hydra public (token issuance) | `http://localhost:4444` |
 | Hydra admin (client management) | `http://localhost:4445` |
-| ClickHouse (HTTP query API) | `http://localhost:8123` |
+| ClickHouse (HTTP query API) | `http://localhost:8123` (loopback-only — no-auth, not LAN-exposed) |
 | OTLP collector (gRPC / HTTP) | `localhost:4317` / `localhost:4318` |
 | HyperDX UI | `http://localhost:8080` |
 
