@@ -316,6 +316,8 @@ Place these in a `.env` file (loaded via `dotenvy`) or export them:
 | [`create_entry`](examples/create_entry.rs) | Connect, authenticate, and create an entry from CLI `KEY=VALUE` arguments |
 | [`get_entry`](examples/get_entry.rs) | Look up an entry by UUID key or by context (`KEY=VALUE` arguments) |
 | [`bulk_write`](examples/bulk_write.rs) | Batch-create entries from newline-delimited JSON on stdin |
+| [`bulk_write_single_op`](examples/bulk_write_single_op.rs) | Batch of one operation type: create several entries in a single transaction |
+| [`bulk_write_mixed_ops`](examples/bulk_write_mixed_ops.rs) | Mixed operation types in one transaction: create + lookup-or-create (client-computed hash) + delete |
 | [`envelope_write`](examples/envelope_write.rs) | Create an entry with one AES-256-GCM envelope-encrypted value, then retrieve and decrypt it |
 | [`delete_index`](examples/delete_index.rs) | Delete an empty index, with clear messages if it still has entries or is not found |
 
@@ -334,6 +336,12 @@ cargo run --example get_entry -- user_id=42 region=eu-west
 # Bulk-create entries from JSON.
 printf '{"user_id":"1","region":"eu"}\n{"user_id":"2","region":"us"}\n' |
     cargo run --example bulk_write
+
+# Bulk-write with a single operation type (several creates in one transaction).
+cargo run --example bulk_write_single_op
+
+# Bulk-write mixing operation types (create + lookup-or-create + delete).
+cargo run --example bulk_write_mixed_ops
 
 # Create an entry with one encrypted context value.
 export UDEX_KEK=$(openssl rand -base64 32)
