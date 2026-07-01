@@ -2,8 +2,7 @@
 
 use anyhow::{Context, Result};
 use tabled::{Table, Tabled};
-use udex_api::hash::xxh3_context_hash;
-use udex_sdk::{value, ContextInput, KeyValuePair, UdexClient, Value};
+use udex_sdk::{value, xxh3_context_hash, ContextInput, KeyValuePair, UdexClient, Value};
 
 use crate::cli::{
     EntryCreateArgs, EntryDeleteArgs, EntryGetArgs, EntryLookupArgs, EntryLookupOrCreateArgs,

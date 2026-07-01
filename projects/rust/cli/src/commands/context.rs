@@ -3,8 +3,7 @@
 //! Handler for `udex context` subcommands.
 
 use anyhow::{Context, Result};
-use udex_api::entry::{value, ContextInput, KeyValuePair, Value};
-use udex_api::hash::xxh3_context_hash;
+use udex_sdk::{value, xxh3_context_hash, ContextInput, KeyValuePair, Value};
 
 use crate::cli::ContextHashArgs;
 
