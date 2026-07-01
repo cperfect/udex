@@ -6,6 +6,18 @@ Provides an idiomatic async Rust API over the Udex gRPC service: TLS channel
 construction, transparent OAuth2 client-credentials token management, and
 strongly-typed wrappers for every entry and index operation.
 
+## One dependency
+
+`udex-sdk` is designed to be a client's **only** Udex dependency. It re-exports
+every proto type needed to build requests and read responses — `ContextInput`,
+`KeyValuePair`, `Value`, `CreateEntryRequest`, `CreateIndexRequest`,
+`HashAlgorithm`, the bulk-operation enums and result types, `xxh3_context_hash`,
+and so on — so application and test code import them from `udex_sdk` and never
+reach into `udex-api` directly. `udex-api` is an internal crate (generated types,
+authz, hashing); depending on it from client code couples you to Udex internals.
+If a client operation needs a type that `udex_sdk` does not re-export, that is a
+missing re-export in the SDK — please file it rather than importing `udex-api`.
+
 ## Getting started
 
 Add the crate to your `Cargo.toml`:

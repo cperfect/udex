@@ -30,10 +30,9 @@
 //! cargo run --example bulk_write_single_op
 //! ```
 
-use udex_api::entry::{bulk_write_entry_operation, bulk_write_entry_operation_result};
 use udex_sdk::{
-    BulkWriteEntryOperation, ClientOptions, ContextInput, CreateEntryRequest, KeyValuePair,
-    UdexClient, Value,
+    bulk_write_entry_operation, bulk_write_entry_operation_result, BulkWriteEntryOperation,
+    ClientOptions, ContextInput, CreateEntryRequest, KeyValuePair, UdexClient, Value,
 };
 
 #[tokio::main]

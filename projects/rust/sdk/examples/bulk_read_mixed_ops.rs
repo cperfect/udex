@@ -41,13 +41,10 @@
 //!
 //! [`xxh3_context_hash`]: udex_sdk::xxh3_context_hash
 
-use udex_api::entry::{
-    bulk_read_entry_operation, bulk_read_entry_operation_result, LookupContextByKeyRequest,
-    LookupKeyByContextRequest,
-};
 use udex_sdk::{
-    xxh3_context_hash, BulkReadEntryOperation, ClientOptions, ContextInput, KeyValuePair,
-    UdexClient, Value,
+    bulk_read_entry_operation, bulk_read_entry_operation_result, xxh3_context_hash,
+    BulkReadEntryOperation, ClientOptions, ContextInput, KeyValuePair, LookupContextByKeyRequest,
+    LookupKeyByContextRequest, UdexClient, Value,
 };
 
 #[tokio::main]

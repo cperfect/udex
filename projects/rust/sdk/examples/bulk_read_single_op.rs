@@ -32,11 +32,9 @@
 //! cargo run --example bulk_read_single_op
 //! ```
 
-use udex_api::entry::{
-    bulk_read_entry_operation, bulk_read_entry_operation_result, LookupContextByKeyRequest,
-};
 use udex_sdk::{
-    BulkReadEntryOperation, ClientOptions, ContextInput, KeyValuePair, UdexClient, Value,
+    bulk_read_entry_operation, bulk_read_entry_operation_result, BulkReadEntryOperation,
+    ClientOptions, ContextInput, KeyValuePair, LookupContextByKeyRequest, UdexClient, Value,
 };
 
 #[tokio::main]

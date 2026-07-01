@@ -40,13 +40,10 @@
 //!
 //! [`xxh3_context_hash`]: udex_sdk::xxh3_context_hash
 
-use udex_api::entry::{
-    bulk_write_entry_operation, bulk_write_entry_operation_result, DeleteEntryRequest,
-    LookupKeyByContextOrCreateRequest,
-};
 use udex_sdk::{
-    xxh3_context_hash, BulkWriteEntryOperation, ClientOptions, ContextInput, CreateEntryRequest,
-    KeyValuePair, UdexClient, Value,
+    bulk_write_entry_operation, bulk_write_entry_operation_result, xxh3_context_hash,
+    BulkWriteEntryOperation, ClientOptions, ContextInput, CreateEntryRequest, DeleteEntryRequest,
+    KeyValuePair, LookupKeyByContextOrCreateRequest, UdexClient, Value,
 };
 
 #[tokio::main]

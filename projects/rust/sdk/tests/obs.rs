@@ -19,9 +19,8 @@ use std::net::SocketAddr;
 
 use jsonwebtoken::EncodingKey;
 use tokio::time::{sleep, Duration};
-use udex_api::index::{CreateIndexRequest, HashAlgorithm};
 use udex_datastore::integration_test::init_postgres;
-use udex_sdk::{ClientOptions, UdexClient};
+use udex_sdk::{ClientOptions, CreateIndexRequest, HashAlgorithm, UdexClient};
 use udex_telemetry::TelemetryConfig;
 use udex_test_utils::bind_file_secret;
 

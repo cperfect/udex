@@ -26,9 +26,11 @@ use rstest::*;
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic_health::pb::{health_client::HealthClient, HealthCheckRequest};
-use udex_api::index::{CreateIndexRequest, HashAlgorithm};
 use udex_datastore::integration_test::init_postgres;
-use udex_sdk::{ClientOptions, ContextInput, HealthStatus, KeyValuePair, UdexClient, Value};
+use udex_sdk::{
+    ClientOptions, ContextInput, CreateIndexRequest, HashAlgorithm, HealthStatus, KeyValuePair,
+    UdexClient, Value,
+};
 use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, register_hydra_client};
 
 mod common;
@@ -433,13 +435,11 @@ async fn test_sdk_lookup_nonexistent_returns_none() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_sdk_bulk_write_and_read() {
-    use udex_api::entry::{
-        bulk_read_entry_operation_result, bulk_write_entry_operation_result, CreateEntryRequest,
-        LookupContextByKeyRequest, LookupKeyByContextRequest,
-    };
     use udex_sdk::{
-        bulk_read_entry_operation, bulk_write_entry_operation, xxh3_context_hash,
-        BulkReadEntryOperation, BulkWriteEntryOperation,
+        bulk_read_entry_operation, bulk_read_entry_operation_result, bulk_write_entry_operation,
+        bulk_write_entry_operation_result, xxh3_context_hash, BulkReadEntryOperation,
+        BulkWriteEntryOperation, CreateEntryRequest, LookupContextByKeyRequest,
+        LookupKeyByContextRequest,
     };
 
     let d = data(false).await;
@@ -901,13 +901,11 @@ async fn test_sdk_oauth2_lookup_nonexistent_returns_none() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_sdk_oauth2_bulk_write_and_read() {
-    use udex_api::entry::{
-        bulk_read_entry_operation_result, bulk_write_entry_operation_result, CreateEntryRequest,
-        LookupContextByKeyRequest, LookupKeyByContextRequest,
-    };
     use udex_sdk::{
-        bulk_read_entry_operation, bulk_write_entry_operation, xxh3_context_hash,
-        BulkReadEntryOperation, BulkWriteEntryOperation,
+        bulk_read_entry_operation, bulk_read_entry_operation_result, bulk_write_entry_operation,
+        bulk_write_entry_operation_result, xxh3_context_hash, BulkReadEntryOperation,
+        BulkWriteEntryOperation, CreateEntryRequest, LookupContextByKeyRequest,
+        LookupKeyByContextRequest,
     };
 
     let d = data_hydra(false).await;
