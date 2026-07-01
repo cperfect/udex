@@ -318,6 +318,8 @@ Place these in a `.env` file (loaded via `dotenvy`) or export them:
 | [`bulk_write`](examples/bulk_write.rs) | Batch-create entries from newline-delimited JSON on stdin |
 | [`bulk_write_single_op`](examples/bulk_write_single_op.rs) | Batch of one operation type: create several entries in a single transaction |
 | [`bulk_write_mixed_ops`](examples/bulk_write_mixed_ops.rs) | Mixed operation types in one transaction: create + lookup-or-create (client-computed hash) + delete |
+| [`bulk_read_single_op`](examples/bulk_read_single_op.rs) | Batch of one operation type: read several entries back by key in a single call |
+| [`bulk_read_mixed_ops`](examples/bulk_read_mixed_ops.rs) | Mixed lookup directions in one call: key -> context and context -> key (client-computed hash) |
 | [`envelope_write`](examples/envelope_write.rs) | Create an entry with one AES-256-GCM envelope-encrypted value, then retrieve and decrypt it |
 | [`delete_index`](examples/delete_index.rs) | Delete an empty index, with clear messages if it still has entries or is not found |
 
@@ -342,6 +344,12 @@ cargo run --example bulk_write_single_op
 
 # Bulk-write mixing operation types (create + lookup-or-create + delete).
 cargo run --example bulk_write_mixed_ops
+
+# Bulk-read with a single operation type (read several entries back by key).
+cargo run --example bulk_read_single_op
+
+# Bulk-read mixing lookup directions (key -> context and context -> key).
+cargo run --example bulk_read_mixed_ops
 
 # Create an entry with one encrypted context value.
 export UDEX_KEK=$(openssl rand -base64 32)
