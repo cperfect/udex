@@ -7,6 +7,9 @@ This document captures the rationale behind Udex's core design choices — why t
 ### Why is this not just a KV-store?
 Firstly because there are *two keys* per entry;the arbitrary unique key and the context hash and both are valid for lookup purposes. Secondly I wanted it to be highly opinionated about keys, contexts, hashes and the mappings between them to fit the use cases without it becoming a free-for-all. Thirdly because most KV-stores aren't transactional (which is really just a special case of the former).
 
+### Why have a Context Hash?
+The context hash firstly makes context duplication detection fast and easy and also makes entry query via context fast and easy (which is basically the same thing). This deliberately shifts the cost of generating the hash for read operations to the Indexer (or other client).
+
 ### Why is it transactional?
 Transactions enforce data quality and make reasoning and implementation of state management much easier, especially in the kind of distributed systems that integration scenarios involve. Ultimately [state is *hard*](https://istheenemyofgood.medium.com/001-state-is-hard-18fa3b1812ae). Modern transactional datastores are highly-performant and I don't think the tradeoff with non-transactional implementations is worth it for Udex.
 
