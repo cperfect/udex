@@ -1,19 +1,28 @@
 #!/bin/bash
-# Generates .env at the workspace root with fresh secret values.
+# Generates the dev env file with fresh secret values.
 # Public/config items use well-known dev defaults.
 #
+# The real file lives at the workspace root .env and .devcontainer/.env is a
+# relative symlink to it. This keeps a single source of truth (Highlander):
+# tools that look for ./.env and tools that mount .devcontainer/.env both
+# resolve to the same file.
+#
 # Usage:
-#   scripts/gen-env.sh           # prompts if .env already exists
+#   scripts/gen-env.sh           # prompts if an env file already exists
 #   scripts/gen-env.sh --force   # overwrites without prompting
 #
 # Run once when first cloning the repo. Re-run with --force to rotate secrets.
-# The devcontainer post-create script calls this automatically.
+# Re-running is idempotent: it converges to the same file + symlink layout
+# regardless of the starting state. The devcontainer post-create script calls
+# this automatically.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ENV_FILE="${WORKSPACE_DIR}/.env"
+DEVCONTAINER_DIR="${WORKSPACE_DIR}/.devcontainer"
+ENV_FILE="${WORKSPACE_DIR}/.env"      # the real file (mode 600)
+ENV_LINK="${DEVCONTAINER_DIR}/.env"   # relative symlink -> ../.env
 
 FORCE=false
 for arg in "$@"; do
@@ -23,7 +32,10 @@ for arg in "$@"; do
   esac
 done
 
-if [[ -f "${ENV_FILE}" && "${FORCE}" == false ]]; then
+# Prompt if either the real root file or the devcontainer link already resolves
+# to content. -e follows symlinks, so this catches a stale layout (root .env is
+# itself a symlink) as well as the normal one.
+if [[ ( -e "${ENV_FILE}" || -e "${ENV_LINK}" ) && "${FORCE}" == false ]]; then
   read -r -p ".env already exists. Overwrite and rotate all secrets? [y/N] " reply
   if [[ ! "${reply}" =~ ^[Yy]$ ]]; then
     echo "Aborted. Existing .env unchanged."
@@ -58,6 +70,14 @@ fi
 # generates uses the Docker service name rather than localhost.
 HYDRA_PUBLIC_URL="${HYDRA_PUBLIC_URL:-http://localhost:4444}"
 HYDRA_ADMIN_URL="${HYDRA_ADMIN_URL:-http://localhost:4445}"
+
+# Ensure the devcontainer dir exists (for the link) and clear any stale entry at
+# ENV_FILE. The clear matters: if root .env is currently a symlink (e.g. it was
+# flipped to point at .devcontainer/.env), an unguarded `cat >` would write
+# *through* the link instead of replacing it with the real file. rm -f is a
+# no-op when absent.
+mkdir -p "${DEVCONTAINER_DIR}"
+rm -f "${ENV_FILE}"
 
 cat > "${ENV_FILE}" <<EOF
 # ============================================================
@@ -101,6 +121,13 @@ EOF
 
 chmod 600 "${ENV_FILE}"
 
+# Expose the real root file inside .devcontainer via a relative symlink. -f
+# replaces whatever is there (an old real .env or a prior symlink); -n avoids
+# following an existing symlinked dir. The target is relative so the link is
+# path-portable.
+ln -sfn "../.env" "${ENV_LINK}"
+
 echo ".env written to ${ENV_FILE}"
+echo "  and symlinked at ${ENV_LINK} -> ../.env"
 echo ""
 echo "Next step: run scripts/gen-keys-and-certs.sh to generate TLS and JWT key material."

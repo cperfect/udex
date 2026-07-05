@@ -2,6 +2,9 @@
 
 VS Code dev container configuration for Udex. Opening the repository in VS Code (or GitHub Codespaces) and choosing **Reopen in Container** gives a fully configured development environment with no manual setup required.
 
+## First Time Setup
+Run `scripts/gen-env.sh` before starting the devcontainer
+
 ## What it runs
 
 The devcontainer uses two Docker Compose files layered together:
