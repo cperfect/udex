@@ -364,6 +364,26 @@ else
     "Run: docker compose -f projects/compose/docker-compose.yml --env-file .env up -d"
 fi
 
+# Postgres password drift: pg_hba trusts loopback, so a stale .env password still
+# "connects" locally while scram clients (e.g. k8s pods) fail to authenticate.
+# This happens when secrets are rotated against an already-initialized data
+# volume (Postgres only reads POSTGRES_PASSWORD on first init). Probe over scram
+# by connecting from the container's own non-loopback IP — which matches the
+# scram pg_hba rule — using the .env password. Best-effort: needs docker + the
+# running container, and stays quiet when neither is available.
+if [[ "${POSTGRES_READY}" == true && -n "${POSTGRES_PASSWORD_SECRET:-}" ]] && command -v docker &>/dev/null; then
+  PG_CID=$(docker ps -q --filter "label=com.docker.compose.service=postgres" 2>/dev/null | head -1)
+  if [[ -n "${PG_CID}" ]]; then
+    if docker exec -e PGPASSWORD="${POSTGRES_PASSWORD_SECRET}" "${PG_CID}" \
+         bash -c 'psql -h "$(hostname -i)" -U postgres -d postgres -tAc "select 1"' &>/dev/null; then
+      pass ".env Postgres password matches the running database (scram auth)"
+    else
+      fail ".env Postgres password rejected over scram — .env is out of sync with the DB volume" \
+        "The DB keeps its init-time password. To realign, reset the volume: docker compose -f projects/compose/docker-compose.yml --env-file .env down -v && bash scripts/gen-env.sh --force  (see docs/SECRETS.md)"
+    fi
+  fi
+fi
+
 # Hydra admin API
 HYDRA_ADMIN="${HYDRA_ADMIN_URL:-http://localhost:4445}"
 if curl -sf --max-time 5 "${HYDRA_ADMIN}/health/ready" &>/dev/null; then

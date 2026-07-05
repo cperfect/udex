@@ -8,13 +8,22 @@
 # resolve to the same file.
 #
 # Usage:
-#   scripts/gen-env.sh           # prompts if an env file already exists
-#   scripts/gen-env.sh --force   # overwrites without prompting
+#   scripts/gen-env.sh                  # prompts if an env file already exists
+#   scripts/gen-env.sh --force          # overwrites without prompting
+#   scripts/gen-env.sh --force --rotate-live  # also rotate against a live Postgres
 #
 # Run once when first cloning the repo. Re-run with --force to rotate secrets.
 # Re-running is idempotent: it converges to the same file + symlink layout
 # regardless of the starting state. The devcontainer post-create script calls
 # this automatically.
+#
+# Rotation safety: Postgres only applies POSTGRES_PASSWORD on first init, so a
+# persisted data volume keeps its old password when you rotate .env. Because
+# pg_hba trusts loopback but requires scram elsewhere, host tools keep working
+# while scram clients (e.g. k8s pods) fail to authenticate far from the cause.
+# This script therefore refuses to rotate an existing .env while a compose
+# Postgres is running, unless you pass --rotate-live. To rotate cleanly, tear
+# the stack's volumes down first (see docs/SECRETS.md).
 
 set -euo pipefail
 
@@ -24,18 +33,60 @@ DEVCONTAINER_DIR="${WORKSPACE_DIR}/.devcontainer"
 ENV_FILE="${WORKSPACE_DIR}/.env"      # the real file (mode 600)
 ENV_LINK="${DEVCONTAINER_DIR}/.env"   # relative symlink -> ../.env
 
+# Detect a running compose Postgres. The compose-service label is independent of
+# the project name, so this works regardless of where the stack was brought up.
+# Returns non-zero (not detected) when docker is unavailable, so first-clone and
+# CI flows without a live stack are unaffected.
+running_postgres_detected() {
+  command -v docker &>/dev/null || return 1
+  local ids
+  ids="$(docker ps -q --filter "label=com.docker.compose.service=postgres" 2>/dev/null)" || return 1
+  [[ -n "${ids}" ]]
+}
+
 FORCE=false
+ROTATE_LIVE=false
 for arg in "$@"; do
   case "$arg" in
     --force) FORCE=true ;;
+    --rotate-live) ROTATE_LIVE=true ;;
     *) echo "Unknown argument: $arg" >&2; exit 1 ;;
   esac
 done
 
-# Prompt if either the real root file or the devcontainer link already resolves
-# to content. -e follows symlinks, so this catches a stale layout (root .env is
-# itself a symlink) as well as the normal one.
-if [[ ( -e "${ENV_FILE}" || -e "${ENV_LINK}" ) && "${FORCE}" == false ]]; then
+# Does an env file already exist anywhere? -e follows symlinks, so this catches a
+# stale layout (root .env itself a symlink) as well as the normal one. Anything
+# beyond this point that hinges on "are we rotating vs first-generating" reads
+# this flag.
+env_exists=false
+if [[ -e "${ENV_FILE}" || -e "${ENV_LINK}" ]]; then
+  env_exists=true
+fi
+
+# Rotation safety guard: refuse to rotate an existing .env while a compose
+# Postgres is live, because the DB keeps its init-time password and only scram
+# clients (k8s) would notice the drift. Fires regardless of --force; --rotate-live
+# is the explicit opt-out. First generation (no existing .env) is always allowed.
+if [[ "${env_exists}" == true && "${ROTATE_LIVE}" == false ]] && running_postgres_detected; then
+  compose_down="docker compose -f projects/compose/docker-compose.yml --env-file .env down -v"
+  {
+    echo "ERROR: a running compose Postgres was detected."
+    echo "Rotating .env will NOT change the already-initialized database password"
+    echo "and will break scram clients (e.g. k8s pods) while loopback trust auth"
+    echo "hides the drift."
+    echo ""
+    echo "  To rotate for real (destroys local DB data):"
+    echo "    ${compose_down} && scripts/gen-env.sh --force"
+    echo "  To override this guard anyway:"
+    echo "    scripts/gen-env.sh --force --rotate-live"
+    echo ""
+    echo "Aborted. Existing .env unchanged."
+  } >&2
+  exit 1
+fi
+
+# Prompt if an env file already exists and we're not forcing.
+if [[ "${env_exists}" == true && "${FORCE}" == false ]]; then
   read -r -p ".env already exists. Overwrite and rotate all secrets? [y/N] " reply
   if [[ ! "${reply}" =~ ^[Yy]$ ]]; then
     echo "Aborted. Existing .env unchanged."

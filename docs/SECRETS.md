@@ -74,3 +74,21 @@ fixed dev-only convenience credential, not a generated secret.
 | `regenerate_certs.sh` (server) | Certificate generation script (RSA-4096, CA + server) | Dev — rotate pod TLS certs (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/rust/server/tests/certs/regenerate_certs.sh` |
 | `regenerate_certs.sh` (Traefik edge) | Certificate generation script (RSA-4096, CA + edge cert) | Dev — rotate Traefik edge TLS certs for k8s (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/k8s/traefik/certs/regenerate_certs.sh` |
 | `hydra-create-client.sh` | Hydra OAuth2 client registration script | Dev — register a client in Hydra with specified scopes; prints env vars for CLI use | Dev | Yes | `scripts/hydra-create-client.sh` |
+
+## Rotating secrets
+
+`gen-env.sh --force` writes fresh random values into `.env`, but the running stateful services do **not** pick them up automatically:
+
+- **Postgres** applies `POSTGRES_PASSWORD` (and runs the init script that sets the `hydra` role password) **only on first initialization of an empty data volume.** A volume that already exists keeps its original passwords. `pg_hba.conf` trusts loopback but requires `scram-sha-256` for every other client, so host-side tools (`cargo test`, `psql`, the CLI) keep working against the stale password while scram clients — notably **k8s pods** — fail to authenticate, far from the cause.
+- **Hydra** reads `HYDRA_SECRETS_SYSTEM_SECRET` and its DSN password at container start; a rotated `.env` only takes effect after the container is recreated.
+
+Because of this, `gen-env.sh` **refuses to rotate an existing `.env` while a compose Postgres is running.** To rotate cleanly, wipe the stateful volumes so the stack re-initializes from the new secrets:
+
+```bash
+docker compose -f projects/compose/docker-compose.yml --env-file .env down -v
+bash scripts/gen-env.sh --force
+docker compose -f projects/compose/docker-compose.yml --env-file .env up -d
+# then redeploy k8s so its secret matches: bash projects/k8s/scripts/deploy.sh
+```
+
+`--rotate-live` overrides the guard, but leaves the drift in place — use it only when you will realign the database yourself. `scripts/dev-doctor.sh` detects this exact drift: it authenticates over scram and reports a failure when `.env` is out of sync with the database volume.
