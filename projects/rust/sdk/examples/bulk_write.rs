@@ -37,8 +37,10 @@
 
 use std::io::{self, BufRead};
 
-use udex_api::entry::{bulk_write_entry_operation, bulk_write_entry_operation_result};
-use udex_sdk::{context_input_from_json, BulkWriteEntryOperation, ClientOptions, UdexClient};
+use udex_sdk::{
+    bulk_write_entry_operation, bulk_write_entry_operation_result, context_input_from_json,
+    BulkWriteEntryOperation, ClientOptions, UdexClient,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

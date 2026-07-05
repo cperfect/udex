@@ -69,12 +69,19 @@ pub use error::{grpc_code, Error, RpcStatus};
 pub use health::HealthStatus;
 pub use json::context_input_from_json;
 
-// Re-export the proto types callers need to build requests and read responses.
+// Re-export every proto type callers need to build requests and read responses.
+// `udex-sdk` is meant to be a client's single Udex dependency: application and
+// test code should import these from `udex_sdk`, never reach into `udex-api`
+// directly. If a client operation needs a type that is not re-exported here, add
+// it — that gap is a bug in this list.
 pub use udex_api::entry::{
-    bulk_read_entry_operation, bulk_write_entry_operation, value, BulkReadEntryOperation,
-    BulkReadEntryOperationResult, BulkWriteEntryOperation, BulkWriteEntryOperationResult, Context,
-    ContextInput, CreateEntryRequest, CreateEntryResponse, KeyValuePair,
-    LookupKeyByContextOrCreateRequest, LookupKeyByContextOrCreateResponse, Value,
+    bulk_read_entry_operation, bulk_read_entry_operation_result, bulk_write_entry_operation,
+    bulk_write_entry_operation_result, value, BulkReadEntryOperation, BulkReadEntryOperationResult,
+    BulkWriteEntryOperation, BulkWriteEntryOperationResult, Context, ContextInput,
+    CreateEntryRequest, CreateEntryResponse, DeleteEntryRequest, DeleteEntryResponse, KeyValuePair,
+    LookupContextByKeyRequest, LookupContextByKeyResponse, LookupKeyByContextOrCreateRequest,
+    LookupKeyByContextOrCreateResponse, LookupKeyByContextRequest, LookupKeyByContextResponse,
+    Value,
 };
 pub use udex_api::hash::xxh3_context_hash;
-pub use udex_api::index::{CreateIndexRequest, Index, IndexUpdate};
+pub use udex_api::index::{CreateIndexRequest, HashAlgorithm, Index, IndexUpdate};

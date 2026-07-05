@@ -2,8 +2,7 @@
 
 use anyhow::{Context, Result};
 use tabled::{Table, Tabled};
-use udex_api::index::HashAlgorithm;
-use udex_sdk::{CreateIndexRequest, Index, IndexUpdate, UdexClient};
+use udex_sdk::{CreateIndexRequest, HashAlgorithm, Index, IndexUpdate, UdexClient};
 
 use crate::cli::{IndexCreateArgs, IndexDeleteArgs, IndexGetArgs, IndexUpdateArgs, OutputFormat};
 

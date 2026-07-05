@@ -6,6 +6,10 @@ Provides an idiomatic async Rust API over the Udex gRPC service: TLS channel
 construction, transparent OAuth2 client-credentials token management, and
 strongly-typed wrappers for every entry and index operation.
 
+## One dependency
+
+`udex-sdk` is designed to be a client's **only** Udex dependency. It re-exports every proto type needed to build requests and read responses — `ContextInput`, `KeyValuePair`, `Value`, `CreateEntryRequest`, `CreateIndexRequest`, `HashAlgorithm`, the bulk-operation enums and result types, `xxh3_context_hash`, and so on — so application and test code import them from `udex_sdk` and never reach into `udex-api` directly. `udex-api` is an internal crate (generated types, authz, hashing); depending on it from client code couples you to Udex internals. If a client operation needs a type that `udex_sdk` does not re-export, that is a missing re-export in the SDK — please file it rather than importing `udex-api`.
+
 ## Getting started
 
 Add the crate to your `Cargo.toml`:
@@ -316,6 +320,10 @@ Place these in a `.env` file (loaded via `dotenvy`) or export them:
 | [`create_entry`](examples/create_entry.rs) | Connect, authenticate, and create an entry from CLI `KEY=VALUE` arguments |
 | [`get_entry`](examples/get_entry.rs) | Look up an entry by UUID key or by context (`KEY=VALUE` arguments) |
 | [`bulk_write`](examples/bulk_write.rs) | Batch-create entries from newline-delimited JSON on stdin |
+| [`bulk_write_single_op`](examples/bulk_write_single_op.rs) | Batch of one operation type: create several entries in a single transaction |
+| [`bulk_write_mixed_ops`](examples/bulk_write_mixed_ops.rs) | Mixed operation types in one transaction: create + lookup-or-create (client-computed hash) + delete |
+| [`bulk_read_single_op`](examples/bulk_read_single_op.rs) | Batch of one operation type: read several entries back by key in a single call |
+| [`bulk_read_mixed_ops`](examples/bulk_read_mixed_ops.rs) | Mixed lookup directions in one call: key -> context and context -> key (client-computed hash) |
 | [`envelope_write`](examples/envelope_write.rs) | Create an entry with one AES-256-GCM envelope-encrypted value, then retrieve and decrypt it |
 | [`delete_index`](examples/delete_index.rs) | Delete an empty index, with clear messages if it still has entries or is not found |
 
@@ -334,6 +342,18 @@ cargo run --example get_entry -- user_id=42 region=eu-west
 # Bulk-create entries from JSON.
 printf '{"user_id":"1","region":"eu"}\n{"user_id":"2","region":"us"}\n' |
     cargo run --example bulk_write
+
+# Bulk-write with a single operation type (several creates in one transaction).
+cargo run --example bulk_write_single_op
+
+# Bulk-write mixing operation types (create + lookup-or-create + delete).
+cargo run --example bulk_write_mixed_ops
+
+# Bulk-read with a single operation type (read several entries back by key).
+cargo run --example bulk_read_single_op
+
+# Bulk-read mixing lookup directions (key -> context and context -> key).
+cargo run --example bulk_read_mixed_ops
 
 # Create an entry with one encrypted context value.
 export UDEX_KEK=$(openssl rand -base64 32)

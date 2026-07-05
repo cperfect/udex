@@ -34,8 +34,7 @@
 //! cargo run --example get_entry -- user_id=42 region=eu-west
 //! ```
 
-use udex_api::hash::xxh3_context_hash;
-use udex_sdk::{ClientOptions, ContextInput, KeyValuePair, UdexClient, Value};
+use udex_sdk::{xxh3_context_hash, ClientOptions, ContextInput, KeyValuePair, UdexClient, Value};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

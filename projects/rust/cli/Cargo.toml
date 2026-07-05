@@ -9,7 +9,6 @@ description.workspace = true
 
 [dependencies]
 udex-sdk = { path = "../sdk" }
-udex-api = { path = "../api" }
 udex-datastore = { path = "../datastore" }
 udex-server = { path = "../server" }
 udex-telemetry = { path = "../telemetry" }
@@ -33,6 +32,9 @@ secrets-rs-macros = { workspace = true }
 
 [dev-dependencies]
 tonic-health = { workspace = true }
+# Test-only: forging JWT claims and server-side timestamps to seed fixtures —
+# not a client operation, so it stays out of the production dependency set.
+udex-api = { path = "../api" }
 udex-test-utils = { path = "../test-utils" }
 assert_cmd = { workspace = true }
 predicates = { workspace = true }

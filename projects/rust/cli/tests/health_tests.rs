@@ -20,8 +20,8 @@ use predicates::prelude::*;
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic_health::pb::{health_client::HealthClient, HealthCheckRequest};
-use udex_api::index::{CreateIndexRequest, HashAlgorithm};
 use udex_datastore::integration_test::init_postgres;
+use udex_sdk::{CreateIndexRequest, HashAlgorithm};
 use udex_test_utils::bind_file_secret;
 
 // ── Constants ─────────────────────────────────────────────────────────────────

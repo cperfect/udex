@@ -36,6 +36,22 @@ name = "bulk_write"
 path = "examples/bulk_write.rs"
 
 [[example]]
+name = "bulk_write_single_op"
+path = "examples/bulk_write_single_op.rs"
+
+[[example]]
+name = "bulk_write_mixed_ops"
+path = "examples/bulk_write_mixed_ops.rs"
+
+[[example]]
+name = "bulk_read_single_op"
+path = "examples/bulk_read_single_op.rs"
+
+[[example]]
+name = "bulk_read_mixed_ops"
+path = "examples/bulk_read_mixed_ops.rs"
+
+[[example]]
 name = "envelope_write"
 path = "examples/envelope_write.rs"
 

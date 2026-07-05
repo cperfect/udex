@@ -26,9 +26,11 @@ use rstest::*;
 use tokio::time::{sleep, Duration};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic_health::pb::{health_client::HealthClient, HealthCheckRequest};
-use udex_api::index::{CreateIndexRequest, HashAlgorithm};
 use udex_datastore::integration_test::init_postgres;
-use udex_sdk::{ClientOptions, ContextInput, HealthStatus, KeyValuePair, UdexClient, Value};
+use udex_sdk::{
+    ClientOptions, ContextInput, CreateIndexRequest, HashAlgorithm, HealthStatus, KeyValuePair,
+    UdexClient, Value,
+};
 use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, register_hydra_client};
 
 mod common;
@@ -433,28 +435,30 @@ async fn test_sdk_lookup_nonexistent_returns_none() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_sdk_bulk_write_and_read() {
-    use udex_api::entry::{
-        bulk_read_entry_operation_result, bulk_write_entry_operation_result, CreateEntryRequest,
-        LookupContextByKeyRequest,
-    };
     use udex_sdk::{
-        bulk_read_entry_operation, bulk_write_entry_operation, BulkReadEntryOperation,
-        BulkWriteEntryOperation,
+        bulk_read_entry_operation, bulk_read_entry_operation_result, bulk_write_entry_operation,
+        bulk_write_entry_operation_result, xxh3_context_hash, BulkReadEntryOperation,
+        BulkWriteEntryOperation, CreateEntryRequest, LookupContextByKeyRequest,
+        LookupKeyByContextRequest,
     };
 
     let d = data(false).await;
     let client = &d.0;
     let index_name = &d.1;
 
-    let ops: Vec<BulkWriteEntryOperation> = (0..5)
-        .map(|i| BulkWriteEntryOperation {
+    // Keep the contexts around: the reverse-lookup (LookupKey) read ops below
+    // recompute the hash from these, exactly as a real client would.
+    let contexts: Vec<_> = (0..5)
+        .map(|i| context_input(&[("sdk_bulk_key", &format!("sdk_bulk_value_{i}"))]))
+        .collect();
+
+    let ops: Vec<BulkWriteEntryOperation> = contexts
+        .iter()
+        .map(|context| BulkWriteEntryOperation {
             operation: Some(bulk_write_entry_operation::Operation::CreateEntry(
                 CreateEntryRequest {
                     index_name: index_name.clone(),
-                    context: Some(context_input(&[(
-                        "sdk_bulk_key",
-                        &format!("sdk_bulk_value_{i}"),
-                    )])),
+                    context: Some(context.clone()),
                 },
             )),
         })
@@ -466,11 +470,14 @@ async fn test_sdk_bulk_write_and_read() {
         .expect("bulk_write failed");
     assert_eq!(write_results.len(), 5);
 
-    // Extract the created keys from results.
-    let keys: Vec<String> = write_results
+    // Extract the created (key, context_hash) pairs from the write results so the
+    // read batch below can address entries by BOTH lookup directions.
+    let entries: Vec<(String, String)> = write_results
         .iter()
         .map(|r| match r.result.as_ref().expect("missing result") {
-            bulk_write_entry_operation_result::Result::CreateEntry(c) => c.key.clone(),
+            bulk_write_entry_operation_result::Result::CreateEntry(c) => {
+                (c.key.clone(), c.context_hash.clone())
+            }
             bulk_write_entry_operation_result::Result::DeleteEntry(_) => {
                 panic!("unexpected delete")
             }
@@ -480,16 +487,38 @@ async fn test_sdk_bulk_write_and_read() {
         })
         .collect();
 
-    // Bulk read back by key.
-    let read_ops: Vec<BulkReadEntryOperation> = keys
+    // Bulk read back, MIXING both directions in one batch so the interleaved
+    // results path is exercised: even slots look up the context by key
+    // (LookupContext), odd slots reverse-look up the key by context hash
+    // (LookupKey). Results come back in input order, so each slot must resolve
+    // via exactly the direction it asked for.
+    let read_ops: Vec<BulkReadEntryOperation> = entries
         .iter()
-        .map(|key| BulkReadEntryOperation {
-            operation: Some(bulk_read_entry_operation::Operation::LookupContext(
-                LookupContextByKeyRequest {
+        .zip(&contexts)
+        .enumerate()
+        .map(|(i, ((key, server_hash), context))| {
+            let operation = if i % 2 == 0 {
+                bulk_read_entry_operation::Operation::LookupContext(LookupContextByKeyRequest {
                     index_name: index_name.clone(),
                     key: key.clone(),
-                },
-            )),
+                })
+            } else {
+                // A real client reverse-looking up by context has no server hash
+                // to hand — it computes the hash from the context pairs itself.
+                // Do the same, and confirm it matches what the server stored.
+                let context_hash = xxh3_context_hash(context).expect("compute context hash");
+                assert_eq!(
+                    &context_hash, server_hash,
+                    "client-computed context hash must match the server's"
+                );
+                bulk_read_entry_operation::Operation::LookupKey(LookupKeyByContextRequest {
+                    index_name: index_name.clone(),
+                    context_hash,
+                })
+            };
+            BulkReadEntryOperation {
+                operation: Some(operation),
+            }
         })
         .collect();
 
@@ -497,15 +526,21 @@ async fn test_sdk_bulk_write_and_read() {
         .bulk_read(index_name, read_ops)
         .await
         .expect("bulk_read failed");
-    assert_eq!(read_results.len(), 5);
+    assert_eq!(read_results.len(), entries.len());
 
-    for result in &read_results {
+    for (i, (result, (key, _))) in read_results.iter().zip(&entries).enumerate() {
         match result.result.as_ref().expect("missing result") {
             bulk_read_entry_operation_result::Result::LookupContext(r) => {
+                assert_eq!(i % 2, 0, "slot {i} expected a LookupKey result");
                 assert!(r.context.is_some(), "expected context in bulk read result");
             }
-            bulk_read_entry_operation_result::Result::LookupKey(_) => {
-                panic!("unexpected LookupKey result")
+            bulk_read_entry_operation_result::Result::LookupKey(r) => {
+                assert_eq!(i % 2, 1, "slot {i} expected a LookupContext result");
+                assert_eq!(
+                    r.key.as_deref(),
+                    Some(key.as_str()),
+                    "LookupKey must return the key created by bulk_write"
+                );
             }
         }
     }
@@ -866,28 +901,28 @@ async fn test_sdk_oauth2_lookup_nonexistent_returns_none() {
 #[rstest]
 #[tokio_shared_rt::test]
 async fn test_sdk_oauth2_bulk_write_and_read() {
-    use udex_api::entry::{
-        bulk_read_entry_operation_result, bulk_write_entry_operation_result, CreateEntryRequest,
-        LookupContextByKeyRequest,
-    };
     use udex_sdk::{
-        bulk_read_entry_operation, bulk_write_entry_operation, BulkReadEntryOperation,
-        BulkWriteEntryOperation,
+        bulk_read_entry_operation, bulk_read_entry_operation_result, bulk_write_entry_operation,
+        bulk_write_entry_operation_result, xxh3_context_hash, BulkReadEntryOperation,
+        BulkWriteEntryOperation, CreateEntryRequest, LookupContextByKeyRequest,
+        LookupKeyByContextRequest,
     };
 
     let d = data_hydra(false).await;
     let client = &d.0;
     let index_name = &d.1;
 
-    let ops: Vec<BulkWriteEntryOperation> = (0..5)
-        .map(|i| BulkWriteEntryOperation {
+    let contexts: Vec<_> = (0..5)
+        .map(|i| context_input(&[("hydra_bulk_key", &format!("hydra_bulk_value_{i}"))]))
+        .collect();
+
+    let ops: Vec<BulkWriteEntryOperation> = contexts
+        .iter()
+        .map(|context| BulkWriteEntryOperation {
             operation: Some(bulk_write_entry_operation::Operation::CreateEntry(
                 CreateEntryRequest {
                     index_name: index_name.clone(),
-                    context: Some(context_input(&[(
-                        "hydra_bulk_key",
-                        &format!("hydra_bulk_value_{i}"),
-                    )])),
+                    context: Some(context.clone()),
                 },
             )),
         })
@@ -899,10 +934,12 @@ async fn test_sdk_oauth2_bulk_write_and_read() {
         .expect("bulk_write via Hydra failed");
     assert_eq!(write_results.len(), 5);
 
-    let keys: Vec<String> = write_results
+    let entries: Vec<(String, String)> = write_results
         .iter()
         .map(|r| match r.result.as_ref().expect("missing result") {
-            bulk_write_entry_operation_result::Result::CreateEntry(c) => c.key.clone(),
+            bulk_write_entry_operation_result::Result::CreateEntry(c) => {
+                (c.key.clone(), c.context_hash.clone())
+            }
             bulk_write_entry_operation_result::Result::DeleteEntry(_) => {
                 panic!("unexpected delete")
             }
@@ -912,15 +949,33 @@ async fn test_sdk_oauth2_bulk_write_and_read() {
         })
         .collect();
 
-    let read_ops: Vec<BulkReadEntryOperation> = keys
+    // Mix both lookup directions in one batch (see test_sdk_bulk_write_and_read):
+    // even slots by key (LookupContext), odd slots by client-computed context
+    // hash (LookupKey).
+    let read_ops: Vec<BulkReadEntryOperation> = entries
         .iter()
-        .map(|key| BulkReadEntryOperation {
-            operation: Some(bulk_read_entry_operation::Operation::LookupContext(
-                LookupContextByKeyRequest {
+        .zip(&contexts)
+        .enumerate()
+        .map(|(i, ((key, server_hash), context))| {
+            let operation = if i % 2 == 0 {
+                bulk_read_entry_operation::Operation::LookupContext(LookupContextByKeyRequest {
                     index_name: index_name.clone(),
                     key: key.clone(),
-                },
-            )),
+                })
+            } else {
+                let context_hash = xxh3_context_hash(context).expect("compute context hash");
+                assert_eq!(
+                    &context_hash, server_hash,
+                    "client-computed context hash must match the server's"
+                );
+                bulk_read_entry_operation::Operation::LookupKey(LookupKeyByContextRequest {
+                    index_name: index_name.clone(),
+                    context_hash,
+                })
+            };
+            BulkReadEntryOperation {
+                operation: Some(operation),
+            }
         })
         .collect();
 
@@ -928,15 +983,21 @@ async fn test_sdk_oauth2_bulk_write_and_read() {
         .bulk_read(index_name, read_ops)
         .await
         .expect("bulk_read via Hydra failed");
-    assert_eq!(read_results.len(), 5);
+    assert_eq!(read_results.len(), entries.len());
 
-    for result in &read_results {
+    for (i, (result, (key, _))) in read_results.iter().zip(&entries).enumerate() {
         match result.result.as_ref().expect("missing result") {
             bulk_read_entry_operation_result::Result::LookupContext(r) => {
+                assert_eq!(i % 2, 0, "slot {i} expected a LookupKey result");
                 assert!(r.context.is_some());
             }
-            bulk_read_entry_operation_result::Result::LookupKey(_) => {
-                panic!("unexpected LookupKey result")
+            bulk_read_entry_operation_result::Result::LookupKey(r) => {
+                assert_eq!(i % 2, 1, "slot {i} expected a LookupContext result");
+                assert_eq!(
+                    r.key.as_deref(),
+                    Some(key.as_str()),
+                    "LookupKey must return the key created by bulk_write"
+                );
             }
         }
     }
