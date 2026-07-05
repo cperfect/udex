@@ -22,7 +22,7 @@ use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic_health::pb::{health_client::HealthClient, HealthCheckRequest};
 use udex_datastore::integration_test::init_postgres;
 use udex_datastore::{Datastore, Entry};
-use udex_sdk::{CreateIndexRequest, HashAlgorithm, Index};
+use udex_sdk::{Context, CreateIndexRequest, HashAlgorithm, Index};
 use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, register_hydra_client};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ async fn init_fixture() -> Fixture {
     datastore
         .create_entry(Entry {
             key: uuid::Uuid::new_v4(),
-            context: udex_sdk::Context {
+            context: Context {
                 hash: "fixture-seed-hash".to_string(),
                 pairs: vec![],
             },
