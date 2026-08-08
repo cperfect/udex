@@ -25,6 +25,31 @@ Owning the index means a regression fails one test, and that test names the actu
 
 **Guarding against a vacuous fix.** A test that seeds its own precondition can pass for the wrong reason if the assertion stops biting. Verified by temporarily removing the seeding step: the test failed exactly as before, and passed again once restored.
 
+## WP-01 -- Isolation sweep in CI and locally
+
+`scripts/validate-test-isolation.sh`, wired as a `Test isolation` step in the Build & Test job. Named to match the existing `validate-*.sh` scripts, which exist precisely so a developer can run the same command CI runs.
+
+**It gates every run rather than being periodic.** The original suggestion was a periodic check, on the assumption it would be slow. Measured first: **~20s**, because the script drives the already-compiled test binary directly rather than invoking `cargo test` forty times — cargo's own startup dominated otherwise. At that cost there is no argument for deferring it to a schedule, where a regression would sit undetected until the next sweep.
+
+**The test list is discovered, not hardcoded.** `--list --format terse` against the built binary, so a new test is covered the moment it exists. A hardcoded list would have quietly stopped covering new tests, which is the failure mode this whole thread is about.
+
+**Serial by design.** The fixtures bind fixed ports, so parallel test processes would fight over them and report port conflicts as test failures — noise that looks exactly like the defect being hunted.
+
+**All tests are attempted even after a failure**, so one run gives the whole picture. When the sweep found the second instance, it was because nothing stopped at the first.
+
+### Verifying the gate can fail
+
+A check that cannot go red is worse than no check, because it looks like assurance. The ordering dependency was deliberately reintroduced and the sweep run:
+
+```text
+39/40 tests pass in isolation
+
+These tests cannot pass on their own:
+  - test_sdk_delete_index_not_empty
+```
+
+It named the test, printed a copy-pasteable reproduction command, and exited 1. The regression was then reverted and the sweep returned to 40/40.
+
 ## Technical Details
 
 Leftover indexes are not cleaned up, deliberately: `init_postgres()` creates a throwaway database per run and drops it at exit, so per-test indexes cost nothing and cleanup code would be one more thing to get wrong.

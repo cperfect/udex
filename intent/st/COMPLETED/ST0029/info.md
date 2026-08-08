@@ -4,7 +4,7 @@ intent_version: 2.15.0
 status: Completed
 slug: remove-cross-test-ordering-dependencies-in-the-sdk-integration-suite
 created: 20260808
-completed: 2026-08-08T09:11:07Z
+completed: 2026-08-08T09:22:12Z
 ---
 
 # ST0029: Remove cross-test ordering dependencies in the SDK integration suite

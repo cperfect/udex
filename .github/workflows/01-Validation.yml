@@ -172,6 +172,16 @@ jobs:
         working-directory: .
         run: bash scripts/validate-test-rust.sh
 
+      # Catches tests that only pass because another test ran first. Kept as its
+      # own step so a failure reads as an ordering problem rather than a test
+      # failure. Cheap (~20s) because it drives the already-compiled binary
+      # directly rather than going through cargo per test. K8S_SERVER_URL is
+      # unset in this job, so the k8s-gated tests take their skip path — they are
+      # gated on a cluster, not on other tests.
+      - name: Test isolation
+        working-directory: .
+        run: bash scripts/validate-test-isolation.sh
+
   changes:
     name: Detect path changes
     runs-on: ubuntu-latest

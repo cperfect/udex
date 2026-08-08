@@ -75,6 +75,25 @@ cargo clippy --all-targets -- -D warnings
 >
 > Two properties of the query helpers in `sdk/tests/common/mod.rs` are worth knowing before adding an assertion. First, a rejected query is surfaced with the API's own reason rather than swallowed — column names are easy to get wrong (see [where the data lands](../compose/README.md#where-the-data-lands)), and a typo would otherwise be indistinguishable from missing telemetry. Second, on a cold fixture a stream or column does not exist yet, so `openobserve_await` tolerates not-yet-ingested responses while polling but still fails naming the stream or column if *every* attempt comes back that way. Use it for baseline-then-poll assertions rather than hand-rolling a loop.
 >
+> **Every test must pass on its own.** A test may not rely on another having run
+> first, and may not destroy shared fixture state that others read. Establish the
+> preconditions you assert on — create and populate your own index rather than
+> borrowing the shared one; `client_scoped_to_index` and
+> `hydra_client_scoped_to_index` exist for exactly that (the shared tokens carry
+> entry scopes only for the shared index).
+>
+> ```bash
+> bash scripts/validate-test-isolation.sh          # udex-sdk integration_tests, ~20s
+> bash scripts/validate-test-isolation.sh udex-sdk obs
+> ```
+>
+> This runs each test alone in a fresh process and is gated in CI. It exists
+> because a test that assumed another had populated the shared index destroyed
+> that index when it ran first, failing nine unrelated tests with a misleading
+> "index not found" — and a second instance of the same defect was found only by
+> this sweep, never by an observed failure (ST0029). A suite that always runs
+> whole cannot tell you which of its tests are load-bearing for others.
+>
 > **Integration test naming** — Every integration test function must be prefixed
 > with a layer indicator: `test_sdk_`, `test_sdk_oauth2_`, `test_sdk_k8s_`,
 > `test_sdk_k8s_multi_`, `test_obs_k8s_`, `test_server_`, `test_server_oauth2_`,
