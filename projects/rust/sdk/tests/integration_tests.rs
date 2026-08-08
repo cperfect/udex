@@ -329,30 +329,42 @@ pub async fn data_hydra(serial: bool) -> Data<'static, HydraFixture> {
         .await
 }
 
-/// OAuth2 counterpart of [`client_scoped_to_index`]: registers a Hydra client
-/// carrying **entry** scopes for `index_name` and connects with it.
+/// OAuth2 counterpart of [`client_scoped_to_index`]: a Hydra client that can
+/// manage entries in an index the test created for itself.
 ///
 /// The shared Hydra fixture's scopes are bound to the shared index, so a test
 /// that creates its own index cannot populate it with the shared client. Rather
 /// than widening the shared client's scopes — which would quietly change what
 /// every other OAuth2 test exercises — this registers a separate one.
-async fn hydra_client_scoped_to_index(index_name: &str) -> UdexClient {
+///
+/// The scopes are **wildcarded rather than naming a specific index**, and that is
+/// deliberate. `register_hydra_client` upserts (it PUTs on a 409), and Hydra
+/// persists clients in PostgreSQL that outlive a single run. A per-index scope
+/// under a fixed `client_id` would therefore be rewritten by every caller, so two
+/// tests using this concurrently could overwrite each other's scope between
+/// registration and token fetch — one would then get a token missing
+/// `udex:entry:v1:<its index>:create` and fail with a permission error instead of
+/// its real assertion. A flake of exactly the kind ST0029 removed. With a
+/// constant scope every registration is byte-identical and the ordering stops
+/// mattering.
+async fn hydra_client_for_owned_index() -> UdexClient {
     let admin_url = hydra_admin_url();
     let public_url = hydra_public_url();
     let audience = format!("{ID_HYDRA_PREFIX}-audience");
     let client_id = format!("{ID_HYDRA_PREFIX}-scoped-client");
     let client_secret = "sdk-hydra-scoped-secret".to_string();
 
-    let scope = format!(
-        "udex:index:v1:list \
+    // `*` matches the index-name position, the same way the shared fixture's
+    // `udex:index:v1:*:delete` already does.
+    let scope = "udex:index:v1:list \
          udex:index:v1:create \
-         udex:index:v1:{index_name}:read \
+         udex:index:v1:*:read \
          udex:index:v1:*:delete \
-         udex:entry:v1:{index_name}:create \
-         udex:entry:v1:{index_name}:read \
-         udex:entry:v1:{index_name}:write \
-         udex:entry:v1:{index_name}:delete"
-    );
+         udex:entry:v1:*:create \
+         udex:entry:v1:*:read \
+         udex:entry:v1:*:write \
+         udex:entry:v1:*:delete"
+        .to_string();
 
     register_hydra_client(&admin_url, &client_id, &client_secret, &audience, &scope).await;
 
@@ -1434,7 +1446,7 @@ async fn test_sdk_oauth2_delete_index_not_empty() {
         .await
         .expect("create_index failed");
 
-    let scoped = hydra_client_scoped_to_index(&index_name).await;
+    let scoped = hydra_client_for_owned_index().await;
     scoped
         .create_entry(&index_name, context_input(&[("delete_guard", &index_name)]))
         .await
