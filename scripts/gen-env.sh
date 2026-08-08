@@ -128,10 +128,16 @@ OPENOBSERVE_ROOT_PASSWORD_SECRET_VAL="Ux1-${OPENOBSERVE_PASSWORD_ENTROPY}"
 # the tests use to query it. Encoding once here keeps the collector config
 # declarative — compose cannot base64 inline, and the fixture's no-bind-mount
 # rule makes a shell wrapper in the collector container awkward. base64's
-# alphabet (A-Za-z0-9+/=) is heredoc-safe. -w0 keeps it on one line; GNU coreutils
-# only, which is what the devcontainer and CI both run.
+# alphabet (A-Za-z0-9+/=) is heredoc-safe.
+#
+# `base64 | tr -d '\n'` rather than `base64 -w0`: -w is GNU coreutils only, and
+# on macOS/BSD it is not a valid option, so the command fails and this script
+# aborts — meaning a developer on a macOS host could not generate .env at all.
+# CONTRIBUTING.md documents development outside the devcontainer, so that path is
+# real. Plain `base64` exists on both, and both wrap at 76 columns by default, so
+# stripping newlines gives one line either way.
 OPENOBSERVE_BASIC_AUTH_SECRET_VAL=$(printf '%s' \
-  "${OPENOBSERVE_ROOT_EMAIL_VAL}:${OPENOBSERVE_ROOT_PASSWORD_SECRET_VAL}" | base64 -w0)
+  "${OPENOBSERVE_ROOT_EMAIL_VAL}:${OPENOBSERVE_ROOT_PASSWORD_SECRET_VAL}" | base64 | tr -d '\n')
 
 # Guard: if openssl is missing or fails, command substitution returns an empty
 # string. set -e won't catch that (it only catches non-zero exits at the

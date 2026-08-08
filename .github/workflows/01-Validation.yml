@@ -108,7 +108,7 @@ jobs:
         run: |
           EMAIL="root@udex.local"
           PASSWORD="Ux1-$(openssl rand -hex 24)"
-          BASIC_AUTH=$(printf '%s' "${EMAIL}:${PASSWORD}" | base64 -w0)
+          BASIC_AUTH=$(printf '%s' "${EMAIL}:${PASSWORD}" | base64 | tr -d '\n')
           echo "::add-mask::${PASSWORD}"
           echo "::add-mask::${BASIC_AUTH}"
           {
@@ -230,7 +230,7 @@ jobs:
         run: |
           EMAIL="root@udex.local"
           PASSWORD="Ux1-$(openssl rand -hex 24)"
-          BASIC_AUTH=$(printf '%s' "${EMAIL}:${PASSWORD}" | base64 -w0)
+          BASIC_AUTH=$(printf '%s' "${EMAIL}:${PASSWORD}" | base64 | tr -d '\n')
           echo "::add-mask::${PASSWORD}"
           echo "::add-mask::${BASIC_AUTH}"
           {
