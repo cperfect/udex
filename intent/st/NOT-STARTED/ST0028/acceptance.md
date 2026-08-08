@@ -44,11 +44,11 @@ title: "OpenObserve as the dev observability backend -- acceptance contract"
 - AC-02.5 The three `test_obs_k8s_*` tests pass against OpenObserve with their assertions semantically unchanged
 - AC-02.6 (non-test) No `clickhouse_*` helper or `otel.otel_*` table reference remains in the test suite -- evidence: `grep -ri clickhouse projects/rust/ --include=*.rs` returns only one deliberate comparative comment in `common/mod.rs` explaining the `"key"` quoting change -- satisfied: yes
 
-### WP-03 -- New coverage: log floor and postgres receiver metric (status: Not Started)
+### WP-03 -- New coverage: log floor and postgres receiver metric (status: Done)
 
 - AC-03.1 An always-run test asserts postgres/hydra container logs reach the store with the correct `service_name`, alongside application telemetry -- coverage that did not exist before this thread
 - AC-03.2 An always-run test asserts the collector's `postgresql.backends` receiver metric is present, closing the gap where it was only checked on the k8s path
-- AC-03.3 (non-test) The floor test asserts on service name and body, not on severity, since severity is deliberately unset for floor records and its rendered value is an artifact -- evidence: test source and its comment -- satisfied: no
+- AC-03.3 (non-test) The floor test asserts on service name and body, not on severity, since severity is deliberately unset for floor records and its rendered value is an artifact -- evidence: `obs.rs::obs_container_log_floor_lands` asserts a non-empty `body` and carries a comment explaining why severity is excluded -- satisfied: yes
 
 ### WP-04 -- Retire ClickHouse, HyperDX and Mongo; CI and dev-doctor (status: Not Started)
 
@@ -94,9 +94,13 @@ Whole-suite evidence: `cargo test --package udex-sdk` with `K8S_SERVER_URL` set 
 
 ### WP-03
 
-- AT-03.1 `sdk/tests/obs.rs` (new): hydra container log reaches the store with `service_name = 'hydra'` -- covers AC-03.1 -- status: to-write (red-first)
-- AT-03.2 `sdk/tests/obs.rs` (new): `postgresql.backends` present on the always-run path -- covers AC-03.2 -- status: to-write (red-first)
+- AT-03.1 `sdk/tests/obs.rs::obs_container_log_floor_lands` -- covers AC-03.1 -- status: green
+- AT-03.2 `sdk/tests/obs.rs::obs_postgres_receiver_metric_lands` -- covers AC-03.2 -- status: green
 - Coverage: AC-03.3 is non-test and carries evidence on the AC line.
+
+AT-03.1 was **proven red-first against the real failure it guards**, not merely written and observed green: stopping the `vector` service made it fail in 90.87s with `hydra container logs did not reach OpenObserve (baseline 282)`, and restarting Vector returned it to green. The assertion text names Vector and its sink, so the failure points at the cause rather than at the store.
+
+AT-03.2 was not independently forced red. Doing so would need an OpenObserve with no prior `postgresql_backends` data, since the search window looks back an hour and stopping the collector leaves earlier datapoints in range. Its failure path is the same `openobserve_pending_*` family that AT-03.1 exercised. Stated plainly rather than implied: this one is green-observed, not red-proven.
 
 ### WP-04
 

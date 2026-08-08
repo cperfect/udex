@@ -35,8 +35,8 @@ use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, regis
 
 mod common;
 use common::{
-    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_metric_count,
-    openobserve_metric_scalar_f64, openobserve_scalar_f64, openobserve_trace_span_names,
+    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_pending_count,
+    openobserve_pending_scalar_f64, openobserve_scalar_f64, openobserve_trace_span_names,
     server_cert_path, wait_for_server,
 };
 
@@ -2208,7 +2208,7 @@ async fn test_obs_k8s_metrics_land() {
     // stream schema from ingested data, and with a 60s export interval a
     // freshly-rolled deployment has not produced a `deployment.environment`
     // datapoint yet. Traces and logs arrive near-instantly, so only metrics race.
-    let baseline = openobserve_metric_scalar_f64(&metric_query)
+    let baseline = openobserve_pending_scalar_f64(&metric_query, "metrics")
         .await
         .unwrap_or(0.0);
 
@@ -2219,7 +2219,7 @@ async fn test_obs_k8s_metrics_land() {
 
     let mut increased = false;
     for _ in 0..45u32 {
-        if let Some(v) = openobserve_metric_scalar_f64(&metric_query).await {
+        if let Some(v) = openobserve_pending_scalar_f64(&metric_query, "metrics").await {
             if v > baseline {
                 increased = true;
                 break;
@@ -2236,7 +2236,11 @@ async fn test_obs_k8s_metrics_land() {
 
     // PostgreSQL receiver metric — the collector scrapes the DB continuously, so a
     // presence check is appropriate here.
-    let pg = openobserve_metric_count("SELECT count(*) AS n FROM \"postgresql_backends\"").await;
+    let pg = openobserve_pending_count(
+        "SELECT count(*) AS n FROM \"postgresql_backends\"",
+        "metrics",
+    )
+    .await;
     assert!(
         pg > 0,
         "no postgresql.backends metric in OpenObserve — the collector's postgresqlreceiver may \

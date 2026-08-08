@@ -3,7 +3,7 @@ verblock: "08 Aug 2026:v0.1: vscode - Initial version"
 wp_id: WP-03
 title: "New coverage: log floor and postgres receiver metric"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-03: New coverage: log floor and postgres receiver metric

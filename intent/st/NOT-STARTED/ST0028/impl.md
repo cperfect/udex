@@ -77,6 +77,36 @@ This pulls against AC-02.1, since a cold start and a typo produce the same `unkn
 
 This defect existed in the ported code from the start and would have shipped had the cluster stayed broken — the skip was hiding it.
 
+### WP-03 -- New coverage (complete)
+
+Two tests added to `sdk/tests/obs.rs`, both on the always-run path:
+`obs_container_log_floor_lands` and `obs_postgres_receiver_metric_lands`.
+
+The floor test was **proven red before being accepted green**: stopping `vector` made it fail in 90.87s naming Vector and its sink, and restarting Vector restored it. That matters more than the green run — this is coverage ST0027 never had, over a transport WP01 changed from a direct store write to an OTLP hop.
+
+**Cold-start tolerance generalised beyond metrics.** WP02 confined it to metrics and said so explicitly; WP03 revises that. The `default` logs stream also does not exist until Vector ships its first record, so the floor test hits the same race on a fresh fixture, and "flakey tests are broken tests" argues for handling it rather than relying on the odds. `openobserve_metric_scalar_f64` / `openobserve_metric_count` became `openobserve_pending_scalar_f64` / `openobserve_pending_count`, taking a `stream_type`.
+
+The underlying principle is unchanged and is the one worth keeping: **tolerance is opt-in at the call site, never the default.** The strict helpers still back every run-scoped app-telemetry assertion, and AT-02.1 still proves they fail loudly.
+
+**`docker compose start <service>` does not work on this stack.** Restarting Vector during the red-first check failed with `dependency failed to start: container ...-openobserve-1 has no healthcheck configured`. `start` evaluates `depends_on` differently from `up` and objects to the distroless OpenObserve service having no healthcheck, even though its declared condition is `service_started`. `docker compose up -d <service>` works correctly. Worth a line in the WP05 docs, because reaching for `start` is a natural thing to do.
+
+### Pre-existing flake surfaced (NOT caused by this thread, NOT fixed here)
+
+Running the whole `udex-sdk` package after WP03 failed once with 10 of 40 integration tests down, then passed cleanly on a re-run. Intermittent, and worth writing down properly because it will bite CI.
+
+Root cause, from the server-side log rather than the assertion:
+
+```text
+insert or update on table "entry_context" violates foreign key constraint "entry_context_index_name_fkey"
+called `Result::unwrap_err()` on an `Ok` value        <- test_sdk_delete_index_not_empty
+```
+
+`integration_tests.rs::test_sdk_delete_index_not_empty` asserts that deleting a **non-empty** index is refused, and its own comment states the assumption plainly: *"The shared index has entries from other tests"*. Nothing enforces that ordering. When the test wins the race and runs before any entry-creating test, the shared `sdk-integration-test-index` is still empty, the delete **succeeds**, `unwrap_err()` panics — and the fixture index is now gone, so the nine tests that depend on it fail with `Index 'sdk-integration-test-index' not found`.
+
+The dependency predates ST0028. What changed is scheduling pressure: this thread added two more concurrently-running tests to the `obs` binary, and cargo runs test binaries in parallel, which made the losing interleaving reachable. Running `integration_tests` alone passes 40/40 consistently.
+
+This violates the project's own rule that flakey tests are broken tests, and it is a latent CI failure independent of observability. **Deliberately not fixed here** — it is unrelated to WP03's scope and touching the shared SDK fixture mid-thread would muddy this change. The fix is for that test to create and populate its own index rather than borrow the shared one, or to seed an entry before asserting. Recommend a separate work item; raised with the owner rather than silently absorbed.
+
 ## Notes for later work packages
 
 - The `.env` on this machine was appended to by hand rather than regenerated, because the rotation guard correctly refuses to rewrite it while a compose Postgres is live. A clean clone gets the same values from `gen-env.sh`; this only affects existing developer machines, and belongs in the WP05 upgrade note.
