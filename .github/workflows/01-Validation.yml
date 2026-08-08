@@ -21,6 +21,11 @@ jobs:
         working-directory: projects/rust
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No job here runs an authenticated git command, so the checkout token
+          # does not need to persist into the local git config where later steps
+          # (or anything they invoke) could read it.
+          persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -53,6 +58,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No job here runs an authenticated git command, so the checkout token
+          # does not need to persist into the local git config where later steps
+          # (or anything they invoke) could read it.
+          persist-credentials: false
 
       - name: Install helm v4.0.0
         run: |
@@ -96,6 +106,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No job here runs an authenticated git command, so the checkout token
+          # does not need to persist into the local git config where later steps
+          # (or anything they invoke) could read it.
+          persist-credentials: false
 
       # OpenObserve requires credentials on both ingest and query. They are
       # generated per job rather than stored as repository secrets: the fixture
@@ -189,6 +204,11 @@ jobs:
       k8s: ${{ steps.filter.outputs.k8s }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No job here runs an authenticated git command, so the checkout token
+          # does not need to persist into the local git config where later steps
+          # (or anything they invoke) could read it.
+          persist-credentials: false
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -218,6 +238,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No job here runs an authenticated git command, so the checkout token
+          # does not need to persist into the local git config where later steps
+          # (or anything they invoke) could read it.
+          persist-credentials: false
 
       # OpenObserve requires credentials on both ingest and query. They are
       # generated per job rather than stored as repository secrets: the fixture

@@ -26,7 +26,7 @@ No volume is declared, so telemetry is ephemeral and dies with the container. Th
 
 ### The Collector stays, and stays the only backend-aware service
 
-The app emits anonymous OTLP to a configurable endpoint and never learns the backend wants credentials. OpenObserve requires Basic auth on both ingest and query; that header is terminated in the collector's exporter config. This is the same separation ST0027 established for ClickStack's bearer token, and it is why no production crate changes in this thread.
+The app emits anonymous OTLP to a configurable endpoint and never learns the backend wants credentials. OpenObserve requires Basic auth on both ingest and query; that header is terminated in the collector's exporter config. This is the same separation ST0027 established for ClickStack's bearer token, and it is why no production behaviour changes in this thread.
 
 ```yaml
 exporters:
@@ -150,8 +150,10 @@ Fixture posture is inherited from ST0027 unchanged: always-on, and the helpers *
 
 **Collector `filelog` receiver instead of Vector** — ST0027 already established this cannot recover container names from docker json-file logs, which is why Vector exists. Retained only as the documented fallback if per-line OTLP requests prove too noisy.
 
-## Open questions to settle during implementation
+## Open questions raised at planning — all resolved
 
-- **Retention.** ClickHouse's exporter sets `ttl: 72h`. The equivalent `ZO_COMPACT_DATA_RETENTION_DAYS` is day-granular, so 72h maps to `3`. Unverified in the spike.
-- **CI footprint.** Unmeasured. OpenObserve should be lighter than ClickHouse + Mongo + HyperDX, but CI is where the fixture has to be reliable, so WP04 should record actual startup time rather than assume an improvement.
-- **UI ergonomics.** Nobody has driven the OpenObserve UI to confirm the charting story is at least as good as the HyperDX recipes currently in `projects/compose/README.md`. Since the developer UI is a main reason the fixture exists, WP05 should not simply delete those recipes without replacing them.
+These were the unknowns this thread deliberately refused to assume its way past. Each is settled; the original wording is kept so the question and its answer sit together.
+
+- **Retention.** *Asked:* ClickHouse's exporter sets `ttl: 72h`; the equivalent `ZO_COMPACT_DATA_RETENTION_DAYS` is day-granular, so 72h maps to `3` — unverified in the spike. **Resolved in WP01:** confirmed against the running service rather than the config file. `GET /config` returns `data_retention_days: 3` and `telemetry_enabled: false` (AC-01.4).
+- **CI footprint.** *Asked:* unmeasured; OpenObserve *should* be lighter than ClickHouse + Mongo + HyperDX, but CI is where the fixture has to be reliable, so WP04 should record actual startup time rather than assume an improvement. **Resolved in WP04:** the three observability services cold-start in **~4s**, and backend image footprint drops from ~2.73GB to 525MB. Stated as an absolute measurement, not a comparison — the old stack's startup was never timed before it was removed (AC-04.5).
+- **UI ergonomics.** *Asked:* nobody had driven the OpenObserve UI to confirm the charting story was at least as good as the HyperDX recipes, and the developer UI is a main reason the fixture exists. **Resolved in WP05:** it is, and better in one respect ST0027 had recorded as a loss — OpenObserve answers **PromQL**, so cumulative counters take `rate()` natively where ClickHouse SQL needed explicit `argMax`-per-series. Every replacement recipe in `projects/compose/README.md` was executed against the running fixture, and each cited UI route (`/web/logs`, `/web/traces`, `/web/metrics`, `/web/dashboards`, `/web/streams`) was probed rather than assumed (AC-05.2).

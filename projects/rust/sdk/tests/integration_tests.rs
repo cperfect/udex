@@ -36,8 +36,8 @@ use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, regis
 mod common;
 use common::{
     context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_await,
-    openobserve_pending_count, openobserve_pending_scalar_f64, openobserve_trace_span_names,
-    server_cert_path, wait_for_server,
+    openobserve_pending_scalar_f64, openobserve_trace_span_names, server_cert_path,
+    wait_for_server,
 };
 
 // ── Port constants ────────────────────────────────────────────────────────────
@@ -2337,10 +2337,20 @@ async fn test_obs_k8s_metrics_land() {
         return;
     };
 
-    // Run-specific check: capture the cumulative ListIndices counter, make the
-    // call, then poll for an increase - so a stale series from a prior run cannot
-    // satisfy the test. Budget is generous because the OTel metric export interval
-    // (default 60s) gates how soon the increment lands in OpenObserve.
+    // Capture the cumulative ListIndices counter, make the call, then poll for an
+    // increase, so telemetry from a PRIOR run cannot satisfy the test on its own.
+    // Budget is generous because the OTel metric export interval (default 60s)
+    // gates how soon the increment lands in OpenObserve.
+    //
+    // Unlike the non-k8s obs tests, this is NOT scoped to a single run. Those tag
+    // their telemetry with a `udex.test.run` resource attribute set at server
+    // startup; here the server is a long-lived k8s Deployment whose resource
+    // attributes come from the Helm chart, identical for every run, so there is no
+    // per-run value to filter on short of redeploying. `deployment_environment`
+    // narrows to cluster-originated telemetry and no further. The consequence:
+    // baseline-then-increase rules out pre-existing data, but concurrent traffic
+    // against the same deployment — another test, or a second CI job sharing the
+    // store — could also satisfy the increase.
     //
     // `udex.rpc.requests` is a CUMULATIVE counter, so each export writes a new row
     // with the running total. We take the latest value per series and sum across
@@ -2381,19 +2391,11 @@ async fn test_obs_k8s_metrics_land() {
         "udex.rpc.requests for {method} did not increase after the request (baseline {baseline})"
     );
 
-    // PostgreSQL receiver metric — the collector scrapes the DB continuously, so a
-    // presence check is appropriate here.
-    let pg = openobserve_pending_count(
-        "SELECT count(*) AS n FROM \"postgresql_backends\"",
-        "metrics",
-    )
-    .await;
-    assert!(
-        pg > 0,
-        "no postgresql.backends metric in OpenObserve — the collector's postgresqlreceiver may \
-         not be scraping, or the stream name may be wrong (metrics become one stream per metric \
-         name, dots as underscores)"
-    );
+    // The PostgreSQL receiver metric is deliberately NOT asserted here. It is a
+    // property of the compose collector, not of the k8s deployment, so checking it
+    // from a cluster-gated test only hid it from anyone without a cluster — which
+    // is exactly the gap ST0028 WP03 closed. `obs.rs::obs_postgres_receiver_metric_lands`
+    // is the single owner, and it runs on every `cargo test`.
 }
 
 #[rstest]

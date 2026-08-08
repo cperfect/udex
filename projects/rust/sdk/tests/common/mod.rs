@@ -156,17 +156,35 @@ fn openobserve_url() -> String {
 /// one happens to run earlier is exactly the kind of ordering coupling that
 /// breaks when a test is run on its own.
 fn openobserve_credentials() -> (String, String) {
-    static LOAD_ENV: std::sync::Once = std::sync::Once::new();
-    LOAD_ENV.call_once(|| {
-        dotenvy::dotenv_override().ok();
-    });
-    let email =
-        std::env::var("OPENOBSERVE_ROOT_EMAIL").unwrap_or_else(|_| "root@udex.local".to_string());
-    let password = std::env::var("OPENOBSERVE_ROOT_PASSWORD_SECRET").expect(
+    // Read the process environment BEFORE touching dotenv. CI sets these
+    // directly and has no .env; a developer has a .env and no exported vars.
+    // `dotenv_override` would let a stale .env win over an explicitly exported
+    // value, which is the wrong precedence — the more specific source should.
+    let mut email = std::env::var("OPENOBSERVE_ROOT_EMAIL").ok();
+    let mut password = std::env::var("OPENOBSERVE_ROOT_PASSWORD_SECRET").ok();
+
+    if password.is_none() {
+        // Only fall back to .env when the process environment did not supply it.
+        // Loaded here rather than relying on another fixture having done it
+        // first: several helpers call dotenvy incidentally, and depending on
+        // which one happens to run earlier is exactly the kind of ordering
+        // coupling that breaks when a test is run on its own.
+        static LOAD_ENV: std::sync::Once = std::sync::Once::new();
+        LOAD_ENV.call_once(|| {
+            dotenvy::dotenv().ok();
+        });
+        email = email.or_else(|| std::env::var("OPENOBSERVE_ROOT_EMAIL").ok());
+        password = std::env::var("OPENOBSERVE_ROOT_PASSWORD_SECRET").ok();
+    }
+
+    let password = password.expect(
         "OPENOBSERVE_ROOT_PASSWORD_SECRET is not set — run scripts/gen-env.sh, or export it \
          directly in CI. The observability fixture is an always-on dev/CI dependency, like Hydra.",
     );
-    (email, password)
+    (
+        email.unwrap_or_else(|| "root@udex.local".to_string()),
+        password,
+    )
 }
 
 /// Run a SQL query against an OpenObserve stream type (`logs` | `traces` |
@@ -213,6 +231,11 @@ pub async fn openobserve_try_search(
             // fall outside the window.
             "end_time": now_micros + 60_000_000,
             "from": 0,
+            // Fixed page cap. Every caller either selects a single aggregate or
+            // reads the span names of one trace, so 100 rows is ample — but it IS
+            // a cap: a query returning more would be silently truncated. Any
+            // future caller needing a larger result set should parameterise this
+            // rather than assume completeness.
             "size": 100,
         }
     });
@@ -413,6 +436,11 @@ impl PendingReason {
 // ── PendingReason behaviour ───────────────────────────────────────────────────
 // The whole point of this type is producing an accurate diagnosis, so the two
 // branches are pinned rather than trusted.
+//
+// These live in `common/`, which is compiled into BOTH test binaries, so they run
+// twice per suite — once under `integration_tests` and once under `obs`. That is
+// intentional and costs nothing: they are pure and sub-millisecond, and moving
+// them to a single binary would separate them from the code they describe.
 
 #[test]
 fn pending_reason_stays_silent_when_the_last_attempt_resolved() {
@@ -432,7 +460,7 @@ fn pending_reason_blames_the_name_when_nothing_ever_resolved() {
         p.panic_if_persistent("ctx")
     }))
     .expect_err("a persistently unresolved query must panic");
-    let msg = panic_message(&err);
+    let msg = panic_message(&*err);
     assert!(
         msg.contains("no attempt ever resolved"),
         "expected the strong diagnosis; got: {msg}"
@@ -452,7 +480,7 @@ fn pending_reason_softens_the_claim_when_something_resolved_earlier() {
         p.panic_if_persistent("ctx")
     }))
     .expect_err("a trailing not-yet-ingested response must still panic");
-    let msg = panic_message(&err);
+    let msg = panic_message(&*err);
     assert!(
         msg.contains("an earlier attempt resolved"),
         "expected the softened diagnosis; got: {msg}"
@@ -463,7 +491,7 @@ fn pending_reason_softens_the_claim_when_something_resolved_earlier() {
     );
 }
 
-fn panic_message(err: &Box<dyn std::any::Any + Send>) -> String {
+fn panic_message(err: &(dyn std::any::Any + Send)) -> String {
     err.downcast_ref::<String>()
         .cloned()
         .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
@@ -515,5 +543,13 @@ pub async fn openobserve_pending_scalar_f64(sql: &str, stream_type: &str) -> Opt
 
 /// Pulls the sole value out of a single-column aggregate result.
 fn scalar_from_hits(hits: &[serde_json::Value]) -> Option<f64> {
-    hits.first()?.as_object()?.values().next()?.as_f64()
+    let row = hits.first()?.as_object()?;
+    // Exactly one column, or nothing. Taking "the first value" of a multi-column
+    // row would pick whichever key sorts first, silently answering a different
+    // question than the caller asked — and every caller here is documented as
+    // selecting a single aggregate.
+    if row.len() != 1 {
+        return None;
+    }
+    row.values().next()?.as_f64()
 }

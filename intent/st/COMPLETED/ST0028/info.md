@@ -11,13 +11,13 @@ completed: 2026-08-08T09:27:11Z
 
 ## Objective
 
-Replace the ClickHouse + HyperDX + MongoDB half of the always-on observability fixture with a single **OpenObserve** service backed by local disk, keeping the OpenTelemetry Collector and the Vector log floor. The fixture goes from five services to three while preserving every capability it has today: OTLP ingest of traces, metrics, and logs; a browsable developer UI; a queryable store the integration tests assert against; and the postgres/hydra container-log floor sitting alongside application telemetry.
+Replace the ClickHouse + HyperDX + MongoDB half of the always-on observability fixture with a single **OpenObserve** service backed by local disk, keeping the OpenTelemetry Collector and the Vector log floor. The fixture goes from six services to three while preserving every capability it has today: OTLP ingest of traces, metrics, and logs; a browsable developer UI; a queryable store the integration tests assert against; and the postgres/hydra container-log floor sitting alongside application telemetry.
 
-The application stays **solution-agnostic**. `udex-telemetry` continues to emit plain OTLP to a configurable endpoint, so no production crate changes in this thread — the backend swap is invisible above the Collector.
+The application stays **solution-agnostic**. `udex-telemetry` continues to emit plain OTLP to a configurable endpoint, so no production behaviour changes in this thread — the backend swap is invisible above the Collector.
 
 ## Context
 
-ST0027 folded observability into `projects/compose/` as an always-on dev/CI fixture. It works, but the backend half is heavy for something that only ever serves local development: ClickHouse (with a raised `nofile` ulimit and a `CLICKHOUSE_DB` bootstrap), HyperDX as a reader-only UI, MongoDB purely to hold HyperDX's own state, and a `hyperdx-init` one-shot that registers a local user so a developer never meets a signup form. Five services, a ~1.5KB inline `DEFAULT_SOURCES` JSON blob, and two moving parts (Mongo, hyperdx-init) that exist only to make a UI usable.
+ST0027 folded observability into `projects/compose/` as an always-on dev/CI fixture. It works, but the backend half is heavy for something that only ever serves local development: ClickHouse (with a raised `nofile` ulimit and a `CLICKHOUSE_DB` bootstrap), HyperDX as a reader-only UI, MongoDB purely to hold HyperDX's own state, and a `hyperdx-init` one-shot that registers a local user so a developer never meets a signup form. Six services, a ~1.5KB inline `DEFAULT_SOURCES` JSON blob, and three moving parts (HyperDX, Mongo, hyperdx-init) that exist only to make a UI usable.
 
 OpenObserve collapses store, query API, and UI into one binary with a SQL-over-HTTP search API. In local mode it keeps metadata in SQLite and segments on local disk, so it needs no companion database and no bootstrap.
 

@@ -56,7 +56,7 @@ Two properties are worth stating rather than leaving implicit.
 
 **The password cannot be plain hex like the other generated secrets.** OpenObserve enforces 8–128 characters with at least one lowercase, uppercase, digit and special character, and *panics on first boot* when that is not met. `gen-env.sh` satisfies it while keeping the value inside `[A-Za-z0-9-]`, because the generated values are expanded through an unquoted heredoc and consumed by docker compose's `.env` parser — a `$` or `#` in that value breaks the fixture in ways that are tedious to diagnose.
 
-Rotate by re-running `gen-env.sh`, never by hand-editing: `OPENOBSERVE_BASIC_AUTH_SECRET` is derived from the other two and will otherwise authenticate nothing. Rotation also requires recreating the containers — see [Rotating secrets](#rotating-secrets) below.
+Rotate by re-running `gen-env.sh --force`, never by hand-editing: `OPENOBSERVE_BASIC_AUTH_SECRET` is derived from the other two and will otherwise authenticate nothing. Rotation also requires recreating the containers — see [Rotating secrets](#rotating-secrets) below.
 
 In CI there is no `.env`; the workflow generates the same three values per job rather than storing them as repository secrets, since the fixture is destroyed with the runner.
 

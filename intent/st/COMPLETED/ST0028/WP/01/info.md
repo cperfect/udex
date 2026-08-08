@@ -14,7 +14,9 @@ Add OpenObserve to the compose fixture and start feeding it, **without removing 
 
 ## Deliverables
 
-- `openobserve` service in `projects/compose/docker-compose.yml`, image pinned to `public.ecr.aws/zinclabs/openobserve:v0.92.0`, configured with `ZO_LOCAL_MODE=true`, `ZO_LOCAL_MODE_STORAGE=disk`, `ZO_DATA_DIR`, and `ZO_TELEMETRY=false` (on by default -- a dev fixture must not phone home). Port 5080 published loopback-only, matching the ClickHouse posture. Healthcheck on `/healthz`. No volume: telemetry is ephemeral, exactly as ClickHouse is today.
+- `openobserve` service in `projects/compose/docker-compose.yml`, image pinned to `public.ecr.aws/zinclabs/openobserve:v0.92.0`, configured with `ZO_LOCAL_MODE=true`, `ZO_LOCAL_MODE_STORAGE=disk`, `ZO_DATA_DIR`, and `ZO_TELEMETRY=false` (on by default -- a dev fixture must not phone home). Port 5080 published loopback-only, matching the ClickHouse posture. No volume: telemetry is ephemeral, exactly as ClickHouse is today.
+
+  **No healthcheck** — planned as one on `/healthz`, but the image turned out to be fully distroless (no shell, curl, wget or busybox), and compose healthchecks exec inside the container. The service does serve `/healthz`; it simply cannot probe itself. Dependents gate on `service_started` instead, and readiness is absorbed where it actually matters: the collector's exporter retries on failure, and the obs tests poll with generous budgets.
 - `otlphttp/openobserve` exporter added to all three collector pipelines alongside the existing `clickhouse` exporter.
 - Vector's `clickhouse` sink replaced by an `opentelemetry` sink pointed at the collector's OTLP/HTTP receiver, so the log floor reaches both stores through the collector and the collector becomes the only backend-aware service.
 - `scripts/gen-env.sh` generates `OPENOBSERVE_ROOT_EMAIL`, `OPENOBSERVE_ROOT_PASSWORD_SECRET` (must include punctuation -- OpenObserve rejects a trivial root password on first boot), and the pre-encoded `OPENOBSERVE_BASIC_AUTH_SECRET` consumed by the collector header and later by the tests.

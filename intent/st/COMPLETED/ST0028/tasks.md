@@ -4,11 +4,11 @@ Work is tracked in work packages (`WP/01` .. `WP/05`); this file is the sequenci
 
 ## Tasks
 
-- [ ] WP-01 Stand up OpenObserve beside ClickHouse (compose service, collector dual-export, Vector via collector, `gen-env.sh` credentials)
-- [ ] WP-02 Port the observability verification layer to OpenObserve (helpers, `obs.rs`, three k8s tests)
-- [ ] WP-03 New coverage: Vector log floor assertion, `postgresql.backends` on the always-run path
-- [ ] WP-04 Retire ClickHouse / HyperDX / Mongo; CI service lists and env; `dev-doctor.sh` check
-- [ ] WP-05 Documentation across compose, docs, k8s, devcontainer and CONTRIBUTING
+- [x] WP-01 Stand up OpenObserve beside ClickHouse (compose service, collector dual-export, Vector via collector, `gen-env.sh` credentials)
+- [x] WP-02 Port the observability verification layer to OpenObserve (helpers, `obs.rs`, three k8s tests)
+- [x] WP-03 New coverage: Vector log floor assertion, `postgresql.backends` on the always-run path
+- [x] WP-04 Retire ClickHouse / HyperDX / Mongo; CI service lists and env; `dev-doctor.sh` check
+- [x] WP-05 Documentation across compose, docs, k8s, devcontainer and CONTRIBUTING
 
 ## Task Notes
 

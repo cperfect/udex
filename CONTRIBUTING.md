@@ -13,7 +13,7 @@ The recommended way to get a consistent environment is the [VS Code dev containe
 ### Prerequisites
 
 - **Rust** (1.95.0) — install via [rustup](https://rustup.rs/)
-- **Docker** — required to run the local dev services (PostgreSQL + Hydra)
+- **Docker** — required to run the local dev services (PostgreSQL, Hydra, and the always-on observability fixture)
 - **jq** (≥1.x) — required by `hydra-create-client.sh` and kubectl version parsing; install via `apt-get install jq` / `brew install jq`
 - **protoc** (Protocol Buffers compiler) — required to build the `api` crate from `.proto` definitions
 - **k3d** (≥5.x) _(optional)_ — local Kubernetes clusters via Docker; install from [k3d.io](https://k3d.io/stable/#installation)

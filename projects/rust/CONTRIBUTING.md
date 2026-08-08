@@ -98,9 +98,12 @@ cargo clippy --all-targets -- -D warnings
 >
 > **Integration test naming** — Every integration test function must be prefixed
 > with a layer indicator: `test_sdk_`, `test_sdk_oauth2_`, `test_sdk_k8s_`,
-> `test_sdk_k8s_multi_`, `test_obs_k8s_`, `test_server_`, `test_server_oauth2_`,
+> `test_sdk_k8s_multi_`, `test_obs_k8s_`, `obs_` (the always-run, non-k8s
+> observability binary `sdk/tests/obs.rs`), `test_server_`, `test_server_oauth2_`,
 > `test_index_service_`, `test_entry_service_`, `test_datastore_`, or `test_cli_`.
 > This makes it immediately obvious from output which layer a failing test covers.
+> Unit tests of shared test scaffolding (e.g. the `pending_reason_*` tests in
+> `sdk/tests/common/`) are exempt — they exercise the helpers, not a layer.
 > Shared fixture helpers live in `udex-test-utils` — check there before duplicating
 > fixture code.
 

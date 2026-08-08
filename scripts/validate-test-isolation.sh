@@ -72,7 +72,11 @@ echo "Building ${PACKAGE} --test ${TARGET}..."
 # the remedy is to run each filter through cargo
 # (`cargo test -p "${PACKAGE}" --test "${TARGET}" <name> -- --exact`), trading
 # speed for exact fidelity.
-ARTIFACT="$(cargo test --package "${PACKAGE}" --test "${TARGET}" --no-run --message-format=json 2>/dev/null \
+# stderr is NOT redirected: cargo writes compiler diagnostics there, and only its
+# JSON stdout flows through jq. Suppressing it meant a compilation failure
+# surfaced as the generic "no test artifact" error below, with the actual errors
+# thrown away.
+ARTIFACT="$(cargo test --package "${PACKAGE}" --test "${TARGET}" --no-run --message-format=json \
   | jq -c --arg t "${TARGET}" 'select(.executable != null and .target.name == $t)' \
   | tail -1)"
 
@@ -82,7 +86,17 @@ if [[ -z "${ARTIFACT}" ]]; then
 fi
 
 BIN="$(jq -r '.executable' <<<"${ARTIFACT}")"
-PKG_DIR="$(dirname "$(jq -r '.manifest_path' <<<"${ARTIFACT}")")"
+
+# Require a real manifest_path. `jq -r` renders a missing field as the string
+# "null", whose dirname is "." — which would silently become the workspace root
+# and run every test from the wrong directory while appearing to succeed.
+MANIFEST="$(jq -r '.manifest_path // empty' <<<"${ARTIFACT}")"
+if [[ -z "${MANIFEST}" || "${MANIFEST}" == "null" ]]; then
+  echo "ERROR: cargo reported no manifest_path for ${PACKAGE}/${TARGET}" >&2
+  echo "Refusing to guess the package root; tests would run from the wrong directory." >&2
+  exit 1
+fi
+PKG_DIR="$(dirname "${MANIFEST}")"
 
 if [[ -z "${BIN}" || ! -x "${BIN}" ]]; then
   echo "ERROR: could not locate the compiled test binary for ${PACKAGE}/${TARGET}" >&2

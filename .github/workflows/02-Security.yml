@@ -19,6 +19,11 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # No job here runs an authenticated git command, so the checkout token
+          # does not need to persist into the local git config where later steps
+          # (or anything they invoke) could read it.
+          persist-credentials: false
 
       - name: Run Trivy (table — log output and build gate)
         uses: aquasecurity/trivy-action@v0.35.0

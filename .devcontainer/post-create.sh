@@ -55,6 +55,23 @@ if [[ ! -f .env ]]; then
   bash scripts/gen-env.sh --force
 else
   echo ".env already exists — skipping secret generation."
+  # The exports above only reach gen-env.sh, which is skipped on this path — so a
+  # .env generated before OPENOBSERVE_URL existed (or on a host, where it points
+  # at localhost) would leave the devcontainer unable to reach the fixture:
+  # published ports land on the host's loopback, not this container's.
+  #
+  # Append or rewrite just that one line, preserving every secret and other value
+  # in the file. Deliberately not a regeneration: that would rotate secrets the
+  # running Postgres has already baked in.
+  if grep -q '^OPENOBSERVE_URL=' .env; then
+    if ! grep -q "^OPENOBSERVE_URL=${OPENOBSERVE_URL}$" .env; then
+      sed -i "s|^OPENOBSERVE_URL=.*|OPENOBSERVE_URL=${OPENOBSERVE_URL}|" .env
+      echo "  updated OPENOBSERVE_URL for devcontainer networking"
+    fi
+  else
+    printf '\n# Added by post-create.sh: devcontainer reaches the fixture by service name.\nOPENOBSERVE_URL=%s\n' "${OPENOBSERVE_URL}" >> .env
+    echo "  added OPENOBSERVE_URL for devcontainer networking"
+  fi
 fi
 
 # docker-compose.devcontainer.yml declares env_file: ../.env, which is the
