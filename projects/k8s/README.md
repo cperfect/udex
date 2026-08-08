@@ -63,6 +63,8 @@ graph LR
 
 **Replicas & statelessness.** The deployment defaults to **2 server replicas** (`replicaCount` in `values.yaml`) so local dev always runs the multi-instance configuration. The server is stateless — all state lives in the shared datastore — so any replica can serve any request. The multi-instance integration tests (`test_sdk_k8s_multi_*`) verify this by addressing each pod **directly** (bypassing the round-robin LB) via `kubectl port-forward`, then asserting that a write through one instance is visible through the other. Direct hops terminate against the pod's own cert; the load-balanced path uses the Traefik edge cert.
 
+**Resource requests & limits.** The container declares both (`resources` in `values.yaml`), so the scheduler has real numbers to place against and a runaway pod cannot starve its neighbours. The defaults are sized from measurement — the pods idle at ~1m CPU and 4-7Mi memory — with wide headroom so the integration tests are never throttled or OOM-killed. They are **dev defaults**: a real deployment should re-measure under its own load rather than inherit them.
+
 **Cluster management** (solid lines, bottom): `image-build.sh` builds the Docker image locally; `image-load.sh` imports it into the k3d cluster so pods can use `imagePullPolicy: Never`. `deploy.sh` runs `helm upgrade --install`, which creates or updates all Kubernetes resources.
 
 **Config injection** (dashed lines): the ConfigMap is mounted as a file at `/etc/udex/config.yaml`; the Opaque Secret is projected as both an environment variable (`DATABASE_URL`) and a volume (the pod's own `tls.crt`/`tls.key`); the `kubernetes.io/tls` Secret holds the edge cert Traefik presents to clients.

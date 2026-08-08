@@ -104,6 +104,12 @@ spec:
               port: 443
             initialDelaySeconds: 5
             periodSeconds: 5
+          # Requests let the scheduler place pods and arbitrate contention; limits
+          # bound the blast radius of a runaway or leaking pod so it cannot starve
+          # its neighbours. Defaults live in values.yaml and are sized from
+          # measurement — see the comment there before changing them.
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
       volumes:
         # ConfigMap volume: exposes config.yaml as a file inside the pod.
         - name: config
