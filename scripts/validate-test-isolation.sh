@@ -44,57 +44,72 @@ echo "Building ${PACKAGE} --test ${TARGET}..."
 # `cargo test` once per test would spend most of the run in cargo's own startup
 # (~20s for the whole sweep this way, versus minutes).
 #
-# KNOWN DIVERGENCE — read before trusting a surprising result.
+# Each test is run from the PACKAGE root, because that is the working directory
+# cargo gives a test process — not the workspace root this script starts in.
+# The distinction matters for anything resolving a relative path, most immediately
+# `dotenvy::dotenv_override()`, which searches upward from the working directory
+# for `.env`. Taking the package root from cargo's own `manifest_path` rather than
+# assuming a layout keeps the two in step if the workspace is ever rearranged.
 #
-# Invoking the binary directly does NOT reproduce the environment `cargo test`
-# gives a test process. Cargo runs the binary with the working directory set to
-# the *package* root (here `projects/rust/sdk`) and sets runtime variables of its
-# own, notably the dynamic library search path. This script runs it from the
-# workspace root (`projects/rust`) with the ambient environment. So in principle
-# a test could pass here and fail under `cargo test`, or the reverse, and the
-# isolation verdict would be misleading.
+# RESIDUAL DIVERGENCE — read before trusting a surprising result.
 #
-# What was actually checked, rather than assumed:
-#   - Fixture paths are cwd-independent: CERTS_DIR/JWT_DIR in
+# Matching the working directory does not make this identical to `cargo test`.
+# Cargo also sets runtime variables of its own, notably the dynamic library
+# search path; this runs with the ambient environment. So a test could in
+# principle pass here and fail under cargo, or the reverse, and the isolation
+# verdict would be misleading.
+#
+# What was checked, rather than assumed:
+#   - Fixture paths are cwd-independent anyway: CERTS_DIR/JWT_DIR in
 #     `sdk/tests/common/mod.rs` are built from `env!("CARGO_MANIFEST_DIR")`,
 #     which is baked in at compile time.
-#   - The one cwd-sensitive call is `dotenvy::dotenv_override()`, which searches
-#     upward from the working directory for `.env`. Both this script's cwd and
-#     cargo's walk up to the same workspace-root `.env`, so they agree.
-#   - Running a database-backed test from `projects/rust`, from
-#     `projects/rust/sdk` (cargo's cwd) and from `/tmp` all produced the same
-#     result, so no divergence is reachable with the suite as it stands.
+#   - A database-backed test produced the same result run from the workspace
+#     root, from the package root, and from /tmp — so no divergence is reachable
+#     with the suite as it stands.
 #
-# The risk is future tests, not current ones: a test that opens a fixture by
-# RELATIVE path, or that depends on a variable only cargo sets, would behave
-# differently here. If this sweep ever disagrees with `cargo test`, that is the
-# first thing to suspect — and the fix is to run each filter through cargo
+# The exposure is future tests that depend on a variable only cargo sets. If this
+# sweep ever disagrees with `cargo test`, that is the first thing to suspect, and
+# the remedy is to run each filter through cargo
 # (`cargo test -p "${PACKAGE}" --test "${TARGET}" <name> -- --exact`), trading
-# the speed for exact fidelity.
-BIN="$(cargo test --package "${PACKAGE}" --test "${TARGET}" --no-run --message-format=json 2>/dev/null \
-  | jq -r --arg t "${TARGET}" 'select(.executable != null and .target.name == $t) | .executable' \
+# speed for exact fidelity.
+ARTIFACT="$(cargo test --package "${PACKAGE}" --test "${TARGET}" --no-run --message-format=json 2>/dev/null \
+  | jq -c --arg t "${TARGET}" 'select(.executable != null and .target.name == $t)' \
   | tail -1)"
+
+if [[ -z "${ARTIFACT}" ]]; then
+  echo "ERROR: cargo reported no test artifact for ${PACKAGE}/${TARGET}" >&2
+  exit 1
+fi
+
+BIN="$(jq -r '.executable' <<<"${ARTIFACT}")"
+PKG_DIR="$(dirname "$(jq -r '.manifest_path' <<<"${ARTIFACT}")")"
 
 if [[ -z "${BIN}" || ! -x "${BIN}" ]]; then
   echo "ERROR: could not locate the compiled test binary for ${PACKAGE}/${TARGET}" >&2
   exit 1
 fi
 
-mapfile -t TESTS < <("${BIN}" --list --format terse 2>/dev/null | sed -n 's/: test$//p')
+if [[ ! -d "${PKG_DIR}" ]]; then
+  echo "ERROR: package root '${PKG_DIR}' is not a directory" >&2
+  exit 1
+fi
+
+mapfile -t TESTS < <(cd "${PKG_DIR}" && "${BIN}" --list --format terse 2>/dev/null | sed -n 's/: test$//p')
 
 if [[ ${#TESTS[@]} -eq 0 ]]; then
   echo "ERROR: no tests found in ${BIN} — has the target name changed?" >&2
   exit 1
 fi
 
-echo "Running ${#TESTS[@]} tests individually..."
+echo "Running ${#TESTS[@]} tests individually from ${PKG_DIR} (cargo's working directory)..."
 echo ""
 
 FAILED=()
 for t in "${TESTS[@]}"; do
   # Every test is attempted even after a failure: one run should give the whole
-  # picture, not just the first offender.
-  if "${BIN}" "${t}" --exact --quiet >/dev/null 2>&1; then
+  # picture, not just the first offender. The subshell keeps the cd scoped; BIN is
+  # an absolute path, so it resolves regardless of where we run it from.
+  if (cd "${PKG_DIR}" && "${BIN}" "${t}" --exact --quiet >/dev/null 2>&1); then
     printf '  ok   %s\n' "${t}"
   else
     printf '  FAIL %s\n' "${t}"
