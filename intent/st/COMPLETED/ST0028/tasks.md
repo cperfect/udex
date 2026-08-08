@@ -1,3 +1,8 @@
+---
+verblock: "08 Aug 2026:v0.1: vscode - Initial version"
+intent_version: 2.15.0
+---
+
 # Tasks - ST0028: OpenObserve as the dev observability backend
 
 Work is tracked in work packages (`WP/01` .. `WP/05`); this file is the sequencing view. Acceptance lives in `acceptance.md`.

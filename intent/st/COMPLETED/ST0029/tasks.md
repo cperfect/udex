@@ -1,3 +1,8 @@
+---
+verblock: "08 Aug 2026:v0.1: vscode - Initial version"
+intent_version: 2.15.0
+---
+
 # Tasks - ST0029: Remove cross-test ordering dependencies in the SDK integration suite
 
 Acceptance lives in `acceptance.md`; as-built detail in `impl.md`. This file is the sequencing view.

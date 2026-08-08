@@ -1,3 +1,8 @@
+---
+verblock: "08 Aug 2026:v0.1: vscode - Initial version"
+intent_version: 2.15.0
+---
+
 # Design - ST0028: OpenObserve as the dev observability backend
 
 All findings cited here were verified on branch `spike/openobserve-obs` (`FINDINGS.md`) against real `udex-server` telemetry, not from documentation.

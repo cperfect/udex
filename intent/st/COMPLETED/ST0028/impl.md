@@ -1,3 +1,8 @@
+---
+verblock: "08 Aug 2026:v0.1: vscode - Initial version"
+intent_version: 2.15.0
+---
+
 # Implementation - ST0028: OpenObserve as the dev observability backend
 
 ## Implementation
