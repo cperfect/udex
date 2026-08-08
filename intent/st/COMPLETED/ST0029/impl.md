@@ -52,4 +52,8 @@ It named the test, printed a copy-pasteable reproduction command, and exited 1. 
 
 ## Technical Details
 
-Leftover indexes are not cleaned up, deliberately: `init_postgres()` creates a throwaway database per run and drops it at exit, so per-test indexes cost nothing and cleanup code would be one more thing to get wrong.
+Leftover indexes are not cleaned up, deliberately: `init_postgres()` creates a throwaway database per run and a `#[ctor::dtor]` drops it on exit (normal or panicking), unless `KEEP_FIXTURES=true`. Per-test indexes therefore cost nothing, and cleanup code would be one more thing to get wrong — worse, deleting the entry and index would mean a test whose entire assertion is *"delete is refused"* also performing deletes.
+
+Measured, because "the tests leak an index and an entry on every run" is a reasonable thing to assume and was raised as a concern: running both tests left the persistent `postgres` database at **0 rows** in `index` and left the test-database count unchanged, since the run's database is created and dropped within the run. Nothing accumulates.
+
+**The real housekeeping issue is one level up, and this thread does not address it.** Orphaned *databases* do accumulate when a run is killed before its destructor executes — a `timeout`, a SIGKILL, an interrupted session. Seven such orphans were present during this work, all with zero connections. No destructor can cover that case by construction. A blanket sweep at startup would be unsafe as written, because the `integration_tests` and `obs` binaries run concurrently with a database each, so "drop everything matching the prefix" could destroy a live sibling's fixture. If it becomes a nuisance, the safe shapes are a non-destructive count reported by `dev-doctor.sh`, or an explicit opt-in cleanup command — not automatic dropping.
