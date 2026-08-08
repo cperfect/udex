@@ -34,7 +34,7 @@ A related trap caught during review rather than in production: composing the pas
 
 **Vector did not recreate on a config-only change.** `docker compose up -d vector` reported it unchanged despite the inline `configs` content differing; `--force-recreate` was needed. Worth knowing for WP04's CI work -- a pipeline that relies on `up -d` picking up a config edit could silently run the old config.
 
-### WP-02 -- Port the verification layer to OpenObserve (complete except AC-02.5)
+### WP-02 -- Port the verification layer to OpenObserve (complete)
 
 Changed files: `sdk/tests/common/mod.rs`, `sdk/tests/obs.rs`, `sdk/tests/integration_tests.rs`, plus three stale comments in `telemetry/src/lib.rs`.
 
@@ -46,7 +46,36 @@ This is exactly why AT-02.1 exists as a real test rather than an assumption: the
 
 **Three comments in `udex-telemetry` named ClickHouse** ("Traces -> ClickHouse (via the collector)"). Made backend-agnostic. This touches a production crate, which AC-00.1 says is untouched — the change is comments only, with no behavioural effect, and it moves the crate *toward* the open-standard boundary MODULES.md says it owns. Read AC-00.1 as "no behavioural change to production crates"; if the owner disagrees, revert these three lines.
 
-**AC-02.5 is not satisfied.** See `acceptance.md` for the detail: the k3d deployment has been crash-looping for 34 days on a database DNS failure, so the three k8s tests take their skip path and report `ok` in 0.00s. That is a skip, not a pass. The `deployment_environment = 'k3d'` column in the ported metric query is inferred from a verified rule but never observed, and needs a live cluster to confirm.
+### Cluster reinitialisation (unblocking AC-02.5)
+
+The k3d deployment had been in `CrashLoopBackOff` for 34 days, with **two independent faults**:
+
+1. The deployed `DATABASE_URL` pointed at `udex_datastore_integration_test_45d36484_...` — a throwaway database created and dropped by a test run. An older `deploy.sh` read `DATABASE_URL` from the process environment, where an integration test had overwritten it. The current script hardcodes `/postgres`, so the bug was already fixed in the repo and only the stale deployment carried it.
+2. `host.k3d.internal` resolved nowhere — absent from both the node's `/etc/hosts` and CoreDNS `NodeHosts`. k3d normally injects it.
+
+Both cleared by delete / rebuild / recreate / load / deploy. Verified after: CoreDNS carries `192.168.107.1 host.k3d.internal`, a throwaway pod reaches `host.k3d.internal:5432`, both replicas are `Running 1/1`, and the deployed URL targets `/postgres`.
+
+The lesson worth keeping: these tests **skip silently** when `K8S_SERVER_URL` is unset and report `ok` in 0.00s. A skip that renders as a pass is how a broken deployment went unnoticed for over a month. Anyone reading a green run should check the elapsed time.
+
+### The metric cold-start race (found only once the tests actually ran)
+
+With the cluster live, `test_obs_k8s_metrics_land` failed immediately:
+
+```text
+OpenObserve rejected the query (400 Bad Request): unknown field 'deployment_environment'
+```
+
+The column name was right — `configmap.yaml` does set `deployment.environment: k3d`. The cause is that **OpenObserve derives a stream's schema from ingested data**: a column does not exist until a datapoint carrying it arrives, and the OTel metric export interval is 60s. Traces and logs arrive near-instantly, so only metrics race. Waiting confirmed it: the column appeared and the query returned `total: 2`.
+
+This pulls against AC-02.1, since a cold start and a typo produce the same `unknown field` response. Resolved by making the tolerance **opt-in and confined to metrics**:
+
+- `openobserve_search` / `openobserve_scalar_f64` still fail instantly on any API error, so a mistyped column in a trace or log query is caught immediately — AT-02.1 continues to prove this.
+- `openobserve_metric_scalar_f64` / `openobserve_metric_count` treat `unknown field` and `stream not found` as "not ingested yet" and return `None` so the caller keeps polling. Every other error — bad syntax, unknown function, auth, transport — still panics at once.
+- The cost is that a typo in a *metric* query now fails when the poll budget expires rather than immediately, so those assertions explicitly say that a value which never appears may mean a wrong column or stream name. That is the honest trade, and it is written into the assertion text rather than left for someone to rediscover.
+
+`stream not found` is included because it is the same class: `postgresql_backends` does not exist until the collector's receiver has scraped once, which would have made the postgres metric check fragile on a cold fixture.
+
+This defect existed in the ported code from the start and would have shipped had the cluster stayed broken — the skip was hiding it.
 
 ## Notes for later work packages
 

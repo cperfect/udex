@@ -170,12 +170,35 @@ fn openobserve_credentials() -> (String, String) {
 }
 
 /// Run a SQL query against an OpenObserve stream type (`logs` | `traces` |
-/// `metrics`) and return the `hits` array.
+/// `metrics`) and return the `hits` array. Panics on any API error.
 ///
 /// `stream_type` is not optional decoration: the stream name `default` exists
 /// independently under both `logs` and `traces`, so getting it wrong silently
 /// searches the wrong signal.
 pub async fn openobserve_search(sql: &str, stream_type: &str) -> Vec<serde_json::Value> {
+    openobserve_try_search(sql, stream_type)
+        .await
+        .unwrap_or_else(|reason| panic!("{reason}"))
+}
+
+/// True when an API error means "this data has not been ingested yet" rather
+/// than "this query is wrong".
+///
+/// Both shapes appear on a cold fixture: a stream does not exist until its first
+/// datapoint arrives (`Search stream not found`), and a column does not exist
+/// until a datapoint carrying it arrives (`unknown field`). Neither is
+/// distinguishable from a genuine typo by the response alone, which is why only
+/// the metrics helpers below are allowed to treat it as transient.
+fn is_schema_not_ready(reason: &str) -> bool {
+    reason.contains("unknown field") || reason.contains("stream not found")
+}
+
+/// Fallible core of [`openobserve_search`]. `Err` carries the fully formatted
+/// failure reason, ready to panic with.
+pub async fn openobserve_try_search(
+    sql: &str,
+    stream_type: &str,
+) -> Result<Vec<serde_json::Value>, String> {
     let (email, password) = openobserve_credentials();
     let now_micros = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -241,17 +264,17 @@ pub async fn openobserve_search(sql: &str, stream_type: &str) -> Vec<serde_json:
             .and_then(|h| h.as_str())
             .map(|h| format!("\n  hint: {h}"))
             .unwrap_or_default();
-        panic!(
+        return Err(format!(
             "OpenObserve rejected the query ({status}): {reason}{hint}\n  \
              stream_type: {stream_type}\n  SQL: {sql}"
-        );
+        ));
     }
 
-    payload
+    Ok(payload
         .get("hits")
         .and_then(|h| h.as_array())
         .cloned()
-        .unwrap_or_default()
+        .unwrap_or_default())
 }
 
 /// Polls for a trace one of whose spans carries the entry `key` attribute,
@@ -280,11 +303,17 @@ pub async fn openobserve_trace_span_names(key: &str) -> Vec<String> {
     Vec::new()
 }
 
-/// Polls a single-column aggregate query, returning the first value > 0 (or 0
-/// after the budget expires).
-pub async fn openobserve_count(sql: &str, stream_type: &str) -> u64 {
+/// Polls a single-column aggregate over a **metrics** stream, returning the first
+/// value > 0 (or 0 after the budget expires).
+///
+/// Metrics-only for the same reason as [`openobserve_metric_scalar_f64`]: the
+/// stream itself does not exist until the exporter or receiver has produced its
+/// first datapoint, so a cold fixture must be polled through rather than failed
+/// on. Callers must word their assertion to say that a value which never appears
+/// may mean a wrong stream or column name, not just absent telemetry.
+pub async fn openobserve_metric_count(sql: &str) -> u64 {
     for _ in 0..45u32 {
-        if let Some(v) = openobserve_scalar_f64(sql, stream_type).await {
+        if let Some(v) = openobserve_metric_scalar_f64(sql).await {
             if v > 0.0 {
                 return v as u64;
             }
@@ -302,5 +331,35 @@ pub async fn openobserve_count(sql: &str, stream_type: &str) -> u64 {
 /// panics inside `openobserve_search`, which is the point.
 pub async fn openobserve_scalar_f64(sql: &str, stream_type: &str) -> Option<f64> {
     let hits = openobserve_search(sql, stream_type).await;
+    scalar_from_hits(&hits)
+}
+
+/// Metrics-stream variant of [`openobserve_scalar_f64`] that tolerates a
+/// not-yet-existent column.
+///
+/// OpenObserve derives a stream's schema from the data it has ingested, so a
+/// column only exists once a datapoint carrying it has arrived. With the OTel
+/// metric export interval at 60s by default, a freshly started exporter has not
+/// produced one yet and the query comes back `unknown field '...'` — a cold
+/// start, not a mistake. Returning `None` lets the caller keep polling.
+///
+/// The tolerance is **opt-in and confined to metrics on purpose**. A mistyped
+/// column in a trace or log query still fails instantly through
+/// `openobserve_scalar_f64`; only here is the signal genuinely ambiguous. The
+/// cost is that a typo in a metric query fails when the poll budget expires
+/// rather than immediately, so callers MUST word their assertion to say that a
+/// column which never appears may be misspelled and not merely absent.
+/// Every other API error — bad syntax, unknown function, auth, transport —
+/// still panics immediately.
+pub async fn openobserve_metric_scalar_f64(sql: &str) -> Option<f64> {
+    match openobserve_try_search(sql, "metrics").await {
+        Ok(hits) => scalar_from_hits(&hits),
+        Err(reason) if is_schema_not_ready(&reason) => None,
+        Err(reason) => panic!("{reason}"),
+    }
+}
+
+/// Pulls the sole value out of a single-column aggregate result.
+fn scalar_from_hits(hits: &[serde_json::Value]) -> Option<f64> {
     hits.first()?.as_object()?.values().next()?.as_f64()
 }

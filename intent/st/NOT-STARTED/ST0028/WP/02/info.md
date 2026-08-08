@@ -3,7 +3,7 @@ verblock: "08 Aug 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Port the observability verification layer to OpenObserve"
 scope: Small
-status: WIP
+status: Done
 ---
 
 # WP-02: Port the observability verification layer to OpenObserve

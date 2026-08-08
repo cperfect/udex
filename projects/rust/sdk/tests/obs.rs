@@ -26,8 +26,9 @@ use udex_test_utils::bind_file_secret;
 
 mod common;
 use common::{
-    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_scalar_f64,
-    openobserve_search, openobserve_trace_span_names, server_cert_path, wait_for_server,
+    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_metric_scalar_f64,
+    openobserve_scalar_f64, openobserve_search, openobserve_trace_span_names, server_cert_path,
+    wait_for_server,
 };
 
 // Distinct from the integration_tests binary's bind addresses to avoid clashes
@@ -220,7 +221,7 @@ async fn obs_local_traces_metrics_logs_land() {
         "SELECT count(*) AS n FROM \"default\" \
          WHERE service_name = 'udex-server' AND udex_test_run = '{run_id}'"
     );
-    let metric_baseline = openobserve_scalar_f64(&metric_query, "metrics")
+    let metric_baseline = openobserve_metric_scalar_f64(&metric_query)
         .await
         .unwrap_or(0.0);
     let log_baseline = openobserve_scalar_f64(&log_query, "logs")
@@ -252,7 +253,7 @@ async fn obs_local_traces_metrics_logs_land() {
     // honoured, else the 60s default).
     let mut metric_increased = false;
     for _ in 0..40u32 {
-        if let Some(v) = openobserve_scalar_f64(&metric_query, "metrics").await {
+        if let Some(v) = openobserve_metric_scalar_f64(&metric_query).await {
             if v > metric_baseline {
                 metric_increased = true;
                 break;
@@ -262,7 +263,10 @@ async fn obs_local_traces_metrics_logs_land() {
     }
     assert!(
         metric_increased,
-        "udex.rpc.requests (this run) for {LIST_METHOD} did not increase (baseline {metric_baseline})"
+        "udex.rpc.requests (this run) for {LIST_METHOD} did not increase (baseline \
+         {metric_baseline}). If the value never appeared at all, check the column names in the \
+         query against the metrics stream schema — a misspelled column reads as an absent series \
+         here, which is the cost of tolerating metric cold starts."
     );
 
     // ── logs ── the audit logs export via the batch log processor (sub-second).

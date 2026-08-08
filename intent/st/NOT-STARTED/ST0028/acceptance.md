@@ -83,14 +83,14 @@ AT-01.1 observed: traces returned all eight expected `udex-server` span names in
 - AT-02.2 `sdk/tests/obs.rs::obs_local_traces_metrics_logs_land` (trace assertion) -- covers AC-02.2 -- status: green
 - AT-02.3 `sdk/tests/obs.rs::obs_local_traces_metrics_logs_land` (metric assertion) -- covers AC-02.3 -- status: green
 - AT-02.4 `sdk/tests/obs.rs::obs_local_traces_metrics_logs_land` (log assertion) -- covers AC-02.4 -- status: green
-- AT-02.5 `integration_tests.rs::test_obs_k8s_traces_land`, `::test_obs_k8s_metrics_land`, `::test_obs_k8s_logs_land` -- covers AC-02.5 -- status: **red (blocked, not run)**
-- Coverage: AC-02.6 is non-test and carries evidence on the AC line. AC-02.5 is NOT satisfied -- see below.
+- AT-02.5 `integration_tests.rs::test_obs_k8s_traces_land`, `::test_obs_k8s_metrics_land`, `::test_obs_k8s_logs_land` -- covers AC-02.5 -- status: green (run against a live k3d cluster with `K8S_SERVER_URL` set: `3 passed; 0 failed` in 61.29s)
+- Coverage: AC-02.6 is non-test and carries evidence on the AC line. All WP-02 ACs are now satisfied.
 
-AT-02.5 is blocked by a pre-existing, unrelated fault: the k3d `udex` deployment has been in `CrashLoopBackOff` for 34 days, failing DNS resolution of its database host (`failed to lookup address information`). With `K8S_SERVER_URL` unset the three tests take their early-return skip path and report `ok` in 0.00s -- which is a **skip, not a pass**, and must not be read as coverage.
+AT-02.5 was initially blocked: the k3d deployment had been in `CrashLoopBackOff` for 34 days on a database DNS failure, so the three tests took their skip path and reported `ok` in 0.00s -- a skip, not a pass. The cluster was reinitialised (see `impl.md`) and the tests then ran for real, which immediately found a genuine defect the skip had been hiding (the metric cold-start race, below).
 
-The three tests are ported and compile, and their queries follow naming rules verified against real telemetry. One element remains genuinely unverified: the metric query filters on `deployment_environment = 'k3d'`. That column name follows the confirmed rule that resource attributes are flattened bare in the metrics stream (as `udex_test_run` was proven to be), but the specific attribute has never been observed, because no k8s telemetry has flowed for 34 days. It must be confirmed against a live cluster before AC-02.5 can go green.
+Note for whoever maintains these: `test_obs_k8s_metrics_land` legitimately takes ~60s, gated by the OTel metric export interval. That is the test working, not hanging.
 
-Repairing the cluster is out of scope for this work package. AC-02.5 stays unsatisfied until a working deployment runs these tests.
+Whole-suite evidence: `cargo test --package udex-sdk` with `K8S_SERVER_URL` set -- 58 tests across four binaries (14 + 40 + 2 + 2), 0 failed, cargo exit 0, with 11 k8s-backed tests genuinely executing rather than skipping.
 
 ### WP-03
 

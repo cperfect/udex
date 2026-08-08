@@ -35,8 +35,9 @@ use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, regis
 
 mod common;
 use common::{
-    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_count,
-    openobserve_scalar_f64, openobserve_trace_span_names, server_cert_path, wait_for_server,
+    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_metric_count,
+    openobserve_metric_scalar_f64, openobserve_scalar_f64, openobserve_trace_span_names,
+    server_cert_path, wait_for_server,
 };
 
 // ── Port constants ────────────────────────────────────────────────────────────
@@ -2203,7 +2204,11 @@ async fn test_obs_k8s_metrics_land() {
              AND deployment_environment = 'k3d' \
            GROUP BY service_instance_id, rpc_grpc_status_code )"
     );
-    let baseline = openobserve_scalar_f64(&metric_query, "metrics")
+    // The metric variant tolerates a not-yet-existent column: OpenObserve builds
+    // stream schema from ingested data, and with a 60s export interval a
+    // freshly-rolled deployment has not produced a `deployment.environment`
+    // datapoint yet. Traces and logs arrive near-instantly, so only metrics race.
+    let baseline = openobserve_metric_scalar_f64(&metric_query)
         .await
         .unwrap_or(0.0);
 
@@ -2214,7 +2219,7 @@ async fn test_obs_k8s_metrics_land() {
 
     let mut increased = false;
     for _ in 0..45u32 {
-        if let Some(v) = openobserve_scalar_f64(&metric_query, "metrics").await {
+        if let Some(v) = openobserve_metric_scalar_f64(&metric_query).await {
             if v > baseline {
                 increased = true;
                 break;
@@ -2224,17 +2229,20 @@ async fn test_obs_k8s_metrics_land() {
     }
     assert!(
         increased,
-        "udex.rpc.requests for {method} did not increase after the request (baseline {baseline})"
+        "udex.rpc.requests for {method} did not increase after the request (baseline {baseline}). \
+         If the value never appeared at all, check the query's column names against the metrics \
+         stream schema — a misspelled column reads as an absent series here."
     );
 
     // PostgreSQL receiver metric — the collector scrapes the DB continuously, so a
     // presence check is appropriate here.
-    let pg = openobserve_count(
-        "SELECT count(*) AS n FROM \"postgresql_backends\"",
-        "metrics",
-    )
-    .await;
-    assert!(pg > 0, "no postgresql.backends metric in OpenObserve");
+    let pg = openobserve_metric_count("SELECT count(*) AS n FROM \"postgresql_backends\"").await;
+    assert!(
+        pg > 0,
+        "no postgresql.backends metric in OpenObserve — the collector's postgresqlreceiver may \
+         not be scraping, or the stream name may be wrong (metrics become one stream per metric \
+         name, dots as underscores)"
+    );
 }
 
 #[rstest]
