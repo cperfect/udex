@@ -102,7 +102,7 @@ bash scripts/validate-security-image.sh      # the built udex image (base layer 
 
 The filesystem scan says nothing about what ends up inside the image, and image findings drift on their own schedule — a new CVE can appear with no change to this repository — which is why the security workflow also runs weekly on a cron.
 
-The image scan requires `udex:latest` to be present (`bash projects/k8s/scripts/image-build.sh`) and **ignores findings with no available fix**. That is deliberate: the `debian:bookworm-slim` base currently carries 167 such CVEs, none of which any change here could resolve, so gating on them would mean a permanently red build. The gate therefore means something precise — *a fix exists upstream and this image has not picked it up*, resolved by rebuilding. To see the excluded findings:
+The image scan requires `udex:latest` to be present (`bash projects/k8s/scripts/image-build.sh`) and **ignores findings with no available fix**. That is deliberate: base-image CVEs frequently have no upstream patch, and gating on them would mean a red build that no change here could turn green. The gate therefore means something precise — *a fix exists upstream and this image has not picked it up*, resolved by rebuilding. The count of excluded findings is printed on every run, so "clean" is never mistaken for "no vulnerabilities". To see them:
 
 ```bash
 trivy image --config .trivy.yaml --scanners vuln udex:latest

@@ -32,6 +32,7 @@ The container pins the following versions:
 | PostgreSQL | 16 | `projects/compose/docker-compose.yml` |
 | OpenObserve | v0.92.0 | `projects/compose/docker-compose.yml` |
 | Trivy | 0.73.0 | `.devcontainer/Dockerfile` (`ARG TRIVY_VERSION`) |
+| Runtime base image | `gcr.io/distroless/cc-debian12` (by digest) | `projects/rust/cli/Dockerfile` |
 | OTel Collector (contrib) | 0.119.0 | `projects/compose/docker-compose.yml` |
 | Vector | 0.44.0 | `projects/compose/docker-compose.yml` |
 

@@ -8,7 +8,7 @@
 #                 layer is fully cached when only source files change and
 #                 Cargo.toml / Cargo.lock are unchanged
 #   3. builder  — copies real source, compiles workspace crates only (~1-2 min)
-#   4. runtime  — copies the stripped binary into a minimal debian image
+#   4. runtime  — copies the stripped binary into a distroless image
 
 # ── Chef installer ────────────────────────────────────────────────────────────
 FROM rust:1.95.0-bookworm AS chef
@@ -66,11 +66,33 @@ RUN cargo build --profile "${PROFILE}" -p udex-cli \
     && cp "target/${dir}/udex" /build/udex
 
 # ── Runtime ───────────────────────────────────────────────────────────────────
-FROM debian:bookworm-slim
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Distroless: the OS package surface is the whole attack surface of a runtime
+# image, and debian:bookworm-slim carried 163 CVEs (5 CRITICAL, 17 HIGH), none of
+# which had an upstream fix — so the base image was the only lever that could
+# move them. This variant reports 17, with zero CRITICAL or HIGH, and is 90MB
+# smaller.
+#
+# `cc` specifically, not the smaller `base`: the binary is dynamically linked
+# against glibc and needs libgcc_s.so.1 (verified with ldd — libc, libm,
+# libgcc_s, ld-linux; rustls means no OpenSSL dependency). On `base` it fails at
+# startup with "libgcc_s.so.1: cannot open shared object file". `static` would
+# reach zero CVEs but requires a musl static build, which aws-lc-rs (C code, via
+# rustls) makes considerably more than a base-image swap.
+#
+# No ca-certificates install: distroless already ships
+# /etc/ssl/certs/ca-certificates.crt, which is what the outbound TLS paths (JWKS
+# fetch, OAuth2 token endpoint) need.
+#
+# Pinned by DIGEST, not tag — distroless tags are rebuilt in place, so a bare tag
+# silently changes the base between builds. This is the multi-arch manifest list
+# (amd64 for CI, arm64 for Apple-silicon devcontainers). To update: pick the new
+# digest from `docker buildx imagetools inspect gcr.io/distroless/cc-debian12`.
+#
+# Trade-off: no shell, so `kubectl exec -- sh` will not work against a running
+# pod. The liveness/readiness probes are tcpSocket rather than exec so they are
+# unaffected; for interactive debugging use the `:debug` variant of the same
+# image, which adds busybox.
+FROM gcr.io/distroless/cc-debian12@sha256:e8e7ee4b8b106d4c5fde9e422a321b2b8a2d5cca546c97adcce927f3e1d36e36
 
 COPY --from=builder /build/udex /usr/local/bin/udex
 
