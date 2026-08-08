@@ -289,36 +289,102 @@ pub async fn openobserve_trace_span_names(key: &str) -> Vec<String> {
          WHERE trace_id IN (SELECT trace_id FROM \"default\" WHERE \"key\" = '{key}') \
          ORDER BY operation_name"
     );
+    let mut pending = PendingReason::default();
     for _ in 0..30u32 {
-        let hits = openobserve_search(&sql, "traces").await;
-        if !hits.is_empty() {
-            return hits
-                .iter()
-                .filter_map(|h| h.get("operation_name").and_then(|v| v.as_str()))
-                .map(|s| s.to_string())
-                .collect();
+        match openobserve_try_search(&sql, "traces").await {
+            Ok(hits) => {
+                pending.clear();
+                if !hits.is_empty() {
+                    return hits
+                        .iter()
+                        .filter_map(|h| h.get("operation_name").and_then(|v| v.as_str()))
+                        .map(|s| s.to_string())
+                        .collect();
+                }
+            }
+            Err(reason) if is_schema_not_ready(&reason) => pending.record(reason),
+            Err(reason) => panic!("{reason}"),
         }
         sleep(Duration::from_secs(2)).await;
     }
+    pending.panic_if_persistent("traces for this entry key never arrived");
     Vec::new()
 }
 
 /// Polls a single-column aggregate, returning the first value > 0 (or 0 after
-/// the budget expires). Tolerates a cold fixture — see
-/// [`openobserve_pending_scalar_f64`].
-///
-/// Callers must word their assertion to say that a value which never appears may
-/// mean a wrong stream or column name, not just absent telemetry.
+/// the budget expires). Tolerates a cold fixture while polling — see
+/// [`openobserve_pending_scalar_f64`] and [`PendingReason`].
 pub async fn openobserve_pending_count(sql: &str, stream_type: &str) -> u64 {
-    for _ in 0..45u32 {
-        if let Some(v) = openobserve_pending_scalar_f64(sql, stream_type).await {
-            if v > 0.0 {
-                return v as u64;
+    openobserve_await(sql, stream_type, 0.0, 45)
+        .await
+        .unwrap_or(0.0) as u64
+}
+
+/// Baseline-then-poll: waits for a single-column aggregate to rise above
+/// `baseline`, returning the value that did so.
+///
+/// This is the one owner of the "capture a baseline, drive traffic, poll for an
+/// increase" shape that every run-scoped observability assertion needs. It was
+/// four hand-rolled copies across two test binaries before ST0028 WP04, and they
+/// did not agree on cold-start handling — which is exactly how the bug this
+/// replaces got in.
+pub async fn openobserve_await(
+    sql: &str,
+    stream_type: &str,
+    baseline: f64,
+    attempts: u32,
+) -> Option<f64> {
+    let mut pending = PendingReason::default();
+    for _ in 0..attempts {
+        match openobserve_try_search(sql, stream_type).await {
+            Ok(hits) => {
+                pending.clear();
+                if let Some(v) = scalar_from_hits(&hits) {
+                    if v > baseline {
+                        return Some(v);
+                    }
+                }
             }
+            Err(reason) if is_schema_not_ready(&reason) => pending.record(reason),
+            Err(reason) => panic!("{reason}"),
         }
         sleep(Duration::from_secs(2)).await;
     }
-    0
+    pending.panic_if_persistent("the value never rose above the baseline");
+    None
+}
+
+/// Remembers why a poll kept coming back empty, so a cold start and a wrong
+/// query can be told apart *at the end* even though they look identical at each
+/// individual attempt.
+///
+/// While polling, a not-yet-ingested response is tolerated. If the budget runs
+/// out and EVERY attempt was that response, the column or stream almost
+/// certainly does not exist — so this fails naming it, rather than letting the
+/// caller report a vague "telemetry did not arrive". A single successful query
+/// clears the memory, so a genuine "ingested but did not increase" still reports
+/// as the caller intends. This is what keeps `IN-AG-NO-SILENT-001` intact while
+/// still tolerating a cold fixture.
+#[derive(Default)]
+struct PendingReason(Option<String>);
+
+impl PendingReason {
+    fn record(&mut self, reason: String) {
+        self.0 = Some(reason);
+    }
+
+    fn clear(&mut self) {
+        self.0 = None;
+    }
+
+    fn panic_if_persistent(&self, context: &str) {
+        if let Some(reason) = &self.0 {
+            panic!(
+                "{context}, and every query attempt was rejected as not-yet-ingested. \
+                 The stream or column name is probably wrong:\n{reason}"
+            );
+        }
+    }
 }
 
 /// Single-shot scalar query (None when the result set is empty or the value is

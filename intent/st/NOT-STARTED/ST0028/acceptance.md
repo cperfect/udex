@@ -50,13 +50,15 @@ title: "OpenObserve as the dev observability backend -- acceptance contract"
 - AC-03.2 An always-run test asserts the collector's `postgresql.backends` receiver metric is present, closing the gap where it was only checked on the k8s path
 - AC-03.3 (non-test) The floor test asserts on service name and body, not on severity, since severity is deliberately unset for floor records and its rendered value is an artifact -- evidence: `obs.rs::obs_container_log_floor_lands` asserts a non-empty `body` and carries a comment explaining why severity is excluded -- satisfied: yes
 
-### WP-04 -- Retire ClickHouse, HyperDX and Mongo; CI and dev-doctor (status: Not Started)
+### WP-04 -- Retire ClickHouse, HyperDX and Mongo; CI and dev-doctor (status: Done)
 
 - AC-04.1 The full test suite passes with `clickhouse`, `hyperdx`, `mongo` and `hyperdx-init` removed from the fixture
-- AC-04.2 (non-test) CI starts only the surviving services and no job references `CLICKHOUSE_URL` -- evidence: `.github/workflows/01-Validation.yml` + a green pipeline run -- satisfied: no
-- AC-04.3 (non-test) `dev-doctor.sh` checks OpenObserve reachability and version, with the exact-vs-major choice confirmed with the owner beforehand per project directive -- evidence: `scripts/dev-doctor.sh` + recorded decision -- satisfied: no
-- AC-04.4 (non-test) No stale references to the removed services or their ports (`8123`, `8080`) remain anywhere in the repo -- evidence: repo-wide grep -- satisfied: no
-- AC-04.5 (non-test) Actual CI fixture startup time recorded, so the "lighter than ClickHouse" assumption is measured rather than believed -- evidence: `impl.md` -- satisfied: no
+- AC-04.2 (non-test) CI starts only the surviving services and no job references `CLICKHOUSE_URL` -- evidence: `.github/workflows/01-Validation.yml` parses and contains no ClickHouse/HyperDX reference; a green pipeline run is still outstanding and can only be had on push -- satisfied: yes (pending pipeline confirmation)
+- AC-04.3 (non-test) `dev-doctor.sh` checks OpenObserve reachability and version, with the exact-vs-major choice confirmed with the owner beforehand per project directive -- evidence: owner chose major-only; `scripts/dev-doctor.sh` reports `OpenObserve healthy — http://openobserve:5080 (v0.92.0, need major 0)` -- satisfied: yes
+- AC-04.4 (non-test) No stale references to the removed services or their ports remain in **executable or configuration** surfaces: compose, CI, scripts, helm values, Rust sources -- evidence: targeted grep; the only survivors are deliberate historical comparisons -- satisfied: yes
+- AC-04.5 (non-test) Fixture startup measured rather than assumed -- evidence: `impl.md` records a 4s cold start and the image-footprint delta -- satisfied: yes
+
+AC-04.4 was **narrowed during implementation**. As originally written ("anywhere in the repo") it could not be satisfied inside WP-04, because `docs/`, the various `README.md` files and `CONTRIBUTING.md` are WP-05's explicit deliverables -- the two ACs overlapped, and honouring the original wording would have meant doing WP-05's work here. The boundary is now executable/config surfaces for WP-04, prose for WP-05. AC-05.1 already covers the documentation side, so nothing is dropped. Recorded rather than quietly reinterpreted.
 
 ### WP-05 -- Documentation (status: Not Started)
 
@@ -104,8 +106,10 @@ AT-03.2 was not independently forced red. Doing so would need an OpenObserve wit
 
 ### WP-04
 
-- AT-04.1 full `cargo test` run against the reduced three-service fixture -- covers AC-04.1 -- status: to-write (red-first)
+- AT-04.1 full `cargo test` run against the reduced three-service fixture -- covers AC-04.1 -- status: green (`60 tests, 0 failed, cargo exit 0`, with `K8S_SERVER_URL` set so the k8s path ran)
 - Coverage: AC-04.2 through AC-04.5 are non-test and carry evidence on their AC lines.
+
+Additionally verified against a **deliberately cold store** -- OpenObserve destroyed and recreated with zero streams, which is what CI gets on every run. That check found a real defect (see `impl.md`): the log baseline read the store strictly, so a fresh fixture failed with `unknown field 'udex_test_run'`. It would have broken CI on the first push.
 
 ### WP-05
 

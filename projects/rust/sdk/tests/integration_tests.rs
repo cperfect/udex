@@ -35,8 +35,8 @@ use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, regis
 
 mod common;
 use common::{
-    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_pending_count,
-    openobserve_pending_scalar_f64, openobserve_scalar_f64, openobserve_trace_span_names,
+    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_await,
+    openobserve_pending_count, openobserve_pending_scalar_f64, openobserve_trace_span_names,
     server_cert_path, wait_for_server,
 };
 
@@ -2217,21 +2217,13 @@ async fn test_obs_k8s_metrics_land() {
         .await
         .expect("list_indices for obs metric test");
 
-    let mut increased = false;
-    for _ in 0..45u32 {
-        if let Some(v) = openobserve_pending_scalar_f64(&metric_query, "metrics").await {
-            if v > baseline {
-                increased = true;
-                break;
-            }
-        }
-        sleep(Duration::from_secs(2)).await;
-    }
+    // A column that never resolves fails inside the helper naming it, so this
+    // assertion only fires for genuinely absent telemetry.
     assert!(
-        increased,
-        "udex.rpc.requests for {method} did not increase after the request (baseline {baseline}). \
-         If the value never appeared at all, check the query's column names against the metrics \
-         stream schema — a misspelled column reads as an absent series here."
+        openobserve_await(&metric_query, "metrics", baseline, 45)
+            .await
+            .is_some(),
+        "udex.rpc.requests for {method} did not increase after the request (baseline {baseline})"
     );
 
     // PostgreSQL receiver metric — the collector scrapes the DB continuously, so a
@@ -2263,7 +2255,9 @@ async fn test_obs_k8s_logs_land() {
     // increases - so pre-existing logs cannot satisfy the test on their own.
     let count_query =
         "SELECT count(*) AS n FROM \"default\" WHERE service_name = 'udex-server'".to_string();
-    let baseline = openobserve_scalar_f64(&count_query, "logs")
+    // Cold-store tolerant: on a freshly created fixture the logs stream does not
+    // exist until the first record is ingested.
+    let baseline = openobserve_pending_scalar_f64(&count_query, "logs")
         .await
         .unwrap_or(0.0);
 
@@ -2272,18 +2266,10 @@ async fn test_obs_k8s_logs_land() {
         .await
         .expect("list_indices for obs log test");
 
-    let mut increased = false;
-    for _ in 0..30u32 {
-        if let Some(v) = openobserve_scalar_f64(&count_query, "logs").await {
-            if v > baseline {
-                increased = true;
-                break;
-            }
-        }
-        sleep(Duration::from_secs(2)).await;
-    }
     assert!(
-        increased,
+        openobserve_await(&count_query, "logs", baseline, 30)
+            .await
+            .is_some(),
         "udex-server logs in OpenObserve did not increase after the request (baseline {baseline})"
     );
 }

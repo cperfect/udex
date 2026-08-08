@@ -88,14 +88,34 @@ jobs:
       HYDRA_ADMIN_URL: http://localhost:4445
       HYDRA_ISSUER: http://localhost:4444/
       RUST_LOG: info
-      # Observability fixture (ClickHouse-backed; ST0027) is part of the base
-      # compose stack, so the obs tests now run here too. The test process is on
-      # the runner host, so it reaches the fixture via the published ports.
-      CLICKHOUSE_URL: http://localhost:8123
+      # Observability fixture (OpenObserve-backed; ST0028) is part of the base
+      # compose stack, so the obs tests run here too. The test process is on the
+      # runner host, so it reaches the fixture via the published ports.
+      OPENOBSERVE_URL: http://localhost:5080
       OTEL_COLLECTOR_OTLP_ENDPOINT: http://localhost:4317
 
     steps:
       - uses: actions/checkout@v4
+
+      # OpenObserve requires credentials on both ingest and query. They are
+      # generated per job rather than stored as repository secrets: the fixture
+      # is ephemeral, loopback-only, and destroyed with the runner, so a
+      # long-lived secret would add rotation burden without adding protection.
+      # Kept in step with scripts/gen-env.sh — OpenObserve rejects a password
+      # without lower, upper, digit and a special character, and panics on boot
+      # when it is not met.
+      - name: Generate OpenObserve fixture credentials
+        run: |
+          EMAIL="root@udex.local"
+          PASSWORD="Ux1-$(openssl rand -hex 24)"
+          BASIC_AUTH=$(printf '%s' "${EMAIL}:${PASSWORD}" | base64 -w0)
+          echo "::add-mask::${PASSWORD}"
+          echo "::add-mask::${BASIC_AUTH}"
+          {
+            echo "OPENOBSERVE_ROOT_EMAIL=${EMAIL}"
+            echo "OPENOBSERVE_ROOT_PASSWORD_SECRET=${PASSWORD}"
+            echo "OPENOBSERVE_BASIC_AUTH_SECRET=${BASIC_AUTH}"
+          } >> "${GITHUB_ENV}"
 
       - name: Start services (postgres + hydra + observability)
         working-directory: projects/compose
@@ -104,23 +124,22 @@ jobs:
           HYDRA_DB_PASSWORD_SECRET: ${{ secrets.VALIDATE_HYDRA_DB_PASSWORD_SECRET }}
           HYDRA_SECRETS_SYSTEM_SECRET: ${{ secrets.VALIDATE_HYDRA_SECRETS_SYSTEM_SECRET }}
         run: |
-          # Start the test-relevant services. The HyperDX dev UI (hyperdx, mongo,
-          # hyperdx-init) is deliberately omitted in CI: it has no test value, and
-          # hyperdx-init's `depends_on: service_healthy` would gate the job on the
-          # UI's slow boot. ClickHouse + collector + Vector are what the obs tests need.
-          docker compose up -d postgres hydra clickhouse otel-collector vector
+          # Start the test-relevant services. OpenObserve + collector + Vector are
+          # the whole observability fixture — ST0028 folded the reader UI into
+          # OpenObserve, so there is no longer a separate UI stack to omit here.
+          docker compose up -d postgres hydra openobserve otel-collector vector
           echo "Waiting for Hydra admin API..."
           for i in $(seq 1 30); do
             curl -sf http://localhost:4445/health/ready && { echo "Hydra ready."; break; }
             echo "  attempt $i/30…"; sleep 3
           done
           curl -sf http://localhost:4445/health/ready || { echo "Hydra did not become ready."; exit 1; }
-          echo "Waiting for ClickHouse..."
+          echo "Waiting for OpenObserve..."
           for i in $(seq 1 30); do
-            curl -sf http://localhost:8123/ping && { echo "ClickHouse ready."; break; }
+            curl -sf http://localhost:5080/healthz && { echo "OpenObserve ready."; break; }
             echo "  attempt $i/30…"; sleep 3
           done
-          curl -sf http://localhost:8123/ping || { echo "ClickHouse did not become ready."; exit 1; }
+          curl -sf http://localhost:5080/healthz || { echo "OpenObserve did not become ready."; exit 1; }
           echo "Waiting for the OTel collector..."
           for i in $(seq 1 30); do
             curl -sf http://localhost:13133/ && { echo "Collector ready."; break; }
@@ -184,11 +203,31 @@ jobs:
       K8S_SERVER_URL: https://localhost:8443
       RUST_LOG: info
       # The k8s deployment exports OTLP to host.k3d.internal:4317 -> the compose
-      # collector; the obs k8s tests query ClickHouse on the runner host.
-      CLICKHOUSE_URL: http://localhost:8123
+      # collector; the obs k8s tests query OpenObserve on the runner host.
+      OPENOBSERVE_URL: http://localhost:5080
 
     steps:
       - uses: actions/checkout@v4
+
+      # OpenObserve requires credentials on both ingest and query. They are
+      # generated per job rather than stored as repository secrets: the fixture
+      # is ephemeral, loopback-only, and destroyed with the runner, so a
+      # long-lived secret would add rotation burden without adding protection.
+      # Kept in step with scripts/gen-env.sh — OpenObserve rejects a password
+      # without lower, upper, digit and a special character, and panics on boot
+      # when it is not met.
+      - name: Generate OpenObserve fixture credentials
+        run: |
+          EMAIL="root@udex.local"
+          PASSWORD="Ux1-$(openssl rand -hex 24)"
+          BASIC_AUTH=$(printf '%s' "${EMAIL}:${PASSWORD}" | base64 -w0)
+          echo "::add-mask::${PASSWORD}"
+          echo "::add-mask::${BASIC_AUTH}"
+          {
+            echo "OPENOBSERVE_ROOT_EMAIL=${EMAIL}"
+            echo "OPENOBSERVE_ROOT_PASSWORD_SECRET=${PASSWORD}"
+            echo "OPENOBSERVE_BASIC_AUTH_SECRET=${BASIC_AUTH}"
+          } >> "${GITHUB_ENV}"
 
       - name: Start services (postgres + hydra + observability)
         working-directory: projects/compose
@@ -197,21 +236,20 @@ jobs:
           HYDRA_DB_PASSWORD_SECRET: ${{ secrets.VALIDATE_HYDRA_DB_PASSWORD_SECRET }}
           HYDRA_SECRETS_SYSTEM_SECRET: ${{ secrets.VALIDATE_HYDRA_SECRETS_SYSTEM_SECRET }}
         run: |
-          # ClickHouse + collector + Vector receive the k3d deployment's telemetry;
-          # the HyperDX dev UI is omitted in CI (no test value, slow boot).
-          docker compose up -d postgres hydra clickhouse otel-collector vector
+          # OpenObserve + collector + Vector receive the k3d deployment's telemetry.
+          docker compose up -d postgres hydra openobserve otel-collector vector
           echo "Waiting for Hydra admin API..."
           for i in $(seq 1 30); do
             curl -sf http://localhost:4445/health/ready && { echo "Hydra ready."; break; }
             echo "  attempt $i/30…"; sleep 3
           done
           curl -sf http://localhost:4445/health/ready || { echo "Hydra did not become ready."; exit 1; }
-          echo "Waiting for ClickHouse..."
+          echo "Waiting for OpenObserve..."
           for i in $(seq 1 30); do
-            curl -sf http://localhost:8123/ping && { echo "ClickHouse ready."; break; }
+            curl -sf http://localhost:5080/healthz && { echo "OpenObserve ready."; break; }
             echo "  attempt $i/30…"; sleep 3
           done
-          curl -sf http://localhost:8123/ping || { echo "ClickHouse did not become ready."; exit 1; }
+          curl -sf http://localhost:5080/healthz || { echo "OpenObserve did not become ready."; exit 1; }
           echo "Waiting for the OTel collector..."
           for i in $(seq 1 30); do
             curl -sf http://localhost:13133/ && { echo "Collector ready."; break; }

@@ -107,6 +107,40 @@ The dependency predates ST0028. What changed is scheduling pressure: this thread
 
 This violates the project's own rule that flakey tests are broken tests, and it is a latent CI failure independent of observability. **Deliberately not fixed here** — it is unrelated to WP03's scope and touching the shared SDK fixture mid-thread would muddy this change. The fix is for that test to create and populate its own index rather than borrow the shared one, or to seed an entry before asserting. Recommend a separate work item; raised with the owner rather than silently absorbed.
 
+### WP-04 -- Retire the old backend; CI and dev-doctor (complete)
+
+`clickhouse`, `hyperdx`, `mongo` and `hyperdx-init` are gone, along with the ClickHouse exporter, its `create_schema`/`ttl` config, the ~1.5KB inline `DEFAULT_SOURCES` blob and the curl-based registration one-shot. The fixture is three services.
+
+**Measured, not assumed** (AC-04.5). Backend image footprint drops from ClickHouse 765MB + HyperDX 929MB + MongoDB 1.04GB = **~2.73GB** to OpenObserve **525MB** — about 81% less. Cold start of the three observability services, from `create` to OpenObserve healthy and the collector ready, is **4s**. There is no before-measurement of the old stack's cold start to compare against; it was never timed and the services are now deleted. What can be said from its configuration is that HyperDX allowed a 30s `start_period` before its healthcheck even began counting and `hyperdx-init` gated on that, so readiness was structurally slower — evidence from config, not a stopwatch, and flagged as such.
+
+CI credentials are **generated per job** rather than stored as repository secrets. The fixture is ephemeral, loopback-only and destroyed with the runner, so a long-lived secret would add rotation burden without adding protection. It also means the pipeline works on the first push with no repository configuration.
+
+`dev-doctor.sh` gained its first observability check (net-new — it had none). Version policy is major-only per the owner's decision. Worth being straight about what that buys on a 0.x product: every OpenObserve release so far is major 0, so it catches a jump to 1.x but not a 0.x minor bump that changes the search API. The image tag in compose remains the authoritative pin, and the check prints the running version so drift from it is at least visible.
+
+`OPENOBSERVE_URL` now follows the existing `HYDRA_*_URL` pattern — defaulted to localhost in `gen-env.sh`, overridden to the service name by `post-create.sh`. Without it, dev-doctor failed inside the devcontainer, where `localhost` is not the host that publishes port 5080.
+
+### A defect that would have broken CI on the first push
+
+Recreating the fixture wiped OpenObserve (no volume, by design), and `obs_local_traces_metrics_logs_land` then failed:
+
+```text
+OpenObserve rejected the query (400 Bad Request): unknown field 'udex_test_run'
+```
+
+The log baseline used the **strict** helper. On a cold store the logs stream has no `udex_test_run` column — it cannot, until this run's own telemetry lands. WP03 generalised cold-start tolerance beyond metrics but applied it only to the floor test; the trace and log paths were left strict. Every CI run starts with an empty store, so this was not an edge case.
+
+Fixed at the root rather than by sprinkling tolerance: the "capture a baseline, drive traffic, poll for an increase" shape existed as **four hand-rolled copies** across two test binaries that did not agree on cold-start handling — which is precisely how the inconsistency survived. They are now one `openobserve_await` (Highlander).
+
+The tolerance no longer costs loudness. `PendingReason` remembers *why* a poll kept coming back empty and, if the budget expires with every attempt rejected as not-yet-ingested, panics naming the stream or column — while a single successful query clears the memory, so a genuine "ingested but did not increase" still reports as the caller intends. Cold start is tolerated during polling; a wrong name still fails loudly, just at the end instead of immediately. `IN-AG-NO-SILENT-001` holds.
+
+Verified by destroying OpenObserve and running against zero streams: all four obs tests pass. Also tightened `obs_search_surfaces_query_errors`, which asserted the panic names the bad *column* — true only against a warm stream; a cold one reports the missing stream first, so the test was passing on the accident of sibling tests running earlier.
+
+### Operational notes
+
+`docker compose up -d` does **not** reload a changed inline `configs:` block on a running container — the collector ran the old ClickHouse-exporting config for two hours after the exporter was deleted, failing every export with `lookup clickhouse: no such host`. `--force-recreate` is required. Together with the WP03 finding that `docker compose start <service>` fails outright on this stack, the reliable incantation after editing compose is `docker compose up -d --force-recreate <service>`. Both belong in the WP05 docs.
+
+The devcontainer restarting also discards `~/.kube/config` while the k3d containers survive, leaving `kubectl` pointed at nothing. `k3d kubeconfig merge udex --kubeconfig-merge-default` followed by the `0.0.0.0` → `host.docker.internal` patch from `cluster-create.sh` restores it without recreating the cluster.
+
 ## Notes for later work packages
 
 - The `.env` on this machine was appended to by hand rather than regenerated, because the rotation guard correctly refuses to rewrite it while a compose Postgres is live. A clean clone gets the same values from `gen-env.sh`; this only affects existing developer machines, and belongs in the WP05 upgrade note.

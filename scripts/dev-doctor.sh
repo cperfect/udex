@@ -384,6 +384,41 @@ if [[ "${POSTGRES_READY}" == true && -n "${POSTGRES_PASSWORD_SECRET:-}" ]] && co
   fi
 fi
 
+# OpenObserve — the observability fixture's store, query API and UI (ST0028).
+# Always-on like postgres and hydra: the obs tests FAIL rather than skip when it
+# is unreachable, so a missing fixture should be diagnosed here, not in a test.
+#
+# Version policy is MAJOR-ONLY, matching the docker compose check above. Note
+# what that does and does not buy on a 0.x product: every release so far is
+# major 0, so this catches a jump to 1.x but not a 0.x minor bump that changes
+# the search API. The authoritative pin is the image tag in
+# projects/compose/docker-compose.yml; the running version is printed below so
+# drift from that pin is at least visible.
+REQUIRED_OPENOBSERVE_MAJOR="0"
+OPENOBSERVE_URL_CHECK="${OPENOBSERVE_URL:-http://localhost:5080}"
+if curl -sf --max-time 5 "${OPENOBSERVE_URL_CHECK}/healthz" &>/dev/null; then
+  # /config is unauthenticated and reports the build version.
+  OPENOBSERVE_VER=$(curl -sf --max-time 5 "${OPENOBSERVE_URL_CHECK}/config" 2>/dev/null \
+    | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+  if [[ -z "${OPENOBSERVE_VER}" ]]; then
+    # Reachable but version not reported — do not fail the environment over a
+    # cosmetic lookup.
+    pass "OpenObserve healthy — ${OPENOBSERVE_URL_CHECK} (version unreported)"
+  else
+    OPENOBSERVE_MAJOR="${OPENOBSERVE_VER#v}"
+    OPENOBSERVE_MAJOR="${OPENOBSERVE_MAJOR%%.*}"
+    if [[ "${OPENOBSERVE_MAJOR}" == "${REQUIRED_OPENOBSERVE_MAJOR}" ]]; then
+      pass "OpenObserve healthy — ${OPENOBSERVE_URL_CHECK} (${OPENOBSERVE_VER}, need major ${REQUIRED_OPENOBSERVE_MAJOR})"
+    else
+      fail "OpenObserve ${OPENOBSERVE_VER} (need major ${REQUIRED_OPENOBSERVE_MAJOR})" \
+        "The compose fixture pins the supported version. Re-pull it: docker compose -f projects/compose/docker-compose.yml --env-file .env pull openobserve && docker compose -f projects/compose/docker-compose.yml --env-file .env up -d openobserve"
+    fi
+  fi
+else
+  fail "OpenObserve not reachable (${OPENOBSERVE_URL_CHECK})" \
+    "Run: docker compose -f projects/compose/docker-compose.yml --env-file .env up -d  (if it is running but unhealthy, check OPENOBSERVE_ROOT_PASSWORD_SECRET in .env — OpenObserve panics on boot when the password lacks lower/upper/digit/special)"
+fi
+
 # Hydra admin API
 HYDRA_ADMIN="${HYDRA_ADMIN_URL:-http://localhost:4445}"
 if curl -sf --max-time 5 "${HYDRA_ADMIN}/health/ready" &>/dev/null; then

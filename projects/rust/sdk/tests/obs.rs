@@ -26,8 +26,8 @@ use udex_test_utils::{bind_file_secret, hydra_public_url};
 
 mod common;
 use common::{
-    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_pending_count,
-    openobserve_pending_scalar_f64, openobserve_scalar_f64, openobserve_search,
+    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_await,
+    openobserve_pending_count, openobserve_pending_scalar_f64, openobserve_search,
     openobserve_trace_span_names, server_cert_path, wait_for_server,
 };
 
@@ -77,11 +77,20 @@ async fn obs_search_surfaces_query_errors() {
         message.contains("OpenObserve rejected the query"),
         "panic did not identify the query rejection; got: {message}"
     );
-    // The API's own reason must reach the developer, not just our wrapper text —
-    // that reason is what names the offending column.
+    // The API's own reason must reach the developer, not just our wrapper text.
+    // Either reason is acceptable and which one appears depends on how warm the
+    // store is: against a populated stream OpenObserve names the bad column,
+    // against a cold one it reports the missing stream first. Asserting only the
+    // column name would make this test depend on sibling tests having run —
+    // exactly the coupling that hides real failures.
+    assert!(
+        message.contains("unknown field") || message.contains("stream not found"),
+        "panic did not carry the API's own reason, only our wrapper text; got: {message}"
+    );
+    // The offending SQL must be echoed so the developer can see what was sent.
     assert!(
         message.contains("no_such_column_at_all"),
-        "panic did not carry the API's reason naming the bad column; got: {message}"
+        "panic did not echo the offending SQL; got: {message}"
     );
 }
 
@@ -317,8 +326,8 @@ async fn obs_local_traces_metrics_logs_land() {
     //
     // Note the attribute naming: in the metrics stream, resource attributes are
     // flattened bare (`udex_test_run`, `service_instance_id`). In the *traces*
-    // stream the same attributes carry a `service_` prefix. Getting this wrong
-    // returns HTTP 200 with an error body, which openobserve_search panics on.
+    // stream the same attributes carry a `service_` prefix. Getting this wrong is
+    // rejected as `unknown field`, which the helpers surface rather than swallow.
     let metric_query = format!(
         "SELECT sum(m) AS total FROM ( \
            SELECT max(value) AS m FROM \"udex_rpc_requests\" \
@@ -330,10 +339,13 @@ async fn obs_local_traces_metrics_logs_land() {
         "SELECT count(*) AS n FROM \"default\" \
          WHERE service_name = 'udex-server' AND udex_test_run = '{run_id}'"
     );
+    // Both baselines tolerate a cold store: on a freshly created fixture neither
+    // stream exists yet, and `udex_test_run` cannot exist until this run's own
+    // telemetry lands. Reading these strictly is what broke CI-shaped runs.
     let metric_baseline = openobserve_pending_scalar_f64(&metric_query, "metrics")
         .await
         .unwrap_or(0.0);
-    let log_baseline = openobserve_scalar_f64(&log_query, "logs")
+    let log_baseline = openobserve_pending_scalar_f64(&log_query, "logs")
         .await
         .unwrap_or(0.0);
 
@@ -359,38 +371,21 @@ async fn obs_local_traces_metrics_logs_land() {
 
     // ── metrics ── poll for the cumulative counter to rise above baseline. Budget
     // is generous to cover the metric export interval (5s if the env var is
-    // honoured, else the 60s default).
-    let mut metric_increased = false;
-    for _ in 0..40u32 {
-        if let Some(v) = openobserve_pending_scalar_f64(&metric_query, "metrics").await {
-            if v > metric_baseline {
-                metric_increased = true;
-                break;
-            }
-        }
-        sleep(Duration::from_secs(3)).await;
-    }
+    // honoured, else the 60s default). A column name that never resolves fails
+    // inside the helper naming it, so this assertion only fires for genuinely
+    // absent telemetry.
     assert!(
-        metric_increased,
-        "udex.rpc.requests (this run) for {LIST_METHOD} did not increase (baseline \
-         {metric_baseline}). If the value never appeared at all, check the column names in the \
-         query against the metrics stream schema — a misspelled column reads as an absent series \
-         here, which is the cost of tolerating metric cold starts."
+        openobserve_await(&metric_query, "metrics", metric_baseline, 60)
+            .await
+            .is_some(),
+        "udex.rpc.requests (this run) for {LIST_METHOD} did not increase (baseline {metric_baseline})"
     );
 
     // ── logs ── the audit logs export via the batch log processor (sub-second).
-    let mut log_increased = false;
-    for _ in 0..30u32 {
-        if let Some(v) = openobserve_scalar_f64(&log_query, "logs").await {
-            if v > log_baseline {
-                log_increased = true;
-                break;
-            }
-        }
-        sleep(Duration::from_secs(2)).await;
-    }
     assert!(
-        log_increased,
+        openobserve_await(&log_query, "logs", log_baseline, 30)
+            .await
+            .is_some(),
         "udex-server logs in OpenObserve did not increase (baseline {log_baseline})"
     );
 }

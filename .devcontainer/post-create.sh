@@ -42,10 +42,13 @@ hydra help
 
 cd /workspace
 
-# In the devcontainer, Hydra is reachable via the Docker service name rather
-# than localhost. Export these so gen-env.sh writes the correct URLs into .env.
+# In the devcontainer, fixture services are reachable via their Docker service
+# names rather than localhost — the published ports land on the host's loopback,
+# which is not this container's. Export these so gen-env.sh writes the correct
+# URLs into .env.
 export HYDRA_PUBLIC_URL=http://hydra:4444
 export HYDRA_ADMIN_URL=http://hydra:4445
+export OPENOBSERVE_URL=http://openobserve:5080
 
 if [[ ! -f .env ]]; then
   echo "No .env found — generating dev secrets..."
@@ -94,10 +97,12 @@ rm get_helm.sh
 
 
 # ── Observability ─────────────────────────────────────────────────────────────
-# The ClickHouse-backed obs fixture (collector + ClickHouse + Vector + HyperDX)
-# is part of the base projects/compose stack (ST0027), so it comes up
-# automatically with the devcontainer — no separate bring-up needed. HyperDX UI:
-# http://localhost:8080. Application/SDK telemetry export stays opt-in (server
-# config / UDEX_OTLP_ENDPOINT) so test runs are unaffected.
+# The OpenObserve-backed obs fixture (OpenObserve + collector + Vector) is part
+# of the base projects/compose stack (ST0027, backend replaced by ST0028), so it
+# comes up automatically with the devcontainer — no separate bring-up needed.
+# OpenObserve UI: http://localhost:5080, credentials in .env
+# (OPENOBSERVE_ROOT_EMAIL / OPENOBSERVE_ROOT_PASSWORD_SECRET). Application/SDK
+# telemetry export stays opt-in (server config / UDEX_OTLP_ENDPOINT) so test runs
+# are unaffected.
 
 

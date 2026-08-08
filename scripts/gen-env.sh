@@ -151,6 +151,12 @@ fi
 HYDRA_PUBLIC_URL="${HYDRA_PUBLIC_URL:-http://localhost:4444}"
 HYDRA_ADMIN_URL="${HYDRA_ADMIN_URL:-http://localhost:4445}"
 
+# Same override mechanism for OpenObserve: the fixture publishes 5080 on the
+# host's loopback, so a process on the host reaches it at localhost, while one
+# inside the devcontainer must use the compose service name. post-create.sh
+# exports the service-name form before calling this script.
+OPENOBSERVE_URL="${OPENOBSERVE_URL:-http://localhost:5080}"
+
 # Ensure the devcontainer dir exists (for the link) and clear any stale entry at
 # ENV_FILE. The clear matters: if root .env is currently a symlink (e.g. it was
 # flipped to point at .devcontainer/.env), an unguarded `cat >` would write
@@ -201,6 +207,10 @@ HYDRA_SECRETS_SYSTEM_SECRET=${HYDRA_SECRETS_SYSTEM_SECRET_VAL}
 # Auth terminates at the collector: it holds the encoded credential below so the
 # udex application keeps emitting anonymous OTLP and never learns the backend
 # wants one. The integration tests use the same values to query.
+#
+# Public config — override before calling gen-env.sh to change this value.
+OPENOBSERVE_URL=${OPENOBSERVE_URL}
+
 OPENOBSERVE_ROOT_EMAIL=${OPENOBSERVE_ROOT_EMAIL_VAL}
 OPENOBSERVE_ROOT_PASSWORD_SECRET=${OPENOBSERVE_ROOT_PASSWORD_SECRET_VAL}
 

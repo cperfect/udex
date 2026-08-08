@@ -3,7 +3,7 @@ verblock: "08 Aug 2026:v0.1: vscode - Initial version"
 wp_id: WP-04
 title: "Retire ClickHouse, HyperDX and Mongo; CI and dev-doctor"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-04: Retire ClickHouse, HyperDX and Mongo; CI and dev-doctor
