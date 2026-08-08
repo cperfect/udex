@@ -26,14 +26,14 @@ title: "OpenObserve as the dev observability backend -- acceptance contract"
 - AC-00.2 The observability fixture is three services (`openobserve`, `otel-collector`, `vector`), down from five -- evidence: `projects/compose/docker-compose.yml` -- satisfied: no
 - AC-00.3 The fixture remains always-on and fail-never-skip: observability tests fail, never skip, when the backend is unreachable, exactly as the Hydra-dependent tests do -- evidence: helper source in `sdk/tests/common/mod.rs` -- satisfied: no
 
-### WP-01 -- Stand up OpenObserve beside ClickHouse (status: Not Started)
+### WP-01 -- Stand up OpenObserve beside ClickHouse (status: WIP)
 
 - AC-01.1 With the fixture up, `udex-server` traces, metrics and logs are all queryable in OpenObserve via its search API
 - AC-01.2 The postgres/hydra container log floor reaches OpenObserve through the collector, in the same logs stream as application telemetry
 - AC-01.3 The existing ClickHouse-backed observability tests still pass unchanged during this WP (the dual-export invariant that keeps the tree green)
-- AC-01.4 (non-test) OpenObserve is configured with local-disk storage, telemetry reporting disabled, and retention equivalent to the current 72h -- evidence: `docker-compose.yml` service definition -- satisfied: no
-- AC-01.5 (non-test) `gen-env.sh` generates the root credential and the pre-encoded basic-auth value; no credential is hardcoded in compose -- evidence: `scripts/gen-env.sh` + a clean `.env` regeneration -- satisfied: no
-- AC-01.6 (non-test) All configuration is inline; no bind mounts are introduced, so the fixture resolves identically from `projects/compose/` and `.devcontainer/` -- evidence: `docker compose config` from both project directories -- satisfied: no
+- AC-01.4 (non-test) OpenObserve is configured with local-disk storage, telemetry reporting disabled, and retention equivalent to the current 72h -- evidence: `docker-compose.yml` service definition, confirmed live via `GET /config` returning `data_retention_days: 3`, `telemetry_enabled: false` -- satisfied: yes
+- AC-01.5 (non-test) `gen-env.sh` generates the root credential and the pre-encoded basic-auth value; no credential is hardcoded in compose -- evidence: `scripts/gen-env.sh` run in an isolated tree; base64 round-trips to `email:password` and the password carries all four required character classes -- satisfied: yes
+- AC-01.6 (non-test) All configuration is inline; no bind mounts are introduced, so the fixture resolves identically from `projects/compose/` and `.devcontainer/` -- evidence: `docker compose config -q` clean from both project directories -- satisfied: yes
 
 ### WP-02 -- Port the observability verification layer to OpenObserve (status: Not Started)
 
@@ -70,10 +70,12 @@ title: "OpenObserve as the dev observability backend -- acceptance contract"
 
 ### WP-01
 
-- AT-01.1 manual: query all three signals via the OpenObserve search API with the fixture up -- covers AC-01.1 -- status: to-write (red-first)
-- AT-01.2 manual: query the logs stream for `service_name IN ('postgres','hydra')` -- covers AC-01.2 -- status: to-write (red-first)
+- AT-01.1 manual: query all three signals via the OpenObserve search API with the fixture up -- covers AC-01.1 -- status: green
+- AT-01.2 manual: query the logs stream for `service_name IN ('postgres','hydra')` -- covers AC-01.2 -- status: green
 - AT-01.3 `sdk/tests/obs.rs::obs_local_traces_metrics_logs_land` (unchanged, still reading ClickHouse) -- covers AC-01.3 -- status: green
 - Coverage: AC-01.4, AC-01.5, AC-01.6 are non-test and carry evidence on the AC line. AT-01.1 and AT-01.2 become permanent tests in WP03; here they are one-shot confirmations that the pipeline is live.
+
+AT-01.1 observed: traces returned all eight expected `udex-server` span names including `db.create_entry` and `/udex.entry.v1.EntryService/CreateEntry`; metrics returned `udex_rpc_requests` plus 19 `postgresql_*` receiver streams, with the cumulative counter query returning 3; logs returned `udex-server` records. AT-01.2 observed: `postgres` and `hydra` records in the same logs stream as `udex-server`. AT-01.3 observed: `test result: ok. 1 passed` -- the ClickHouse-backed assertions were unaffected by the dual-export.
 
 ### WP-02
 

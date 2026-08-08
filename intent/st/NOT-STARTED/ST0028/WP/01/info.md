@@ -3,7 +3,7 @@ verblock: "08 Aug 2026:v0.1: vscode - Initial version"
 wp_id: WP-01
 title: "Stand up OpenObserve beside ClickHouse"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-01: Stand up OpenObserve beside ClickHouse

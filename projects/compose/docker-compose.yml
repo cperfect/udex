@@ -56,10 +56,15 @@ services:
       hydra-migrate:
         condition: service_completed_successfully
 
-  # ── Observability fixture (ST0027) ──────────────────────────────────────────
+  # ── Observability fixture (ST0027, mid-swap under ST0028) ───────────────────
   # Always-on like postgres/hydra: the obs tests assume it is present and FAIL
-  # (never skip) if it is not. ClickHouse is the unified telemetry store; the
-  # collector ingests the app's OTLP and exports to it.
+  # (never skip) if it is not. The collector ingests the app's OTLP and exports
+  # it to the telemetry store.
+  #
+  # ST0028 is replacing ClickHouse + HyperDX + Mongo with a single OpenObserve
+  # service. Both backends are present and fed identically for now (WP01); the
+  # tests move over in WP02 and the ClickHouse side is deleted in WP04. If you
+  # are reading this and only one backend remains, this note is stale.
   #
   # Everything here is configured WITHOUT bind mounts (inline `configs` content +
   # env vars only). The base compose is consumed in two contexts with different
@@ -99,8 +104,60 @@ services:
       retries: 45
     restart: unless-stopped
 
-  # Single OTLP ingest (plaintext) for the app's traces/metrics/logs -> ClickHouse.
-  # Static config supplied inline via `configs` (no bind mount, no OpAMP).
+  # ── OpenObserve (ST0028 WP01) ───────────────────────────────────────────────
+  # Store + query API + UI in a single binary, replacing clickhouse + hyperdx +
+  # mongo. Stood up BESIDE ClickHouse for now: the collector dual-exports to
+  # both, so the existing obs tests keep reading ClickHouse and stay green while
+  # this fills with identical telemetry. ClickHouse and HyperDX are retired in
+  # WP04, once the tests read from here instead.
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:v0.92.0
+    environment:
+      # Root credential, generated into .env by scripts/gen-env.sh. OpenObserve
+      # enforces its own complexity rule (8-128 chars with lower, upper, digit
+      # and a special character) and PANICS on first boot if it is not met, so
+      # the generator cannot simply emit hex like the other secrets.
+      ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_ROOT_EMAIL}
+      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_ROOT_PASSWORD_SECRET}
+      # Single-node: SQLite metadata + segments on local disk. Deliberately NOT
+      # object storage — see ST0028 design.md; MinIO was considered and rejected
+      # as a stateful service that works against this fixture's simplification.
+      ZO_LOCAL_MODE: "true"
+      ZO_LOCAL_MODE_STORAGE: disk
+      ZO_DATA_DIR: /data
+      # Usage reporting is ON by default upstream. A dev fixture must not phone
+      # home.
+      ZO_TELEMETRY: "false"
+      # Closest equivalent of the ClickHouse exporter's `ttl: 72h`. This knob is
+      # day-granular, so 72h maps to 3.
+      ZO_COMPACT_DATA_RETENTION_DAYS: "3"
+    ports:
+      # Loopback-only, matching the ClickHouse posture: one port serves the UI,
+      # the REST/search API and OTLP/HTTP ingest, and it is credentialed rather
+      # than open, but it is still a dev fixture and never belongs on the LAN.
+      - "127.0.0.1:5080:5080"
+    # No healthcheck: this image is distroless — no shell, no curl, no wget, not
+    # even a busybox — so there is nothing to exec a probe with, and compose
+    # healthchecks run inside the container. The service does serve /healthz;
+    # it just cannot test itself.
+    #
+    # Dependents therefore gate on service_started, and readiness is absorbed
+    # where it actually matters: the collector's exporter retries on failure, and
+    # the obs tests already poll with generous budgets. If a future image ships a
+    # shell, add a healthcheck on /healthz and tighten those conditions.
+    #
+    # No volume: telemetry is ephemeral and dies with the container. Same as
+    # ClickHouse today — stated here so it reads as a choice, not an oversight.
+    restart: unless-stopped
+
+  # Single OTLP ingest (plaintext) for the app's traces/metrics/logs. Exports to
+  # BOTH ClickHouse and OpenObserve during the ST0028 strangler swap; ClickHouse
+  # drops out in WP04. Static config supplied inline via `configs` (no bind
+  # mount, no OpAMP).
+  #
+  # This is the ONLY service that knows which backend exists. Vector ships its
+  # container logs here rather than writing to a store directly, and the app just
+  # emits anonymous OTLP — so a backend swap touches this file and nothing else.
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.119.0
     command: ["--config=/etc/otel/config.yaml"]
@@ -111,6 +168,10 @@ services:
       # For the postgresqlreceiver (WP03). Interpolated by compose from the same
       # .env that feeds the postgres service's password.
       - POSTGRES_PASSWORD_SECRET=${POSTGRES_PASSWORD_SECRET}
+      # Pre-encoded `Basic` credential for the OpenObserve exporter. Auth is
+      # terminated HERE: the udex app keeps emitting anonymous OTLP and never
+      # learns the backend wants credentials.
+      - OPENOBSERVE_BASIC_AUTH_SECRET=${OPENOBSERVE_BASIC_AUTH_SECRET}
     ports:
       - "4317:4317"   # OTLP gRPC - all ifaces: k3d pods reach it via host.k3d.internal
       - "4318:4318"   # OTLP HTTP
@@ -118,6 +179,10 @@ services:
     depends_on:
       clickhouse:
         condition: service_healthy
+      openobserve:
+        # service_started, not service_healthy — the image is distroless and
+        # cannot host a healthcheck. See the openobserve service above.
+        condition: service_started
     restart: unless-stopped
 
   # HyperDX dev UI over ClickHouse (reader-only). A developer convenience — the
@@ -197,13 +262,17 @@ services:
         done
         echo "hyperdx-init: registration did not take" >&2; exit 1
 
-  # Container-stdout log floor (WP03): ship postgres + hydra container logs into
-  # ClickHouse's otel_logs so they sit alongside the app's telemetry in HyperDX.
-  # Uses the Docker API via docker.sock — the only way to get container *names*
-  # (the OTel filelog receiver can't: docker json-file logs carry no identity and
-  # a file reader would slurp the whole daemon, unnamed). Scoped by compose
-  # service to just postgres/hydra. Config is inline (no bind mount); the
-  # docker.sock mount is an absolute path, so it is project-dir-independent.
+  # Container-stdout log floor: ship postgres + hydra container logs so they sit
+  # alongside the app's telemetry in the same store. Uses the Docker API via
+  # docker.sock — the only way to get container *names* (the OTel filelog
+  # receiver can't: docker json-file logs carry no identity and a file reader
+  # would slurp the whole daemon, unnamed). Scoped by compose service to just
+  # postgres/hydra. Config is inline (no bind mount); the docker.sock mount is an
+  # absolute path, so it is project-dir-independent.
+  #
+  # ST0028 WP01: this used to write to ClickHouse directly. It now emits OTLP to
+  # the collector instead, so the collector is the single service that knows
+  # which backend exists and the floor follows the same path as app telemetry.
   vector:
     image: timberio/vector:0.44.0-debian
     command: ["--config", "/etc/vector/vector.yaml"]
@@ -213,8 +282,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
-      clickhouse:
-        condition: service_healthy
+      - otel-collector
     restart: unless-stopped
 
 configs:
@@ -262,32 +330,45 @@ configs:
             initial_interval: 5s
             max_interval: 30s
             max_elapsed_time: 300s
+        # OpenObserve (ST0028). The otlphttp exporter appends /v1/traces,
+        # /v1/metrics and /v1/logs to this base endpoint, which is exactly
+        # OpenObserve's ingest layout. The $$ escapes the $ past compose
+        # interpolation so the OTel env provider resolves it at collector start.
+        otlphttp/openobserve:
+          endpoint: http://openobserve:5080/api/default
+          headers:
+            Authorization: "Basic $${env:OPENOBSERVE_BASIC_AUTH_SECRET}"
+            stream-name: default
+          retry_on_failure:
+            enabled: true
       extensions:
         health_check:
           endpoint: 0.0.0.0:13133
       service:
         extensions: [health_check]
         pipelines:
+          # Dual-export during the ST0028 swap: identical telemetry reaches both
+          # stores, so the tests can move from one to the other without a window
+          # where the suite cannot pass. `clickhouse` drops out in WP04.
           traces:
             receivers: [otlp]
             processors: [batch]
-            exporters: [clickhouse]
+            exporters: [clickhouse, otlphttp/openobserve]
           metrics:
             receivers: [otlp, postgresql]
             processors: [batch]
-            exporters: [clickhouse]
+            exporters: [clickhouse, otlphttp/openobserve]
           logs:
             receivers: [otlp]
             processors: [batch]
-            exporters: [clickhouse]
+            exporters: [clickhouse, otlphttp/openobserve]
         telemetry:
           metrics:
             address: 0.0.0.0:8888
 
   # Inline Vector config (no bind mount): tail postgres/hydra container stdout via
-  # the Docker API and write it into ClickHouse's otel_logs, so the floor shows up
-  # in HyperDX's Logs view (ServiceName = the compose service). Only the four
-  # otel_logs columns we populate are emitted; the rest take ClickHouse defaults.
+  # the Docker API and emit it as OTLP to the collector, which fans it out to the
+  # configured backend(s) alongside the app's own telemetry.
   vector_config:
     content: |
       sources:
@@ -304,29 +385,55 @@ configs:
           type: remap
           inputs: [floor]
           source: |
-            # Keep it to the columns we can populate honestly: postgres and hydra
+            # Build the OTLP envelope by hand: Vector's opentelemetry sink is a
+            # thin HTTP wrapper and does no OTel mapping of its own.
+            #
+            # Keep it to the fields we can populate honestly: postgres and hydra
             # both log to stderr regardless of level, so stream is NOT severity —
-            # leave SeverityText unset (the level is in the body) rather than
-            # mislabel everything. The original stream is kept as a log attribute.
+            # leave severity unset (the level is in the body) rather than mislabel
+            # everything. The original stream is kept as a log attribute.
             svc = string(.label."com.docker.compose.service") ?? (string(.container_name) ?? "")
             stream = string(.stream) ?? ""
+            # The `!` form is required: .timestamp is untyped to VRL, so the
+            # infallible call does not compile.
+            ts = to_unix_timestamp!(.timestamp, unit: "nanoseconds")
             . = {
-              "Timestamp": .timestamp,
-              "ServiceName": svc,
-              "Body": string(.message) ?? "",
-              "LogAttributes": { "log.io.stream": stream }
+              "resourceLogs": [{
+                "resource": { "attributes": [
+                  { "key": "service.name", "value": { "stringValue": svc } }
+                ]},
+                "scopeLogs": [{ "logRecords": [{
+                  "timeUnixNano": to_string(ts),
+                  "body": { "stringValue": string(.message) ?? "" },
+                  "attributes": [
+                    { "key": "log.io.stream", "value": { "stringValue": stream } }
+                  ]
+                }]}]
+              }]
             }
       sinks:
-        clickhouse:
-          type: clickhouse
+        otlp:
+          type: opentelemetry
           inputs: [to_otel_logs]
-          endpoint: http://clickhouse:8123
-          database: otel
-          table: otel_logs
-          skip_unknown_fields: true
-          date_time_best_effort: true
-          healthcheck:
-            enabled: false
+          protocol:
+            type: http
+            uri: http://otel-collector:4318/v1/logs
+            method: post
+            encoding:
+              codec: json
+            framing:
+              method: newline_delimited
+            request:
+              headers:
+                # Without this the collector answers 415 Unsupported Media Type
+                # and Vector drops the batch as non-retriable.
+                Content-Type: application/json
+            # One OTLP envelope per request. The remap above produces a complete
+            # JSON document per event, so batching would concatenate several
+            # documents into one body and the receiver would reject it. Deliberate,
+            # and affordable: this floor covers two low-volume dev containers.
+            batch:
+              max_events: 1
 
 # volumes:
 #   pg_data:
