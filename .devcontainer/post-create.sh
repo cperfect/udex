@@ -42,16 +42,36 @@ hydra help
 
 cd /workspace
 
-# In the devcontainer, Hydra is reachable via the Docker service name rather
-# than localhost. Export these so gen-env.sh writes the correct URLs into .env.
+# In the devcontainer, fixture services are reachable via their Docker service
+# names rather than localhost — the published ports land on the host's loopback,
+# which is not this container's. Export these so gen-env.sh writes the correct
+# URLs into .env.
 export HYDRA_PUBLIC_URL=http://hydra:4444
 export HYDRA_ADMIN_URL=http://hydra:4445
+export OPENOBSERVE_URL=http://openobserve:5080
 
 if [[ ! -f .env ]]; then
   echo "No .env found — generating dev secrets..."
   bash scripts/gen-env.sh --force
 else
   echo ".env already exists — skipping secret generation."
+  # The exports above only reach gen-env.sh, which is skipped on this path — so a
+  # .env generated before OPENOBSERVE_URL existed (or on a host, where it points
+  # at localhost) would leave the devcontainer unable to reach the fixture:
+  # published ports land on the host's loopback, not this container's.
+  #
+  # Append or rewrite just that one line, preserving every secret and other value
+  # in the file. Deliberately not a regeneration: that would rotate secrets the
+  # running Postgres has already baked in.
+  if grep -q '^OPENOBSERVE_URL=' .env; then
+    if ! grep -q "^OPENOBSERVE_URL=${OPENOBSERVE_URL}$" .env; then
+      sed -i "s|^OPENOBSERVE_URL=.*|OPENOBSERVE_URL=${OPENOBSERVE_URL}|" .env
+      echo "  updated OPENOBSERVE_URL for devcontainer networking"
+    fi
+  else
+    printf '\n# Added by post-create.sh: devcontainer reaches the fixture by service name.\nOPENOBSERVE_URL=%s\n' "${OPENOBSERVE_URL}" >> .env
+    echo "  added OPENOBSERVE_URL for devcontainer networking"
+  fi
 fi
 
 # docker-compose.devcontainer.yml declares env_file: ../.env, which is the
@@ -94,10 +114,12 @@ rm get_helm.sh
 
 
 # ── Observability ─────────────────────────────────────────────────────────────
-# The ClickHouse-backed obs fixture (collector + ClickHouse + Vector + HyperDX)
-# is part of the base projects/compose stack (ST0027), so it comes up
-# automatically with the devcontainer — no separate bring-up needed. HyperDX UI:
-# http://localhost:8080. Application/SDK telemetry export stays opt-in (server
-# config / UDEX_OTLP_ENDPOINT) so test runs are unaffected.
+# The OpenObserve-backed obs fixture (OpenObserve + collector + Vector) is part
+# of the base projects/compose stack (ST0027, backend replaced by ST0028), so it
+# comes up automatically with the devcontainer — no separate bring-up needed.
+# OpenObserve UI: http://localhost:5080, credentials in .env
+# (OPENOBSERVE_ROOT_EMAIL / OPENOBSERVE_ROOT_PASSWORD_SECRET). Application/SDK
+# telemetry export stays opt-in (server config / UDEX_OTLP_ENDPOINT) so test runs
+# are unaffected.
 
 

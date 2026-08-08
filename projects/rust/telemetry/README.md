@@ -13,7 +13,7 @@ This crate is the **only** place in the workspace that configures an OpenTelemet
 
 ## Bringing your own OTLP backend
 
-The application emits **plain OTLP** and is backend-agnostic — point the server or CLI at any OTLP-compatible backend by changing the endpoint, never the code. The local dev/CI fixture (ST0027) is a keyless ClickHouse-backed collector, but header-authed backends (Honeycomb, Grafana Cloud, the ClickStack all-in-one) are supported via `otlp_headers`. Header values are commonly secrets, so they are **redacted in `Debug`** and never echoed in validation errors.
+The application emits **plain OTLP** and is backend-agnostic — point the server or CLI at any OTLP-compatible backend by changing the endpoint, never the code. The local dev/CI fixture (ST0027, backend replaced in ST0028) presents a keyless, plaintext collector; the collector's own credential for the backend behind it is never seen by the application. Header-authed backends (Honeycomb, Grafana Cloud, the ClickStack all-in-one) are supported directly via `otlp_headers`. Header values are commonly secrets, so they are **redacted in `Debug`** and never echoed in validation errors.
 
 Server config:
 
@@ -53,4 +53,4 @@ JSON logs are **always** written to stdout (a durable floor that survives a Coll
 
 The SDK (`udex-sdk`) deliberately does **not** depend on `udex-telemetry`: as a client library it never installs a global provider. It uses only the `opentelemetry` API to emit client spans and inject `traceparent`, composing into a host application's own OpenTelemetry setup.
 
-See [docs/ARCHITECTURE.md#observability](../../../docs/ARCHITECTURE.md#observability) for the system-level design and the [compose observability fixture](../../compose/README.md#observability) for the local backend (ClickHouse + collector + HyperDX).
+See [docs/ARCHITECTURE.md#observability](../../../docs/ARCHITECTURE.md#observability) for the system-level design and the [compose observability fixture](../../compose/README.md#observability) for the local backend (OpenObserve + collector + Vector).

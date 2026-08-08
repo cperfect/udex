@@ -25,6 +25,7 @@ Public artefacts (certificates, public keys, client IDs, endpoint URLs) are mark
 | Hydra non-Udex client secret (`non-udex-secret`) | OAuth2 client secret | Server integration tests — scope rejection test | Dev | No | `projects/rust/server/tests/server_integration_tests.rs` (dev-only hardcoded fixture) |
 | Hydra wrong-audience client secret (`wrong-aud-secret`) | OAuth2 client secret | Server integration tests — audience rejection test | Dev | No | `projects/rust/server/tests/server_integration_tests.rs` (dev-only hardcoded fixture) |
 | SDK Hydra test client secret (`sdk-hydra-test-secret`) | OAuth2 client secret | SDK integration tests — Hydra fixture | Dev | No | `projects/rust/sdk/tests/integration_tests.rs` (dev-only hardcoded fixture) |
+| SDK Hydra scoped-client secret (`sdk-hydra-scoped-secret`) | OAuth2 client secret | SDK integration tests — wildcard-scoped client used to populate a test-owned index, so tests need not borrow the shared fixture index | Dev | No | `projects/rust/sdk/tests/integration_tests.rs` (dev-only hardcoded fixture) |
 | CLI token test client secret (`cli-hydra-test-secret`) | OAuth2 client secret | CLI token Hydra tests | Dev | No | `projects/rust/cli/tests/token_hydra_tests.rs` (dev-only hardcoded fixture) |
 | CLI index test client secret (`cli-hydra-idx-del-secret`) | OAuth2 client secret | CLI index delete Hydra tests | Dev | No | `projects/rust/cli/tests/index_hydra_tests.rs` (dev-only hardcoded fixture) |
 | `jwks_url` | JWKS endpoint URL | Rust server config — runtime key source | Both | Yes | Config property (`projects/rust/server/src/config.rs`; `projects/rust/cli/src/config.rs`) |
@@ -41,11 +42,23 @@ Public artefacts (certificates, public keys, client IDs, endpoint URLs) are mark
 
 ## Observability
 
-The ClickHouse-backed observability fixture (ST0027; part of the base
-`projects/compose` stack) holds **no secrets**: the OTel collector is keyless and
-plaintext locally, and the HyperDX dev UI registers its own local user
-(`admin@udex.local`) rather than reading an env credential. The HyperDX login is a
-fixed dev-only convenience credential, not a generated secret.
+The observability fixture (ST0027, backend replaced by ST0028; part of the base `projects/compose` stack) holds one generated credential. The OTel collector's OTLP ingest is still **keyless and plaintext** — the application emits anonymous OTLP and never carries a credential — but OpenObserve requires authentication on both ingest and query, so the collector holds one on the application's behalf.
+
+| Name | Type | Usage | Scope | Public | Source |
+|------|------|-------|-------|--------|--------|
+| `OPENOBSERVE_ROOT_EMAIL` | Account identifier | OpenObserve root user; UI login and test queries | Dev | Yes | `scripts/gen-env.sh` → `.env` (gitignored) |
+| `OPENOBSERVE_ROOT_PASSWORD_SECRET` | Generated password | OpenObserve root user; UI login and test queries | Dev | No | `scripts/gen-env.sh` → `.env` (gitignored) |
+| `OPENOBSERVE_BASIC_AUTH_SECRET` | `base64(email:password)` | OTel Collector's `Authorization: Basic` header for the OpenObserve exporter | Dev | No | Derived by `scripts/gen-env.sh` from the two above → `.env` (gitignored) |
+
+Two properties are worth stating rather than leaving implicit.
+
+**This is a weaker posture than the ClickHouse fixture it replaces.** That one was keyless, so nothing sensitive crossed the compose network at all. Now a credential does, over a plaintext in-network hop. It is accepted because the fixture is dev/CI-only, the port is published on loopback only, and the value is generated per environment and never leaves it — but it is a real change, not a like-for-like swap.
+
+**The password cannot be plain hex like the other generated secrets.** OpenObserve enforces 8–128 characters with at least one lowercase, uppercase, digit and special character, and *panics on first boot* when that is not met. `gen-env.sh` satisfies it while keeping the value inside `[A-Za-z0-9-]`, because the generated values are expanded through an unquoted heredoc and consumed by docker compose's `.env` parser — a `$` or `#` in that value breaks the fixture in ways that are tedious to diagnose.
+
+Rotate by re-running `gen-env.sh --force`, never by hand-editing: `OPENOBSERVE_BASIC_AUTH_SECRET` is derived from the other two and will otherwise authenticate nothing. Rotation also requires recreating the containers — see [Rotating secrets](#rotating-secrets) below.
+
+In CI there is no `.env`; the workflow generates the same three values per job rather than storing them as repository secrets, since the fixture is destroyed with the runner.
 
 ## TLS Certificates & Keys
 
@@ -68,7 +81,7 @@ fixed dev-only convenience credential, not a generated secret.
 
 | Name | Type | Usage | Scope | Public | Source |
 |------|------|-------|-------|--------|--------|
-| `gen-env.sh` | Env var generation script | Dev — generate `.env` with DB passwords and Hydra secrets | Dev | Yes | `scripts/gen-env.sh` |
+| `gen-env.sh` | Env var generation script | Dev — generate `.env` with DB passwords, Hydra secrets and OpenObserve credentials | Dev | Yes | `scripts/gen-env.sh` |
 | `gen-keys-and-certs.sh` | Key/cert generation script (delegates to sub-scripts) | Dev/CI — generate server TLS certs, Traefik edge certs, and JWT signing keys | Dev | Yes | `scripts/gen-keys-and-certs.sh` |
 | `regenerate_jwt_signing_key_pair.sh` | Key generation script (ECDSA P-256, PKCS8) | Dev — rotate test JWT keys (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/rust/server/tests/jwt/regenerate_jwt_signing_key_pair.sh` |
 | `regenerate_certs.sh` (server) | Certificate generation script (RSA-4096, CA + server) | Dev — rotate pod TLS certs (invoked by `gen-keys-and-certs.sh`) | Dev | Yes | `projects/rust/server/tests/certs/regenerate_certs.sh` |
@@ -81,6 +94,7 @@ fixed dev-only convenience credential, not a generated secret.
 
 - **Postgres** applies `POSTGRES_PASSWORD` (and runs the init script that sets the `hydra` role password) **only on first initialization of an empty data volume.** A volume that already exists keeps its original passwords. `pg_hba.conf` trusts loopback but requires `scram-sha-256` for every other client, so host-side tools (`cargo test`, `psql`, the CLI) keep working against the stale password while scram clients — notably **k8s pods** — fail to authenticate, far from the cause.
 - **Hydra** reads `HYDRA_SECRETS_SYSTEM_SECRET` and its DSN password at container start; a rotated `.env` only takes effect after the container is recreated.
+- **OpenObserve and the OTel collector** are the same shape. OpenObserve applies `ZO_ROOT_USER_*` on first boot into its container-local SQLite, and the collector reads `OPENOBSERVE_BASIC_AUTH_SECRET` at start. Rotating `.env` without recreating **both** leaves the collector presenting a credential the store no longer accepts — telemetry then stops arriving with nothing obviously broken. The recipe below already covers it, since `down -v` removes the OpenObserve container along with everything else.
 
 Because of this, `gen-env.sh` **refuses to rotate an existing `.env` while a compose Postgres is running.** To rotate cleanly, wipe the stateful volumes so the stack re-initializes from the new secrets:
 

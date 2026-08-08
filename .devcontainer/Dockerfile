@@ -13,13 +13,16 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
   apt-transport-https curl gnupg lsb-release
 
 ## Install Trivy (security scanner)
-# This installs the latest Trivy package from the official repo (may differ from the version used in CI).
+# Pinned so every developer and CI scan with the same rule set — an unpinned
+# install made findings non-reproducible between machines, since Trivy's checks
+# and severity mappings change between releases.
 # Commands match the official Trivy Debian install docs: https://trivy.dev/docs/latest/getting-started/installation/
+ARG TRIVY_VERSION=0.73.0
 RUN curl -fsSL https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg > /dev/null \
   && echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
      | tee -a /etc/apt/sources.list.d/trivy.list \
   && apt-get update \
-  && apt-get -y install --no-install-recommends trivy
+  && apt-get -y install --no-install-recommends "trivy=${TRIVY_VERSION}"
 
 # Claude is installed via the devcontainer feature in devcontainer.json.
 

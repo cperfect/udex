@@ -56,10 +56,15 @@ services:
       hydra-migrate:
         condition: service_completed_successfully
 
-  # ── Observability fixture (ST0027) ──────────────────────────────────────────
+  # ── Observability fixture (ST0027, backend replaced by ST0028) ──────────────
   # Always-on like postgres/hydra: the obs tests assume it is present and FAIL
-  # (never skip) if it is not. ClickHouse is the unified telemetry store; the
-  # collector ingests the app's OTLP and exports to it.
+  # (never skip) if it is not. The collector ingests the app's OTLP and exports
+  # it to the telemetry store.
+  #
+  # Three services: OpenObserve (store + query + UI), the collector, and Vector
+  # for the container log floor. ST0028 replaced ClickHouse + HyperDX + MongoDB
+  # with OpenObserve alone, which is why the store now has a UI of its own and
+  # there is no separate reader service or state database.
   #
   # Everything here is configured WITHOUT bind mounts (inline `configs` content +
   # env vars only). The base compose is consumed in two contexts with different
@@ -70,37 +75,57 @@ services:
   # is a local dev/CI posture; the app itself stays OTLP-standard and can be
   # pointed at a TLS-terminating collector in any real deployment.
 
-  # Unified store for traces/metrics/logs (replaces Tempo/Prometheus/Loki).
-  clickhouse:
-    image: clickhouse/clickhouse-server:24.8
+  # ── OpenObserve (ST0028) ────────────────────────────────────────────────────
+  # Store + query API + UI in a single binary. The integration tests query it
+  # over its search API; developers browse the same data at http://localhost:5080.
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:v0.92.0
     environment:
-      # Local dev fixture: allow the default user to connect with no password
-      # from the in-network collector/HyperDX. Not a production posture.
-      - CLICKHOUSE_SKIP_USER_SETUP=1
-      # Pre-create the observability database the collector's clickhouse exporter
-      # targets. The exporter's create_schema makes the tables but NOT the
-      # database, and it connects with `otel` as the session default, so the DB
-      # must exist first. CLICKHOUSE_DB creates it on init with no bind mount.
-      - CLICKHOUSE_DB=otel
+      # Root credential, generated into .env by scripts/gen-env.sh. OpenObserve
+      # enforces its own complexity rule (8-128 chars with lower, upper, digit
+      # and a special character) and PANICS on first boot if it is not met, so
+      # the generator cannot simply emit hex like the other secrets.
+      ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_ROOT_EMAIL}
+      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_ROOT_PASSWORD_SECRET}
+      # Single-node: SQLite metadata + segments on local disk. Deliberately NOT
+      # object storage — see ST0028 design.md; MinIO was considered and rejected
+      # as a stateful service that works against this fixture's simplification.
+      ZO_LOCAL_MODE: "true"
+      ZO_LOCAL_MODE_STORAGE: disk
+      ZO_DATA_DIR: /data
+      # Usage reporting is ON by default upstream. A dev fixture must not phone
+      # home.
+      ZO_TELEMETRY: "false"
+      # Closest equivalent of the ClickHouse exporter's `ttl: 72h`. This knob is
+      # day-granular, so 72h maps to 3.
+      ZO_COMPACT_DATA_RETENTION_DAYS: "3"
     ports:
-      # Loopback-only: the default user has no password (CLICKHOUSE_SKIP_USER_SETUP),
-      # so this is unauthenticated full SQL access — never expose it on the LAN.
-      # Tests reach it in-network by service name (devcontainer) or via the
-      # runner's localhost (CI); host debugging from the same machine still works.
-      - "127.0.0.1:8123:8123"   # HTTP query API
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    healthcheck:
-      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
-      interval: 2s
-      timeout: 5s
-      retries: 45
+      # Loopback-only. One port serves the UI, the REST/search API and OTLP/HTTP
+      # ingest. It is credentialed rather than open, but it is still a dev
+      # fixture and never belongs on the LAN.
+      - "127.0.0.1:5080:5080"
+    # No healthcheck: this image is distroless — no shell, no curl, no wget, not
+    # even a busybox — so there is nothing to exec a probe with, and compose
+    # healthchecks run inside the container. The service does serve /healthz;
+    # it just cannot test itself.
+    #
+    # Dependents therefore gate on service_started, and readiness is absorbed
+    # where it actually matters: the collector's exporter retries on failure, and
+    # the obs tests already poll with generous budgets. If a future image ships a
+    # shell, add a healthcheck on /healthz and tighten those conditions.
+    #
+    # No volume: telemetry is ephemeral and dies with the container. That matches
+    # what the ClickHouse fixture did before it, and is stated here so it reads as
+    # a choice rather than an oversight.
     restart: unless-stopped
 
-  # Single OTLP ingest (plaintext) for the app's traces/metrics/logs -> ClickHouse.
-  # Static config supplied inline via `configs` (no bind mount, no OpAMP).
+  # Single OTLP ingest (plaintext) for the app's traces/metrics/logs, exported to
+  # OpenObserve. Static config supplied inline via `configs` (no bind mount, no
+  # OpAMP).
+  #
+  # This is the ONLY service that knows which backend exists. Vector ships its
+  # container logs here rather than writing to a store directly, and the app just
+  # emits anonymous OTLP — so a backend swap touches this file and nothing else.
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.119.0
     command: ["--config=/etc/otel/config.yaml"]
@@ -111,99 +136,32 @@ services:
       # For the postgresqlreceiver (WP03). Interpolated by compose from the same
       # .env that feeds the postgres service's password.
       - POSTGRES_PASSWORD_SECRET=${POSTGRES_PASSWORD_SECRET}
+      # Pre-encoded `Basic` credential for the OpenObserve exporter. Auth is
+      # terminated HERE: the udex app keeps emitting anonymous OTLP and never
+      # learns the backend wants credentials.
+      - OPENOBSERVE_BASIC_AUTH_SECRET=${OPENOBSERVE_BASIC_AUTH_SECRET}
     ports:
       - "4317:4317"   # OTLP gRPC - all ifaces: k3d pods reach it via host.k3d.internal
       - "4318:4318"   # OTLP HTTP
       - "127.0.0.1:13133:13133" # health_check (readiness probe) - loopback only
     depends_on:
-      clickhouse:
-        condition: service_healthy
+      openobserve:
+        # service_started, not service_healthy — the image is distroless and
+        # cannot host a healthcheck. See the openobserve service above.
+        condition: service_started
     restart: unless-stopped
 
-  # HyperDX dev UI over ClickHouse (reader-only). A developer convenience — the
-  # obs tests query ClickHouse directly and do NOT depend on it, so nothing
-  # `depends_on` HyperDX/Mongo and they never gate the stack's readiness.
-
-  # HyperDX application state (saved searches, dashboards). Ephemeral: no volume,
-  # because DEFAULT_CONNECTIONS/DEFAULT_SOURCES re-seed the source on every boot.
-  mongo:
-    image: mongo:5.0.32-focal
-    restart: unless-stopped
-
-  hyperdx:
-    image: docker.hyperdx.io/hyperdx/hyperdx:2
-    # Inline env (no env_file) so there is no project-dir-relative path to
-    # misresolve. DEFAULT_CONNECTIONS/DEFAULT_SOURCES pre-provision the ClickHouse
-    # connection + Logs/Traces/Metrics sources against our `otel` database, so the
-    # UI needs no manual datasource setup. This image has no no-auth mode, so a
-    # login is required; the hyperdx-init service registers the local user for you
-    # (log in with admin@udex.local / UdexLocalDev1!).
-    environment:
-      MONGO_URI: mongodb://mongo:27017/hyperdx
-      FRONTEND_URL: http://localhost:8080
-      HYPERDX_APP_URL: http://localhost
-      HYPERDX_APP_PORT: "8080"
-      HYPERDX_API_PORT: "8000"
-      HYPERDX_LOG_LEVEL: info
-      DEFAULT_CONNECTIONS: '[{"name":"Local ClickHouse","host":"http://clickhouse:8123","username":"default","password":""}]'
-      DEFAULT_SOURCES: '[{"from":{"databaseName":"otel","tableName":"otel_logs"},"kind":"log","timestampValueExpression":"Timestamp","name":"Logs","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"Body","serviceNameExpression":"ServiceName","bodyExpression":"Body","eventAttributesExpression":"LogAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,SeverityText,Body","severityTextExpression":"SeverityText","traceIdExpression":"TraceId","spanIdExpression":"SpanId","connection":"Local ClickHouse","traceSourceId":"Traces","metricSourceId":"Metrics"},{"from":{"databaseName":"otel","tableName":"otel_traces"},"kind":"trace","timestampValueExpression":"Timestamp","name":"Traces","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"SpanName","serviceNameExpression":"ServiceName","eventAttributesExpression":"SpanAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName","traceIdExpression":"TraceId","spanIdExpression":"SpanId","durationExpression":"Duration","durationPrecision":9,"parentSpanIdExpression":"ParentSpanId","spanNameExpression":"SpanName","spanKindExpression":"SpanKind","statusCodeExpression":"StatusCode","statusMessageExpression":"StatusMessage","connection":"Local ClickHouse","logSourceId":"Logs","metricSourceId":"Metrics"},{"from":{"databaseName":"otel","tableName":""},"kind":"metric","timestampValueExpression":"TimeUnix","name":"Metrics","resourceAttributesExpression":"ResourceAttributes","metricTables":{"gauge":"otel_metrics_gauge","histogram":"otel_metrics_histogram","sum":"otel_metrics_sum","summary":"otel_metrics_summary","exponentialHistogram":"otel_metrics_exponential_histogram"},"connection":"Local ClickHouse","logSourceId":"Logs","traceSourceId":"Traces"}]'
-    ports:
-      - "8080:8080"   # HyperDX UI
-      - "8000:8000"   # HyperDX API (called by the UI)
-    depends_on:
-      - mongo
-      - clickhouse
-    # Readiness gate so hyperdx-init runs only once the API is actually serving
-    # (the app's boot is slow and variable). `wget` ships in the image.
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8000/health"]
-      interval: 5s
-      timeout: 5s
-      retries: 60
-      start_period: 30s
-    restart: unless-stopped
-
-  # One-shot: register the local HyperDX user so a dev never meets a signup form
-  # — just open http://localhost:8080 and log in with the documented credentials
-  # (admin@udex.local / UdexLocalDev1!). This image has no no-auth mode, and the
-  # DEFAULT_* source seeding only fires when the first team is created, so this
-  # both removes the signup step and triggers the seed. Gated on hyperdx being
-  # healthy (no boot race); idempotent via the installation check. Local dev only.
-  hyperdx-init:
-    image: curlimages/curl:8.11.1
-    depends_on:
-      hyperdx:
-        condition: service_healthy
-    restart: "no"
-    command:
-      - sh
-      - -c
-      - |
-        if curl -sf --max-time 10 http://hyperdx:8080/api/installation | grep -q '"isTeamExisting":true'; then
-          echo "hyperdx: team already present, nothing to do"; exit 0
-        fi
-        # Register the local user. The server-side work (create team + seed the
-        # DEFAULT_* sources) can outlast the client read, so don't trust the POST
-        # return code — confirm success by polling the installation state instead.
-        curl -s --max-time 60 -o /dev/null \
-          -X POST http://hyperdx:8080/api/register/password \
-          -H 'Content-Type: application/json' \
-          -d '{"email":"admin@udex.local","password":"UdexLocalDev1!","confirmPassword":"UdexLocalDev1!","name":"udex"}' || true
-        for i in $(seq 1 15); do
-          if curl -sf --max-time 10 http://hyperdx:8080/api/installation | grep -q '"isTeamExisting":true'; then
-            echo "hyperdx: local user registered + sources seeded"; exit 0
-          fi
-          sleep 2
-        done
-        echo "hyperdx-init: registration did not take" >&2; exit 1
-
-  # Container-stdout log floor (WP03): ship postgres + hydra container logs into
-  # ClickHouse's otel_logs so they sit alongside the app's telemetry in HyperDX.
-  # Uses the Docker API via docker.sock — the only way to get container *names*
-  # (the OTel filelog receiver can't: docker json-file logs carry no identity and
-  # a file reader would slurp the whole daemon, unnamed). Scoped by compose
-  # service to just postgres/hydra. Config is inline (no bind mount); the
-  # docker.sock mount is an absolute path, so it is project-dir-independent.
+  # Container-stdout log floor: ship postgres + hydra container logs so they sit
+  # alongside the app's telemetry in the same store. Uses the Docker API via
+  # docker.sock — the only way to get container *names* (the OTel filelog
+  # receiver can't: docker json-file logs carry no identity and a file reader
+  # would slurp the whole daemon, unnamed). Scoped by compose service to just
+  # postgres/hydra. Config is inline (no bind mount); the docker.sock mount is an
+  # absolute path, so it is project-dir-independent.
+  #
+  # ST0028 WP01: this used to write to ClickHouse directly. It now emits OTLP to
+  # the collector instead, so the collector is the single service that knows
+  # which backend exists and the floor follows the same path as app telemetry.
   vector:
     image: timberio/vector:0.44.0-debian
     command: ["--config", "/etc/vector/vector.yaml"]
@@ -213,16 +171,17 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
-      clickhouse:
-        condition: service_healthy
+      - otel-collector
     restart: unless-stopped
 
 configs:
   # Inline OTel Collector config (no bind mount). OTLP (plaintext) in,
-  # ClickHouse out. create_schema lets the exporter own the OTel table schema
-  # (otel_traces / otel_logs / otel_metrics_*), which is exactly what HyperDX
-  # reads. Postgres server metrics come from the postgresqlreceiver here; the
-  # container-stdout log floor is handled by the Vector service (see below).
+  # OpenObserve out. OpenObserve derives its stream schema from the data it
+  # ingests, so nothing here declares tables: traces and logs land in a stream
+  # named `default` (per signal type) and each metric becomes its own stream
+  # named after it, dots as underscores. Postgres server metrics come from the
+  # postgresqlreceiver here; the container-stdout log floor is handled by the
+  # Vector service (see below).
   otelcol_config:
     content: |
       receivers:
@@ -247,21 +206,17 @@ configs:
       processors:
         batch: {}
       exporters:
-        clickhouse:
-          endpoint: tcp://clickhouse:9000?dial_timeout=10s
-          database: otel
-          username: default
-          password: ""
-          create_schema: true
-          ttl: 72h
-          logs_table_name: otel_logs
-          traces_table_name: otel_traces
-          timeout: 10s
+        # OpenObserve (ST0028). The otlphttp exporter appends /v1/traces,
+        # /v1/metrics and /v1/logs to this base endpoint, which is exactly
+        # OpenObserve's ingest layout. The $$ escapes the $ past compose
+        # interpolation so the OTel env provider resolves it at collector start.
+        otlphttp/openobserve:
+          endpoint: http://openobserve:5080/api/default
+          headers:
+            Authorization: "Basic $${env:OPENOBSERVE_BASIC_AUTH_SECRET}"
+            stream-name: default
           retry_on_failure:
             enabled: true
-            initial_interval: 5s
-            max_interval: 30s
-            max_elapsed_time: 300s
       extensions:
         health_check:
           endpoint: 0.0.0.0:13133
@@ -271,23 +226,22 @@ configs:
           traces:
             receivers: [otlp]
             processors: [batch]
-            exporters: [clickhouse]
+            exporters: [otlphttp/openobserve]
           metrics:
             receivers: [otlp, postgresql]
             processors: [batch]
-            exporters: [clickhouse]
+            exporters: [otlphttp/openobserve]
           logs:
             receivers: [otlp]
             processors: [batch]
-            exporters: [clickhouse]
+            exporters: [otlphttp/openobserve]
         telemetry:
           metrics:
             address: 0.0.0.0:8888
 
   # Inline Vector config (no bind mount): tail postgres/hydra container stdout via
-  # the Docker API and write it into ClickHouse's otel_logs, so the floor shows up
-  # in HyperDX's Logs view (ServiceName = the compose service). Only the four
-  # otel_logs columns we populate are emitted; the rest take ClickHouse defaults.
+  # the Docker API and emit it as OTLP to the collector, which fans it out to the
+  # configured backend(s) alongside the app's own telemetry.
   vector_config:
     content: |
       sources:
@@ -304,29 +258,55 @@ configs:
           type: remap
           inputs: [floor]
           source: |
-            # Keep it to the columns we can populate honestly: postgres and hydra
+            # Build the OTLP envelope by hand: Vector's opentelemetry sink is a
+            # thin HTTP wrapper and does no OTel mapping of its own.
+            #
+            # Keep it to the fields we can populate honestly: postgres and hydra
             # both log to stderr regardless of level, so stream is NOT severity —
-            # leave SeverityText unset (the level is in the body) rather than
-            # mislabel everything. The original stream is kept as a log attribute.
+            # leave severity unset (the level is in the body) rather than mislabel
+            # everything. The original stream is kept as a log attribute.
             svc = string(.label."com.docker.compose.service") ?? (string(.container_name) ?? "")
             stream = string(.stream) ?? ""
+            # The `!` form is required: .timestamp is untyped to VRL, so the
+            # infallible call does not compile.
+            ts = to_unix_timestamp!(.timestamp, unit: "nanoseconds")
             . = {
-              "Timestamp": .timestamp,
-              "ServiceName": svc,
-              "Body": string(.message) ?? "",
-              "LogAttributes": { "log.io.stream": stream }
+              "resourceLogs": [{
+                "resource": { "attributes": [
+                  { "key": "service.name", "value": { "stringValue": svc } }
+                ]},
+                "scopeLogs": [{ "logRecords": [{
+                  "timeUnixNano": to_string(ts),
+                  "body": { "stringValue": string(.message) ?? "" },
+                  "attributes": [
+                    { "key": "log.io.stream", "value": { "stringValue": stream } }
+                  ]
+                }]}]
+              }]
             }
       sinks:
-        clickhouse:
-          type: clickhouse
+        otlp:
+          type: opentelemetry
           inputs: [to_otel_logs]
-          endpoint: http://clickhouse:8123
-          database: otel
-          table: otel_logs
-          skip_unknown_fields: true
-          date_time_best_effort: true
-          healthcheck:
-            enabled: false
+          protocol:
+            type: http
+            uri: http://otel-collector:4318/v1/logs
+            method: post
+            encoding:
+              codec: json
+            framing:
+              method: newline_delimited
+            request:
+              headers:
+                # Without this the collector answers 415 Unsupported Media Type
+                # and Vector drops the batch as non-retriable.
+                Content-Type: application/json
+            # One OTLP envelope per request. The remap above produces a complete
+            # JSON document per event, so batching would concatenate several
+            # documents into one body and the receiver would reject it. Deliberate,
+            # and affordable: this floor covers two low-volume dev containers.
+            batch:
+              max_events: 1
 
 # volumes:
 #   pg_data:

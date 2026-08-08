@@ -96,22 +96,57 @@ fi
 
 echo "Generating secrets..."
 
-# Generate secret values. All three use `openssl rand -hex`, which produces
-# [0-9a-f] only — no $, ', ", or whitespace. This matters because the values
-# are expanded inside an unquoted heredoc below; a character outside that
-# alphabet could cause silent shell expansion or broken output. If you ever
-# change the generator (e.g. to base64 or a passphrase), quote the heredoc
-# delimiter (<<'EOF') and emit the values via printf/envsubst instead.
+# Generate secret values. The values are expanded inside an unquoted heredoc
+# below, so every generator here must stay within an alphabet that cannot be
+# reinterpreted by the shell — no $, `, \, ', ", or whitespace — and must also
+# survive docker compose's .env parser, which rules out # as well.
+#
+# `openssl rand -hex` produces [0-9a-f] only and satisfies that trivially.
 POSTGRES_PASSWORD_SECRET_VAL=$(openssl rand -hex 24)
 HYDRA_DB_PASSWORD_SECRET_VAL=$(openssl rand -hex 24)
 HYDRA_SECRETS_SYSTEM_SECRET_VAL=$(openssl rand -hex 32)
+
+# OpenObserve (ST0028) will not accept a hex password. It enforces 8-128 chars
+# with at least one lowercase, one uppercase, one digit and one special
+# character, and PANICS on first boot when the rule is not met — so the fixture
+# fails to start rather than degrading quietly.
+#
+# The fixed `Ux1-` prefix supplies the four required character classes; the
+# entropy is entirely in the 48 hex characters that follow. That keeps the whole
+# value inside [A-Za-z0-9-], which is still safe for the unquoted heredoc and for
+# compose. Do not "improve" this into a random symbol soup without re-reading the
+# heredoc note above — $ or # in this value breaks the fixture in ways that are
+# tedious to diagnose.
+# Generated in two steps on purpose: the entropy is captured on its own so the
+# emptiness guard below can actually see it. Composing the prefix inline would
+# yield a non-empty "Ux1-" when openssl fails, sailing straight past the check.
+OPENOBSERVE_ROOT_EMAIL_VAL="root@udex.local"
+OPENOBSERVE_PASSWORD_ENTROPY=$(openssl rand -hex 24)
+OPENOBSERVE_ROOT_PASSWORD_SECRET_VAL="Ux1-${OPENOBSERVE_PASSWORD_ENTROPY}"
+
+# Pre-encode the Basic credential the OTel Collector sends to OpenObserve, and
+# the tests use to query it. Encoding once here keeps the collector config
+# declarative — compose cannot base64 inline, and the fixture's no-bind-mount
+# rule makes a shell wrapper in the collector container awkward. base64's
+# alphabet (A-Za-z0-9+/=) is heredoc-safe.
+#
+# `base64 | tr -d '\n'` rather than `base64 -w0`: -w is GNU coreutils only, and
+# on macOS/BSD it is not a valid option, so the command fails and this script
+# aborts — meaning a developer on a macOS host could not generate .env at all.
+# CONTRIBUTING.md documents development outside the devcontainer, so that path is
+# real. Plain `base64` exists on both, and both wrap at 76 columns by default, so
+# stripping newlines gives one line either way.
+OPENOBSERVE_BASIC_AUTH_SECRET_VAL=$(printf '%s' \
+  "${OPENOBSERVE_ROOT_EMAIL_VAL}:${OPENOBSERVE_ROOT_PASSWORD_SECRET_VAL}" | base64 | tr -d '\n')
 
 # Guard: if openssl is missing or fails, command substitution returns an empty
 # string. set -e won't catch that (it only catches non-zero exits at the
 # statement level). Fail fast here rather than writing a .env full of blanks.
 if [[ -z "${POSTGRES_PASSWORD_SECRET_VAL}" || \
       -z "${HYDRA_DB_PASSWORD_SECRET_VAL}" || \
-      -z "${HYDRA_SECRETS_SYSTEM_SECRET_VAL}" ]]; then
+      -z "${HYDRA_SECRETS_SYSTEM_SECRET_VAL}" || \
+      -z "${OPENOBSERVE_PASSWORD_ENTROPY}" || \
+      -z "${OPENOBSERVE_BASIC_AUTH_SECRET_VAL}" ]]; then
   echo "ERROR: secret generation produced an empty value — is openssl installed?" >&2
   exit 1
 fi
@@ -121,6 +156,12 @@ fi
 # generates uses the Docker service name rather than localhost.
 HYDRA_PUBLIC_URL="${HYDRA_PUBLIC_URL:-http://localhost:4444}"
 HYDRA_ADMIN_URL="${HYDRA_ADMIN_URL:-http://localhost:4445}"
+
+# Same override mechanism for OpenObserve: the fixture publishes 5080 on the
+# host's loopback, so a process on the host reaches it at localhost, while one
+# inside the devcontainer must use the compose service name. post-create.sh
+# exports the service-name form before calling this script.
+OPENOBSERVE_URL="${OPENOBSERVE_URL:-http://localhost:5080}"
 
 # Ensure the devcontainer dir exists (for the link) and clear any stale entry at
 # ENV_FILE. The clear matters: if root .env is currently a symlink (e.g. it was
@@ -163,11 +204,26 @@ HYDRA_DB_PASSWORD_SECRET=${HYDRA_DB_PASSWORD_SECRET_VAL}
 HYDRA_SECRETS_SYSTEM_SECRET=${HYDRA_SECRETS_SYSTEM_SECRET_VAL}
 
 # ------------------------------------------------------------
-# Observability (ST0027)
+# Observability (ST0027 / ST0028)
 # ------------------------------------------------------------
-# The ClickHouse-backed obs fixture (collector + ClickHouse + Vector + HyperDX)
-# is part of the base projects/compose stack and needs no .env secrets: the
-# collector is keyless and the HyperDX dev UI registers its own local user.
+# The obs fixture is part of the base projects/compose stack. The OTLP hop from
+# the app to the collector stays keyless; OpenObserve is the one component that
+# requires credentials, on both ingest and query.
+#
+# Auth terminates at the collector: it holds the encoded credential below so the
+# udex application keeps emitting anonymous OTLP and never learns the backend
+# wants one. The integration tests use the same values to query.
+#
+# Public config — override before calling gen-env.sh to change this value.
+OPENOBSERVE_URL=${OPENOBSERVE_URL}
+
+OPENOBSERVE_ROOT_EMAIL=${OPENOBSERVE_ROOT_EMAIL_VAL}
+OPENOBSERVE_ROOT_PASSWORD_SECRET=${OPENOBSERVE_ROOT_PASSWORD_SECRET_VAL}
+
+# Derived — base64(email:password), consumed as the collector's Basic auth
+# header. Rotating the password above without regenerating this will authenticate
+# nothing; always rotate by re-running this script rather than hand-editing.
+OPENOBSERVE_BASIC_AUTH_SECRET=${OPENOBSERVE_BASIC_AUTH_SECRET_VAL}
 EOF
 
 chmod 600 "${ENV_FILE}"

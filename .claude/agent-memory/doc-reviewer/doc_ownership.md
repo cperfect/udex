@@ -19,7 +19,9 @@ Udex repo doc ownership (Highlander). Cross-reference these rather than duplicat
 - DB schema/tables → `projects/rust/datastore/README.md`
 - Rust contribution / pre-commit / version pin table → `projects/rust/CONTRIBUTING.md`
 - k8s/Helm deploy → `projects/k8s/README.md`
-- Observability / OTel design → `docs/ARCHITECTURE.md#observability` (system-level) + `projects/observability/README.md` (local stack). Telemetry crate boundary → `projects/rust/telemetry/README.md` (`udex-telemetry` is the ONLY crate that installs an OTel provider; SDK is provider-free, uses `opentelemetry` API only).
+- Observability / OTel design → `docs/ARCHITECTURE.md#observability` (system-level) + `projects/compose/README.md#observability` (local fixture: services, UI/credentials, where data lands, chart recipes — there is no `projects/observability/` any more). Telemetry crate boundary → `projects/rust/telemetry/README.md` (`udex-telemetry` is the ONLY crate that installs an OTel provider; SDK is provider-free, uses `opentelemetry` API only).
+- Observability *rationale* → `docs/DESIGN_DECISIONS.md#observability`, kept as a layered record: the superseded ST0027 ClickHouse sections are retained deliberately, with an ST0028 "Why OpenObserve instead of ClickHouse + HyperDX?" section after them. ClickHouse/HyperDX/Mongo mentions there (and the posture comparison in `docs/SECRETS.md#observability`, and ClickStack/HyperDX as a third-party backend example in `projects/rust/telemetry/README.md`) are INTENTIONAL history, not staleness.
+- Recurring duplication risk: the obs UI URL + login credential sentence tends to get copied into `projects/compose/README.md`, `.devcontainer/README.md` and `projects/k8s/README.md`. compose/README owns it; the other two should link.
 - Pinned-version table authority → `projects/rust/CONTRIBUTING.md` "Developing" section names the defining file for each version.
 
 Authz fact (verify against `projects/rust/api/src/authz/entry.rs`): LookupOrCreate requires BOTH read AND write (`Operation::LookupOrCreate(_) => &["read","write"]`). Docs that say "write only" are wrong.

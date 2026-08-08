@@ -10,6 +10,27 @@ image:
 # integration tests address individual instances directly to verify this.
 replicaCount: 2
 
+# Container resource requests and limits.
+#
+# Sized from measurement rather than convention: the udex pods idle at ~1m CPU
+# and 4-7Mi memory on the k3d dev cluster. Requests sit comfortably above that so
+# the scheduler has a real number to place against; limits are deliberately
+# generous so the k8s integration tests cannot be throttled or OOM-killed.
+#
+# Note the asymmetry when tuning these: exceeding a memory limit KILLS the
+# container, while exceeding a CPU limit only throttles it. That is why the
+# memory headroom is wide (~70x observed) and the CPU limit is a round core.
+#
+# These are dev defaults. A real deployment should re-measure under its own load
+# rather than inherit them.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 1
+    memory: 512Mi
+
 server:
   bindAddress: "0.0.0.0:443"
   requestTimeoutSecs: 30
@@ -38,11 +59,12 @@ datastore:
   # Apply pending migrations on startup — acceptable for local dev.
   applyMigrations: true
 
-# OpenTelemetry observability. The dev cluster exports OTLP to the ClickHouse-
-# backed collector in the base compose stack (projects/compose), running on the
-# host and reached from k3d pods via host.k3d.internal — the same bridge used for
-# postgres and Hydra. Full sampling for dev. The collector is always-on with the
-# base stack (`docker compose -f projects/compose/docker-compose.yml up -d`).
+# OpenTelemetry observability. The dev cluster exports OTLP to the collector in
+# the base compose stack (projects/compose), running on the host and reached from
+# k3d pods via host.k3d.internal — the same bridge used for postgres and Hydra.
+# The collector forwards to OpenObserve; nothing here names the backend, which is
+# the point. Full sampling for dev. The collector is always-on with the base
+# stack (`docker compose -f projects/compose/docker-compose.yml up -d`).
 observability:
   enabled: true
   # Compose OTel Collector, reachable from k3d pods via the host. OTLP over gRPC

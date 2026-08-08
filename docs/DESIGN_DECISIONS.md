@@ -46,6 +46,8 @@ Udex implements the [standard gRPC Health Checking Protocol](https://github.com/
 
 ## Observability
 
+> **Superseded in part (ST0028).** The reasoning below records why the fixture moved from the Grafana stack to ClickHouse + HyperDX, and it still explains the shape the fixture has today — one always-on store, declaratively configured, with the application coupled only to OTLP. What changed is *which* store: ST0028 replaced ClickHouse, HyperDX and MongoDB with a single **OpenObserve** service. See [Why OpenObserve instead of ClickHouse + HyperDX?](#why-openobserve-instead-of-clickhouse--hyperdx) below. The ClickHouse sections are kept rather than rewritten, because the argument that led there is what makes the later move legible.
+
 ### Why ClickHouse instead of the original Grafana stack (Tempo/Prometheus/Loki)?
 
 The first local observability stack (ST0026) was six services: an OTel Collector fanning out to **Tempo** (traces), **Prometheus** (metrics), and **Loki** (logs), with **Grafana** for the UI and **Vector** shipping container logs. That is four separate stores — each with its own query language, retention, and operational surface — plus a bespoke separate-compose-project that had to attach to the running base stack's network by hand.
@@ -68,7 +70,31 @@ The replaced stack had real strengths: Grafana, Tempo, Prometheus, and Loki are 
 
 We accept those trade-offs because **the goal of this fixture is dev/test simplicity and replicability, not running a production observability platform** — which is precisely why ST0027 exists. For a thing that must come up identically on every developer's machine and in CI, with zero manual steps, and that the test suite can depend on as a hard requirement, "one store, always-on, no network dance, queryable in plain SQL" beats "four best-of-breed stores behind a bespoke side-project." The losses (UI polish, per-signal query ergonomics, store isolation) barely matter for an ephemeral, human-facing-only-in-dev aid, while the wins (fewer moving parts, deterministic bring-up, enforced test coverage) directly target what made the old stack painful. The trade-off would invert at production scale — but that was never this fixture's job, and because the application stays OTLP-agnostic, a real deployment can point at Grafana Cloud, Honeycomb, or anything else with no code change. The fixture optimises for *reproducible development and testing*; production backend choice is left open by design.
 
-For the as-built detail and the work-package history, see steel thread ST0027.
+### Why OpenObserve instead of ClickHouse + HyperDX?
+
+ST0027's argument was "collapse the stores to reduce moving parts." It worked, but it stopped one step short: the *store* collapsed to one while the *fixture* did not. ClickHouse held the data, HyperDX read it, MongoDB existed only to hold HyperDX's own state, and a `hyperdx-init` one-shot registered a local user so a developer never met a signup form. Six services, a ~1.5KB inline `DEFAULT_SOURCES` JSON blob to pre-provision datasources, and three components (HyperDX, Mongo, the init job) that existed solely to make a UI usable.
+
+ST0028 replaced all four with **OpenObserve**, which is store, query API and UI in one binary. In local mode it keeps metadata in SQLite and segments on local disk, so it needs no companion database and no bootstrap. The fixture goes from six services to three: OpenObserve, the collector, and Vector. Backend image footprint drops from about 2.73GB to 525MB. The three observability services cold-start in about 4 seconds — an absolute measurement, not a comparison; the old stack's startup was never timed before it was removed.
+
+Two properties made this worth doing rather than merely tidy:
+
+- **The UI stops being a separate concern.** No datasource seeding, no state database, no user-registration job — the parts most likely to rot were the parts that only existed to serve the reader UI.
+- **Metrics get a real query language.** ClickHouse SQL needed explicit `argMax`-per-series handling for cumulative counters (a trade-off named as a loss in the section above); OpenObserve answers PromQL, so `rate(udex_rpc_requests[5m])` says what it means. That recovers one of the specific things the Grafana stack was better at.
+
+The application was again untouched. It emits anonymous OTLP to a configurable endpoint, and OpenObserve's requirement for credentials on ingest and query is terminated in the **collector's** exporter config — the same separation ST0027 used to keep ClickStack's per-team key away from the app. Vector's log floor was rerouted through the collector for the same reason, so the collector's exporter is the only part of the telemetry pipeline that names a backend. (The test helpers, `gen-env.sh`, `dev-doctor.sh` and CI all name it too — they query or provision it directly. The agnostic boundary is the pipeline, not the repository.)
+
+**Storage is local disk, not object storage.** MinIO was the original proposal and was rejected: it reintroduces a stateful service and a bucket bootstrap to a fixture whose entire purpose is being light, and the object-storage path is not a Udex capability under test. The OTel capability that matters is the application's OTLP emission, which is identical either way.
+
+The costs, stated rather than glossed:
+
+- **A credential now crosses the compose network.** ClickHouse was keyless. OpenObserve requires authentication, so the fixture carries a generated password and a derived Basic header over a plaintext in-network hop. Dev-only and loopback-published, but a genuine weakening — see [docs/SECRETS.md](SECRETS.md#observability).
+- **OpenObserve is a 0.x product**, less mature than ClickHouse, and its image is distroless — so it cannot host a compose healthcheck at all, and dependents gate on `service_started` instead.
+- **Schema is derived from ingested data**, so a stream or column does not exist until something writes it. That is convenient (nothing to provision) but means queries against a cold fixture must tolerate not-yet-ingested responses without letting a genuinely wrong column name pass unnoticed.
+- **The container-log floor lost its independence.** Under ST0027 Vector wrote to the store directly, so postgres/hydra logs survived a collector outage. Routing Vector through the collector — done so that only the collector names a backend — means an outage now takes both. The trade was accepted because the *application's* durable floor is its own JSON-on-stdout, which is unaffected, and because a dev fixture is not where log durability is load-bearing. It is still a property that was given up rather than one that carried over.
+
+The reasoning is the same one that justified ST0027, applied once more: for a fixture that must come up identically everywhere with zero manual steps, fewer moving parts wins, and the application's OTLP-agnostic boundary is what makes the swap cheap enough to be worth making twice.
+
+For the as-built detail and the work-package history, see steel threads ST0027 and ST0028.
 
 ## Scope and non-goals
 

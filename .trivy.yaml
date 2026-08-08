@@ -1,20 +1,49 @@
+# `severity` and `exit-code` are TOP-LEVEL keys in Trivy's config schema, not
+# members of `scan:`. They were previously nested and therefore silently ignored:
+# scans reported LOW findings despite the threshold below, and exited 0 even with
+# HIGH findings present. Verified by running the same image against both layouts
+# — nested exits 0, top-level exits 1.
+#
+# CI was unaffected, because 02-Security.yml passes severity and exit-code as
+# action inputs, which is exactly what hid the problem: the gate worked in CI
+# while every local `trivy fs --config .trivy.yaml .` quietly refused to fail.
+severity:
+  - MEDIUM
+  - HIGH
+  - CRITICAL
+exit-code: 1        # Non-zero exit when issues at or above the severity threshold are found
+
 scan:
   scanners:
     - vuln          # CVEs in Cargo.lock and other dependency manifests
     - secret        # Hardcoded credentials, API keys, tokens
     - misconfig     # IaC and config file misconfigurations
     - license       # Dependency licence detection
-  severity:
-    - MEDIUM
-    - HIGH
-    - CRITICAL
-  exit-code: 1      # Non-zero exit when issues at or above severity threshold are found
   ignorefile: .trivyignore
   # Skip third-party Claude Code marketplace plugins installed into the devcontainer.
   # These bun.lock files are owned and versioned by the plugin authors, not this repo.
   # We have no control over their dependency versions and do not ship them in production.
   skip-dirs:
     - .devcontainer/home/.claude
+  # Locally generated dev TLS key material for the k3d Traefik edge. Produced by
+  # scripts/gen-keys-and-certs.sh, gitignored (.gitignore:11), never committed and
+  # never deployed anywhere but a developer's own cluster.
+  #
+  # This extends a convention Trivy already applies rather than inventing one:
+  # its built-in secret allow-rules exempt paths containing `tests/`, which is why
+  # the equally generated, equally gitignored keys under
+  # projects/rust/server/tests/{certs,jwt}/ are not reported. Verified: scanning
+  # projects/rust/server finds 0 private keys, while scanning
+  # projects/rust/server/tests — where the path no longer contains `tests/` —
+  # finds 4. These two files are flagged only because their path happens to read
+  # `traefik/certs` instead.
+  #
+  # Deliberately scoped to the two exact files, NOT the directory: a new or
+  # unexpected key appearing alongside them must still be reported. Re-check this
+  # if regenerate_certs.sh ever emits a differently named key.
+  skip-files:
+    - projects/k8s/traefik/certs/ca.key
+    - projects/k8s/traefik/certs/tls.key
 
 # Render the Helm chart for misconfig scanning. The chart uses `required` on
 # secrets.databaseUrl / tlsCrt / tlsKey (secret.yaml) and traefikTlsCrt /

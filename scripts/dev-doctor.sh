@@ -292,6 +292,32 @@ else
     "Debian/Ubuntu: apt-get install jq   macOS: brew install jq"
 fi
 
+# trivy (security scanner; mirrors the 02-Security CI job)
+#
+# Version policy is MAJOR-ONLY, so a developer running a slightly newer Trivy is
+# not blocked. Be clear about what that buys on a 0.x tool: every release so far
+# is major 0, so this catches a jump to 1.x but not a 0.x minor bump — and minor
+# bumps are exactly where Trivy's checks and severity mappings move. The
+# authoritative pin is TRIVY_VERSION in .devcontainer/Dockerfile; the running
+# version is printed below so drift from it is visible.
+REQUIRED_TRIVY_MAJOR="0"
+if command -v trivy &>/dev/null; then
+  TRIVY_VER=$(trivy --version 2>/dev/null | awk '/^Version:/ {print $2}')
+  TRIVY_MAJOR="${TRIVY_VER%%.*}"
+  if is_nonempty_integer "${TRIVY_MAJOR}" && [[ "${TRIVY_MAJOR}" -eq "${REQUIRED_TRIVY_MAJOR}" ]]; then
+    pass "trivy $TRIVY_VER (need major $REQUIRED_TRIVY_MAJOR)"
+  elif is_nonempty_integer "${TRIVY_MAJOR}"; then
+    fail "trivy $TRIVY_VER (need major $REQUIRED_TRIVY_MAJOR)" \
+      "Rebuild the devcontainer to get the pinned version, or see CONTRIBUTING.md for a host install"
+  else
+    fail "trivy version could not be parsed" \
+      "Rebuild the devcontainer, or see CONTRIBUTING.md for a host install"
+  fi
+else
+  fail "trivy not found" \
+    "Rebuild the devcontainer (it installs the pinned version), or see CONTRIBUTING.md for a host install"
+fi
+
 # --- Environment & fixtures ------------------------------------------------
 echo ""
 echo "==> Environment & fixtures"
@@ -382,6 +408,41 @@ if [[ "${POSTGRES_READY}" == true && -n "${POSTGRES_PASSWORD_SECRET:-}" ]] && co
         "The DB keeps its init-time password. To realign, reset the volume: docker compose -f projects/compose/docker-compose.yml --env-file .env down -v && bash scripts/gen-env.sh --force  (see docs/SECRETS.md)"
     fi
   fi
+fi
+
+# OpenObserve — the observability fixture's store, query API and UI (ST0028).
+# Always-on like postgres and hydra: the obs tests FAIL rather than skip when it
+# is unreachable, so a missing fixture should be diagnosed here, not in a test.
+#
+# Version policy is MAJOR-ONLY, matching the docker compose check above. Note
+# what that does and does not buy on a 0.x product: every release so far is
+# major 0, so this catches a jump to 1.x but not a 0.x minor bump that changes
+# the search API. The authoritative pin is the image tag in
+# projects/compose/docker-compose.yml; the running version is printed below so
+# drift from that pin is at least visible.
+REQUIRED_OPENOBSERVE_MAJOR="0"
+OPENOBSERVE_URL_CHECK="${OPENOBSERVE_URL:-http://localhost:5080}"
+if curl -sf --max-time 5 "${OPENOBSERVE_URL_CHECK}/healthz" &>/dev/null; then
+  # /config is unauthenticated and reports the build version.
+  OPENOBSERVE_VER=$(curl -sf --max-time 5 "${OPENOBSERVE_URL_CHECK}/config" 2>/dev/null \
+    | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "")
+  if [[ -z "${OPENOBSERVE_VER}" ]]; then
+    # Reachable but version not reported — do not fail the environment over a
+    # cosmetic lookup.
+    pass "OpenObserve healthy — ${OPENOBSERVE_URL_CHECK} (version unreported)"
+  else
+    OPENOBSERVE_MAJOR="${OPENOBSERVE_VER#v}"
+    OPENOBSERVE_MAJOR="${OPENOBSERVE_MAJOR%%.*}"
+    if [[ "${OPENOBSERVE_MAJOR}" == "${REQUIRED_OPENOBSERVE_MAJOR}" ]]; then
+      pass "OpenObserve healthy — ${OPENOBSERVE_URL_CHECK} (${OPENOBSERVE_VER}, need major ${REQUIRED_OPENOBSERVE_MAJOR})"
+    else
+      fail "OpenObserve ${OPENOBSERVE_VER} (need major ${REQUIRED_OPENOBSERVE_MAJOR})" \
+        "The compose fixture pins the supported version. Re-pull it: docker compose -f projects/compose/docker-compose.yml --env-file .env pull openobserve && docker compose -f projects/compose/docker-compose.yml --env-file .env up -d openobserve"
+    fi
+  fi
+else
+  fail "OpenObserve not reachable (${OPENOBSERVE_URL_CHECK})" \
+    "Run: docker compose -f projects/compose/docker-compose.yml --env-file .env up -d  (if it is running but unhealthy, check OPENOBSERVE_ROOT_PASSWORD_SECRET in .env — OpenObserve panics on boot when the password lacks lower/upper/digit/special)"
 fi
 
 # Hydra admin API

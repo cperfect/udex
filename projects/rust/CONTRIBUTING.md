@@ -30,8 +30,13 @@ The container pins the following versions:
 | protoc | v34.1 | `.devcontainer/devcontainer.json` (`features.protoc.version`) |
 | Ory Hydra | v26.2.0 | `projects/compose/docker-compose.yml` |
 | PostgreSQL | 16 | `projects/compose/docker-compose.yml` |
+| OpenObserve | v0.92.0 | `projects/compose/docker-compose.yml` |
+| Trivy | 0.73.0 | `.devcontainer/Dockerfile` (`ARG TRIVY_VERSION`) |
+| Runtime base image | `gcr.io/distroless/cc-debian12` (by digest) | `projects/rust/cli/Dockerfile` |
+| OTel Collector (contrib) | 0.119.0 | `projects/compose/docker-compose.yml` |
+| Vector | 0.44.0 | `projects/compose/docker-compose.yml` |
 
-To update any of these, change the version in the file listed above. For Hydra, also update `HYDRA_VERSION` and `HYDRA_TARBALL` in `.devcontainer/post-create.sh` and fetch the new SHA-256 from the corresponding `checksums.txt` release asset.
+To update any of these, change the version in the file listed above. For Hydra, also update `HYDRA_VERSION` and `HYDRA_TARBALL` in `.devcontainer/post-create.sh` and fetch the new SHA-256 from the corresponding `checksums.txt` release asset. For OpenObserve, `scripts/dev-doctor.sh` checks the running fixture against `REQUIRED_OPENOBSERVE_MAJOR` and must move with a major bump.
 
 ```bash
 # Build the workspace
@@ -68,13 +73,37 @@ cargo clippy --all-targets -- -D warnings
 > visible through the other). Direct hops trust the pod cert (server CA, SNI
 > `localhost`); the load-balanced path uses the Traefik edge cert.
 >
-> **Observability tests** — The observability fixture (ClickHouse-backed; part of the base `projects/compose` stack) is a hard dependency like Hydra: the obs tests query ClickHouse and **fail, never skip**, if it is unreachable. The always-run, non-k8s `obs.rs` test stands up a local server with OTLP export on and asserts traces/metrics/logs land in ClickHouse on every `cargo test`. The `test_obs_k8s_` tests additionally assert the k3d deployment's telemetry lands; they reuse the k8s fixture, so they return early when `K8S_SERVER_URL` is unset. ClickHouse is reached by the `clickhouse` service name in the devcontainer; override with `CLICKHOUSE_URL` (CI uses `http://localhost:8123`).
+> **Observability tests** — The observability fixture (OpenObserve-backed; part of the base `projects/compose` stack) is a hard dependency like Hydra: the obs tests query OpenObserve and **fail, never skip**, if it is unreachable. The always-run, non-k8s `obs.rs` binary stands up a local server with OTLP export on and asserts traces/metrics/logs land on every `cargo test`; it also covers the postgres/hydra container log floor and the collector's `postgresql.backends` receiver metric. The `test_obs_k8s_` tests additionally assert the k3d deployment's telemetry lands; they reuse the k8s fixture, so they **return early when `K8S_SERVER_URL` is unset** — a skip that reports as `ok` in 0.00s, so check the elapsed time before reading a green run as coverage. OpenObserve is reached by the `openobserve` service name in the devcontainer; override with `OPENOBSERVE_URL` (CI uses `http://localhost:5080`), and credentials come from `OPENOBSERVE_ROOT_EMAIL` / `OPENOBSERVE_ROOT_PASSWORD_SECRET`.
+>
+> Two properties of the query helpers in `sdk/tests/common/mod.rs` are worth knowing before adding an assertion. First, a rejected query is surfaced with the API's own reason rather than swallowed — column names are easy to get wrong (see [where the data lands](../compose/README.md#where-the-data-lands)), and a typo would otherwise be indistinguishable from missing telemetry. Second, on a cold fixture a stream or column does not exist yet, so `openobserve_await` tolerates not-yet-ingested responses while polling, but if the budget expires with the *most recent* attempt still rejected that way it fails naming the stream or column — and says whether anything ever resolved, since "never resolved" points at a wrong name far harder than "resolved, then stopped". Use it for baseline-then-poll assertions rather than hand-rolling a loop.
+>
+> **Every test must pass on its own.** A test may not rely on another having run
+> first, and may not destroy shared fixture state that others read. Establish the
+> preconditions you assert on — create and populate your own index rather than
+> borrowing the shared one; `client_scoped_to_index` and
+> `hydra_client_scoped_to_index` exist for exactly that (the shared tokens carry
+> entry scopes only for the shared index).
+>
+> ```bash
+> bash scripts/validate-test-isolation.sh          # udex-sdk integration_tests, ~20s
+> bash scripts/validate-test-isolation.sh udex-sdk obs
+> ```
+>
+> This runs each test alone in a fresh process and is gated in CI. It exists
+> because a test that assumed another had populated the shared index destroyed
+> that index when it ran first, failing nine unrelated tests with a misleading
+> "index not found" — and a second instance of the same defect was found only by
+> this sweep, never by an observed failure (ST0029). A suite that always runs
+> whole cannot tell you which of its tests are load-bearing for others.
 >
 > **Integration test naming** — Every integration test function must be prefixed
 > with a layer indicator: `test_sdk_`, `test_sdk_oauth2_`, `test_sdk_k8s_`,
-> `test_sdk_k8s_multi_`, `test_obs_k8s_`, `test_server_`, `test_server_oauth2_`,
+> `test_sdk_k8s_multi_`, `test_obs_k8s_`, `obs_` (the always-run, non-k8s
+> observability binary `sdk/tests/obs.rs`), `test_server_`, `test_server_oauth2_`,
 > `test_index_service_`, `test_entry_service_`, `test_datastore_`, or `test_cli_`.
 > This makes it immediately obvious from output which layer a failing test covers.
+> Unit tests of shared test scaffolding (e.g. the `pending_reason_*` tests in
+> `sdk/tests/common/`) are exempt — they exercise the helpers, not a layer.
 > Shared fixture helpers live in `udex-test-utils` — check there before duplicating
 > fixture code.
 

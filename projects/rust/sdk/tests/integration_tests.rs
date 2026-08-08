@@ -35,8 +35,9 @@ use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, regis
 
 mod common;
 use common::{
-    clickhouse_count, clickhouse_scalar_f64, clickhouse_trace_span_names, context_input,
-    jwt_key_path, make_token, now_unix_nanos, server_cert_path, wait_for_server,
+    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_await,
+    openobserve_pending_scalar_f64, openobserve_trace_span_names, server_cert_path,
+    wait_for_server,
 };
 
 // ── Port constants ────────────────────────────────────────────────────────────
@@ -162,6 +163,41 @@ pub async fn data(serial: bool) -> Data<'static, JwtFixture> {
     DATA.get_or_init(|| MaybeOnceAsync::new(|| Box::pin(init_jwt_fixture())))
         .data(serial)
         .await
+}
+
+/// Builds a second client against the shared JWT server whose token carries
+/// **entry** scopes for `index_name`.
+///
+/// The shared fixture's own token is scoped to the shared index, so a test that
+/// creates its own index can manage the index itself (index-level scopes are
+/// wildcarded) but cannot put entries in it. Anything needing a populated
+/// index of its own goes through here rather than borrowing the shared one.
+async fn client_scoped_to_index(index_name: &str) -> UdexClient {
+    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
+        .await
+        .expect("read CA cert");
+    let private_key_pem = tokio::fs::read_to_string(jwt_key_path("signing_private_key.pem"))
+        .await
+        .expect("read JWT private key");
+    let signing_key = EncodingKey::from_ec_pem(private_key_pem.as_bytes()).expect("EncodingKey");
+    let token = make_token(
+        &signing_key,
+        &format!("{ID_PREFIX}-issuer"),
+        &format!("{ID_PREFIX}-audience"),
+        index_name,
+        None,
+    );
+
+    UdexClient::connect(
+        ClientOptions::builder()
+            .endpoint(format!("https://{SDK_JWT_BIND_ADDR}"))
+            .ca_cert_pem_bytes(ca_pem)
+            .static_bearer_token(token)
+            .build()
+            .unwrap(),
+    )
+    .await
+    .expect("SDK connect failed")
 }
 
 // ── Hydra fixture ─────────────────────────────────────────────────────────────
@@ -291,6 +327,68 @@ pub async fn data_hydra(serial: bool) -> Data<'static, HydraFixture> {
         .get_or_init(|| MaybeOnceAsync::new(|| Box::pin(init_hydra_fixture())))
         .data(serial)
         .await
+}
+
+/// OAuth2 counterpart of [`client_scoped_to_index`]: a Hydra client that can
+/// manage entries in an index the test created for itself.
+///
+/// The shared Hydra fixture's scopes are bound to the shared index, so a test
+/// that creates its own index cannot populate it with the shared client. Rather
+/// than widening the shared client's scopes — which would quietly change what
+/// every other OAuth2 test exercises — this registers a separate one.
+///
+/// The scopes are **wildcarded rather than naming a specific index**, and that is
+/// deliberate. `register_hydra_client` upserts (it PUTs on a 409), and Hydra
+/// persists clients in PostgreSQL that outlive a single run. A per-index scope
+/// under a fixed `client_id` would therefore be rewritten by every caller, so two
+/// tests using this concurrently could overwrite each other's scope between
+/// registration and token fetch — one would then get a token missing
+/// `udex:entry:v1:<its index>:create` and fail with a permission error instead of
+/// its real assertion. A flake of exactly the kind ST0029 removed. With a
+/// constant scope every registration is byte-identical and the ordering stops
+/// mattering.
+async fn hydra_client_for_owned_index() -> UdexClient {
+    let admin_url = hydra_admin_url();
+    let public_url = hydra_public_url();
+    let audience = format!("{ID_HYDRA_PREFIX}-audience");
+    let client_id = format!("{ID_HYDRA_PREFIX}-scoped-client");
+    let client_secret = "sdk-hydra-scoped-secret".to_string();
+
+    // `*` matches the index-name position, the same way the shared fixture's
+    // `udex:index:v1:*:delete` already does.
+    let scope = "udex:index:v1:list \
+         udex:index:v1:create \
+         udex:index:v1:*:read \
+         udex:index:v1:*:delete \
+         udex:entry:v1:*:create \
+         udex:entry:v1:*:read \
+         udex:entry:v1:*:write \
+         udex:entry:v1:*:delete"
+        .to_string();
+
+    register_hydra_client(&admin_url, &client_id, &client_secret, &audience, &scope).await;
+
+    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
+        .await
+        .expect("read CA cert");
+
+    UdexClient::connect(
+        ClientOptions::builder()
+            .endpoint(format!("https://{SDK_HYDRA_BIND_ADDR}"))
+            .ca_cert_pem_bytes(ca_pem)
+            .client_credentials(
+                format!("{public_url}/oauth2/token"),
+                &client_id,
+                &client_secret,
+            )
+            .audience(&audience)
+            .scope(scope)
+            .dangerous_allow_non_tls() // Hydra token endpoint is plain HTTP in the dev environment
+            .build()
+            .unwrap(),
+    )
+    .await
+    .expect("SDK hydra connect failed")
 }
 
 // ── JWT-backed tests (always run) ─────────────────────────────────────────────
@@ -1228,10 +1326,44 @@ async fn test_sdk_delete_index_empty() {
 async fn test_sdk_delete_index_not_empty() {
     let d = data(false).await;
     let client = &d.0;
-    let index_name = &d.1;
 
-    // The shared index has entries from other tests; attempting to delete it must fail.
-    let err = client.delete_index(index_name).await.unwrap_err();
+    // This test creates and populates its OWN index rather than borrowing the
+    // shared one.
+    //
+    // It used to assert against the shared index on the assumption that other
+    // tests had already put entries in it — an ordering dependency nothing
+    // enforced. When this test won the race and ran first the index was empty, so
+    // the delete SUCCEEDED, `unwrap_err` panicked, and the shared fixture index
+    // was destroyed, failing every later test with a misleading
+    // "Index 'sdk-integration-test-index' not found". Run on its own it could
+    // never pass at all.
+    //
+    // Owning the index also contains the blast radius: if delete-on-non-empty
+    // ever regresses, this test fails alone instead of taking the suite with it.
+    let index_name = format!("{ID_PREFIX}-delete-not-empty-{}", now_unix_nanos());
+
+    client
+        .create_index(CreateIndexRequest {
+            name: index_name.clone(),
+            display_name: "Delete Not Empty".to_string(),
+            description: "delete-non-empty test".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 10,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        })
+        .await
+        .expect("create_index failed");
+
+    // The shared client's token carries entry scopes for the shared index only.
+    let scoped = client_scoped_to_index(&index_name).await;
+    scoped
+        .create_entry(&index_name, context_input(&[("delete_guard", &index_name)]))
+        .await
+        .expect("create_entry failed — the index must be non-empty for this test to mean anything");
+
+    let err = client.delete_index(&index_name).await.unwrap_err();
     assert!(
         matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::FAILED_PRECONDITION),
         "expected FailedPrecondition for non-empty index, got: {err}"
@@ -1293,10 +1425,34 @@ async fn test_sdk_oauth2_delete_index_empty() {
 async fn test_sdk_oauth2_delete_index_not_empty() {
     let d = data_hydra(false).await;
     let client = &d.0;
-    let index_name = &d.1;
 
-    // The shared Hydra index has entries from other tests; deletion must fail.
-    let err = client.delete_index(index_name).await.unwrap_err();
+    // Own index, own entry — see `test_sdk_delete_index_not_empty` for why. This
+    // is the OAuth2 twin of the same defect: it assumed other tests had populated
+    // the shared Hydra index, so on its own the index was empty, the delete
+    // succeeded, and it took the shared Hydra fixture down with it.
+    let index_name = format!("{ID_HYDRA_PREFIX}-delete-not-empty-{}", now_unix_nanos());
+
+    client
+        .create_index(CreateIndexRequest {
+            name: index_name.clone(),
+            display_name: "OAuth2 Delete Not Empty".to_string(),
+            description: "oauth2 delete-non-empty test".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 10,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        })
+        .await
+        .expect("create_index failed");
+
+    let scoped = hydra_client_for_owned_index().await;
+    scoped
+        .create_entry(&index_name, context_input(&[("delete_guard", &index_name)]))
+        .await
+        .expect("create_entry failed — the index must be non-empty for this test to mean anything");
+
+    let err = client.delete_index(&index_name).await.unwrap_err();
     assert!(
         matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::FAILED_PRECONDITION),
         "expected FailedPrecondition for non-empty index via Hydra, got: {err}"
@@ -2126,9 +2282,9 @@ async fn test_sdk_k8s_multi_cross_instance_crud() {
 
 // ── Observability tests (k8s) ───────────────────────────────────────────────
 //
-// These assert that telemetry from the k8s deployment lands in ClickHouse — the
-// unified store the collector exports to (ST0027). ClickHouse is an always-on
-// dev/CI fixture like Hydra: the ClickHouse helpers (in `common`) FAIL if it is
+// These assert that telemetry from the k8s deployment lands in OpenObserve — the
+// unified store the collector exports to (ST0028). OpenObserve is an always-on
+// dev/CI fixture like Hydra: the OpenObserve helpers (in `common`) FAIL if it is
 // unreachable, they do NOT skip. These tests still gate on the k8s fixture
 // (`data_k8s`), returning early when `K8S_SERVER_URL` is unset.
 //
@@ -2136,7 +2292,7 @@ async fn test_sdk_k8s_multi_cross_instance_crud() {
 // server-generated `key` span attribute; the metric/log assertions use a
 // baseline-then-increase comparison. The k8s deployment exports OTLP (plaintext
 // gRPC) to the compose collector via `host.k3d.internal:4317`; the tests query
-// ClickHouse by the `clickhouse` service name (override with CLICKHOUSE_URL).
+// OpenObserve by the `openobserve` service name (override with OPENOBSERVE_URL).
 
 #[rstest]
 #[tokio_shared_rt::test]
@@ -2148,7 +2304,7 @@ async fn test_obs_k8s_traces_land() {
 
     // A unique context yields a new entry with a server-generated key; the server
     // stamps that key onto the db.create_entry span as the `key` attribute, giving
-    // us a run-specific handle to find this exact request's trace in ClickHouse.
+    // us a run-specific handle to find this exact request's trace in OpenObserve.
     let tag = format!("obs-{}", now_unix_nanos());
     let resp = client
         .create_entry(index_name, context_input(&[("obs_tag", &tag)]))
@@ -2156,10 +2312,10 @@ async fn test_obs_k8s_traces_land() {
         .expect("create_entry for obs trace test");
     let key = resp.key;
 
-    let spans = clickhouse_trace_span_names(&key).await;
+    let spans = openobserve_trace_span_names(&key).await;
     assert!(
         !spans.is_empty(),
-        "no trace found in ClickHouse for entry key {key}"
+        "no trace found in OpenObserve for entry key {key}"
     );
     // The request span is named after the full gRPC method path; the datastore
     // span is db.create_entry.
@@ -2181,55 +2337,65 @@ async fn test_obs_k8s_metrics_land() {
         return;
     };
 
-    // Run-specific check: capture the cumulative ListIndices counter, make the
-    // call, then poll for an increase - so a stale series from a prior run cannot
-    // satisfy the test. Budget is generous because the OTel metric export interval
-    // (default 60s) gates how soon the increment lands in ClickHouse.
+    // Capture the cumulative ListIndices counter, make the call, then poll for an
+    // increase, so telemetry from a PRIOR run cannot satisfy the test on its own.
+    // Budget is generous because the OTel metric export interval (default 60s)
+    // gates how soon the increment lands in OpenObserve.
+    //
+    // Unlike the non-k8s obs tests, this is NOT scoped to a single run. Those tag
+    // their telemetry with a `udex.test.run` resource attribute set at server
+    // startup; here the server is a long-lived k8s Deployment whose resource
+    // attributes come from the Helm chart, identical for every run, so there is no
+    // per-run value to filter on short of redeploying. `deployment_environment`
+    // narrows to cluster-originated telemetry and no further. The consequence:
+    // baseline-then-increase rules out pre-existing data, but concurrent traffic
+    // against the same deployment — another test, or a second CI job sharing the
+    // store — could also satisfy the increase.
     //
     // `udex.rpc.requests` is a CUMULATIVE counter, so each export writes a new row
-    // with the running total. We take the latest value per series (argMax over
-    // TimeUnix, grouped by pod instance + status code) and sum across the two
-    // replicas, giving a monotonic total that rises by one whichever pod the
-    // load-balanced request hits.
+    // with the running total. We take the latest value per series and sum across
+    // the two replicas, giving a monotonic total that rises by one whichever pod
+    // the load-balanced request hits.
+    //
+    // max(value) is the argMax equivalent - OpenObserve's DataFusion build has no
+    // max_by - and is CORRECT ONLY BECAUSE the counter is monotonic cumulative, so
+    // a series' latest value is also its largest. The metric lives in its own
+    // stream named after the metric, dots as underscores.
     let method = "/udex.index.v1.IndexService/ListIndices";
     let metric_query = format!(
-        "SELECT sum(v) FROM ( \
-           SELECT argMax(Value, TimeUnix) AS v FROM otel.otel_metrics_sum \
-           WHERE MetricName = 'udex.rpc.requests' \
-             AND Attributes['rpc.method'] = '{method}' \
-             AND ResourceAttributes['deployment.environment'] = 'k3d' \
-           GROUP BY ResourceAttributes['service.instance.id'], \
-                    Attributes['rpc.grpc.status_code'] )"
+        "SELECT sum(m) AS total FROM ( \
+           SELECT max(value) AS m FROM \"udex_rpc_requests\" \
+           WHERE rpc_method = '{method}' \
+             AND deployment_environment = 'k3d' \
+           GROUP BY service_instance_id, rpc_grpc_status_code )"
     );
-    let baseline = clickhouse_scalar_f64(&metric_query).await.unwrap_or(0.0);
+    // The metric variant tolerates a not-yet-existent column: OpenObserve builds
+    // stream schema from ingested data, and with a 60s export interval a
+    // freshly-rolled deployment has not produced a `deployment.environment`
+    // datapoint yet. Traces and logs arrive near-instantly, so only metrics race.
+    let baseline = openobserve_pending_scalar_f64(&metric_query, "metrics")
+        .await
+        .unwrap_or(0.0);
 
     client
         .list_indices()
         .await
         .expect("list_indices for obs metric test");
 
-    let mut increased = false;
-    for _ in 0..45u32 {
-        if let Some(v) = clickhouse_scalar_f64(&metric_query).await {
-            if v > baseline {
-                increased = true;
-                break;
-            }
-        }
-        sleep(Duration::from_secs(2)).await;
-    }
+    // A column that never resolves fails inside the helper naming it, so this
+    // assertion only fires for genuinely absent telemetry.
     assert!(
-        increased,
+        openobserve_await(&metric_query, "metrics", baseline, 45)
+            .await
+            .is_some(),
         "udex.rpc.requests for {method} did not increase after the request (baseline {baseline})"
     );
 
-    // PostgreSQL receiver metric — the collector scrapes the DB continuously, so a
-    // presence check is appropriate here.
-    let pg = clickhouse_count(
-        "SELECT count() FROM otel.otel_metrics_sum WHERE MetricName = 'postgresql.backends'",
-    )
-    .await;
-    assert!(pg > 0, "no postgresql.backends metric in ClickHouse");
+    // The PostgreSQL receiver metric is deliberately NOT asserted here. It is a
+    // property of the compose collector, not of the k8s deployment, so checking it
+    // from a cluster-gated test only hid it from anyone without a cluster — which
+    // is exactly the gap ST0028 WP03 closed. `obs.rs::obs_postgres_receiver_metric_lands`
+    // is the single owner, and it runs on every `cargo test`.
 }
 
 #[rstest]
@@ -2242,29 +2408,25 @@ async fn test_obs_k8s_logs_land() {
 
     // Run-specific check: count udex-server logs now, make a request (each
     // authenticated request emits an authz audit "request authenticated" info log
-    // that reaches ClickHouse via the OTLP logs pipeline), then assert the count
+    // that reaches OpenObserve via the OTLP logs pipeline), then assert the count
     // increases - so pre-existing logs cannot satisfy the test on their own.
     let count_query =
-        "SELECT count() FROM otel.otel_logs WHERE ServiceName = 'udex-server'".to_string();
-    let baseline = clickhouse_scalar_f64(&count_query).await.unwrap_or(0.0);
+        "SELECT count(*) AS n FROM \"default\" WHERE service_name = 'udex-server'".to_string();
+    // Cold-store tolerant: on a freshly created fixture the logs stream does not
+    // exist until the first record is ingested.
+    let baseline = openobserve_pending_scalar_f64(&count_query, "logs")
+        .await
+        .unwrap_or(0.0);
 
     client
         .list_indices()
         .await
         .expect("list_indices for obs log test");
 
-    let mut increased = false;
-    for _ in 0..30u32 {
-        if let Some(v) = clickhouse_scalar_f64(&count_query).await {
-            if v > baseline {
-                increased = true;
-                break;
-            }
-        }
-        sleep(Duration::from_secs(2)).await;
-    }
     assert!(
-        increased,
-        "udex-server logs in ClickHouse did not increase after the request (baseline {baseline})"
+        openobserve_await(&count_query, "logs", baseline, 30)
+            .await
+            .is_some(),
+        "udex-server logs in OpenObserve did not increase after the request (baseline {baseline})"
     );
 }
