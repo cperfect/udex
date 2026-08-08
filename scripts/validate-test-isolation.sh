@@ -94,7 +94,44 @@ if [[ ! -d "${PKG_DIR}" ]]; then
   exit 1
 fi
 
-mapfile -t TESTS < <(cd "${PKG_DIR}" && "${BIN}" --list --format terse 2>/dev/null | sed -n 's/: test$//p')
+# Capture the listing with command substitution, NOT `mapfile < <(...)`. Process
+# substitution runs the producer asynchronously and discards its exit status, so
+# a listing that failed or was cut short would yield a partial set of names and
+# this script would cheerfully report "20/20 pass" while silently skipping the
+# other 23. Under-reporting coverage is the exact failure mode the sweep exists
+# to catch, so it must not be able to do it itself.
+#
+# stderr is deliberately not suppressed: if listing fails, the reason should be
+# on screen.
+LIST_RAW="$(cd "${PKG_DIR}" && "${BIN}" --list)" || {
+  echo "ERROR: could not list tests in ${BIN}" >&2
+  exit 1
+}
+
+# The default (non-terse) list format ends with "N tests, M benchmarks". Parsing
+# that and checking it against the names actually collected turns a truncated
+# read into a loud failure rather than a quiet under-count — exit status alone
+# would not catch output lost after a successful exit.
+TESTS=()
+DECLARED=""
+while IFS= read -r line; do
+  case "${line}" in
+    *": test") TESTS+=("${line%: test}") ;;
+    *" tests, "*" benchmarks"*) DECLARED="${line%% *}" ;;
+  esac
+done <<<"${LIST_RAW}"
+
+if [[ -z "${DECLARED}" ]]; then
+  echo "ERROR: no test-count summary in the --list output of ${BIN}." >&2
+  echo "The libtest list format has probably changed; refusing to sweep an unverifiable set." >&2
+  exit 1
+fi
+
+if [[ ${#TESTS[@]} -ne ${DECLARED} ]]; then
+  echo "ERROR: parsed ${#TESTS[@]} test names but ${BIN} declared ${DECLARED}." >&2
+  echo "The listing was truncated or its format changed; refusing to report a partial sweep." >&2
+  exit 1
+fi
 
 if [[ ${#TESTS[@]} -eq 0 ]]; then
   echo "ERROR: no tests found in ${BIN} — has the target name changed?" >&2
