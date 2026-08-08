@@ -165,6 +165,41 @@ pub async fn data(serial: bool) -> Data<'static, JwtFixture> {
         .await
 }
 
+/// Builds a second client against the shared JWT server whose token carries
+/// **entry** scopes for `index_name`.
+///
+/// The shared fixture's own token is scoped to the shared index, so a test that
+/// creates its own index can manage the index itself (index-level scopes are
+/// wildcarded) but cannot put entries in it. Anything needing a populated
+/// index of its own goes through here rather than borrowing the shared one.
+async fn client_scoped_to_index(index_name: &str) -> UdexClient {
+    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
+        .await
+        .expect("read CA cert");
+    let private_key_pem = tokio::fs::read_to_string(jwt_key_path("signing_private_key.pem"))
+        .await
+        .expect("read JWT private key");
+    let signing_key = EncodingKey::from_ec_pem(private_key_pem.as_bytes()).expect("EncodingKey");
+    let token = make_token(
+        &signing_key,
+        &format!("{ID_PREFIX}-issuer"),
+        &format!("{ID_PREFIX}-audience"),
+        index_name,
+        None,
+    );
+
+    UdexClient::connect(
+        ClientOptions::builder()
+            .endpoint(format!("https://{SDK_JWT_BIND_ADDR}"))
+            .ca_cert_pem_bytes(ca_pem)
+            .static_bearer_token(token)
+            .build()
+            .unwrap(),
+    )
+    .await
+    .expect("SDK connect failed")
+}
+
 // ── Hydra fixture ─────────────────────────────────────────────────────────────
 
 type HydraFixture = (
@@ -292,6 +327,56 @@ pub async fn data_hydra(serial: bool) -> Data<'static, HydraFixture> {
         .get_or_init(|| MaybeOnceAsync::new(|| Box::pin(init_hydra_fixture())))
         .data(serial)
         .await
+}
+
+/// OAuth2 counterpart of [`client_scoped_to_index`]: registers a Hydra client
+/// carrying **entry** scopes for `index_name` and connects with it.
+///
+/// The shared Hydra fixture's scopes are bound to the shared index, so a test
+/// that creates its own index cannot populate it with the shared client. Rather
+/// than widening the shared client's scopes — which would quietly change what
+/// every other OAuth2 test exercises — this registers a separate one.
+async fn hydra_client_scoped_to_index(index_name: &str) -> UdexClient {
+    let admin_url = hydra_admin_url();
+    let public_url = hydra_public_url();
+    let audience = format!("{ID_HYDRA_PREFIX}-audience");
+    let client_id = format!("{ID_HYDRA_PREFIX}-scoped-client");
+    let client_secret = "sdk-hydra-scoped-secret".to_string();
+
+    let scope = format!(
+        "udex:index:v1:list \
+         udex:index:v1:create \
+         udex:index:v1:{index_name}:read \
+         udex:index:v1:*:delete \
+         udex:entry:v1:{index_name}:create \
+         udex:entry:v1:{index_name}:read \
+         udex:entry:v1:{index_name}:write \
+         udex:entry:v1:{index_name}:delete"
+    );
+
+    register_hydra_client(&admin_url, &client_id, &client_secret, &audience, &scope).await;
+
+    let ca_pem = tokio::fs::read(server_cert_path("ca.crt"))
+        .await
+        .expect("read CA cert");
+
+    UdexClient::connect(
+        ClientOptions::builder()
+            .endpoint(format!("https://{SDK_HYDRA_BIND_ADDR}"))
+            .ca_cert_pem_bytes(ca_pem)
+            .client_credentials(
+                format!("{public_url}/oauth2/token"),
+                &client_id,
+                &client_secret,
+            )
+            .audience(&audience)
+            .scope(scope)
+            .dangerous_allow_non_tls() // Hydra token endpoint is plain HTTP in the dev environment
+            .build()
+            .unwrap(),
+    )
+    .await
+    .expect("SDK hydra connect failed")
 }
 
 // ── JWT-backed tests (always run) ─────────────────────────────────────────────
@@ -1229,10 +1314,44 @@ async fn test_sdk_delete_index_empty() {
 async fn test_sdk_delete_index_not_empty() {
     let d = data(false).await;
     let client = &d.0;
-    let index_name = &d.1;
 
-    // The shared index has entries from other tests; attempting to delete it must fail.
-    let err = client.delete_index(index_name).await.unwrap_err();
+    // This test creates and populates its OWN index rather than borrowing the
+    // shared one.
+    //
+    // It used to assert against the shared index on the assumption that other
+    // tests had already put entries in it — an ordering dependency nothing
+    // enforced. When this test won the race and ran first the index was empty, so
+    // the delete SUCCEEDED, `unwrap_err` panicked, and the shared fixture index
+    // was destroyed, failing every later test with a misleading
+    // "Index 'sdk-integration-test-index' not found". Run on its own it could
+    // never pass at all.
+    //
+    // Owning the index also contains the blast radius: if delete-on-non-empty
+    // ever regresses, this test fails alone instead of taking the suite with it.
+    let index_name = format!("{ID_PREFIX}-delete-not-empty-{}", now_unix_nanos());
+
+    client
+        .create_index(CreateIndexRequest {
+            name: index_name.clone(),
+            display_name: "Delete Not Empty".to_string(),
+            description: "delete-non-empty test".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 10,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        })
+        .await
+        .expect("create_index failed");
+
+    // The shared client's token carries entry scopes for the shared index only.
+    let scoped = client_scoped_to_index(&index_name).await;
+    scoped
+        .create_entry(&index_name, context_input(&[("delete_guard", &index_name)]))
+        .await
+        .expect("create_entry failed — the index must be non-empty for this test to mean anything");
+
+    let err = client.delete_index(&index_name).await.unwrap_err();
     assert!(
         matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::FAILED_PRECONDITION),
         "expected FailedPrecondition for non-empty index, got: {err}"
@@ -1294,10 +1413,34 @@ async fn test_sdk_oauth2_delete_index_empty() {
 async fn test_sdk_oauth2_delete_index_not_empty() {
     let d = data_hydra(false).await;
     let client = &d.0;
-    let index_name = &d.1;
 
-    // The shared Hydra index has entries from other tests; deletion must fail.
-    let err = client.delete_index(index_name).await.unwrap_err();
+    // Own index, own entry — see `test_sdk_delete_index_not_empty` for why. This
+    // is the OAuth2 twin of the same defect: it assumed other tests had populated
+    // the shared Hydra index, so on its own the index was empty, the delete
+    // succeeded, and it took the shared Hydra fixture down with it.
+    let index_name = format!("{ID_HYDRA_PREFIX}-delete-not-empty-{}", now_unix_nanos());
+
+    client
+        .create_index(CreateIndexRequest {
+            name: index_name.clone(),
+            display_name: "OAuth2 Delete Not Empty".to_string(),
+            description: "oauth2 delete-non-empty test".to_string(),
+            max_bulk_operations: 100,
+            max_key_length: 256,
+            max_value_length: 1024,
+            max_kv_pairs_per_context: 10,
+            hash_algorithm: HashAlgorithm::Xxh3 as i32,
+        })
+        .await
+        .expect("create_index failed");
+
+    let scoped = hydra_client_scoped_to_index(&index_name).await;
+    scoped
+        .create_entry(&index_name, context_input(&[("delete_guard", &index_name)]))
+        .await
+        .expect("create_entry failed — the index must be non-empty for this test to mean anything");
+
+    let err = client.delete_index(&index_name).await.unwrap_err();
     assert!(
         matches!(&err, udex_sdk::Error::Rpc(s) if s.code() == udex_sdk::grpc_code::FAILED_PRECONDITION),
         "expected FailedPrecondition for non-empty index via Hydra, got: {err}"
