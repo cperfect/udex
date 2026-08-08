@@ -15,6 +15,25 @@ scan:
   # We have no control over their dependency versions and do not ship them in production.
   skip-dirs:
     - .devcontainer/home/.claude
+  # Locally generated dev TLS key material for the k3d Traefik edge. Produced by
+  # scripts/gen-keys-and-certs.sh, gitignored (.gitignore:11), never committed and
+  # never deployed anywhere but a developer's own cluster.
+  #
+  # This extends a convention Trivy already applies rather than inventing one:
+  # its built-in secret allow-rules exempt paths containing `tests/`, which is why
+  # the equally generated, equally gitignored keys under
+  # projects/rust/server/tests/{certs,jwt}/ are not reported. Verified: scanning
+  # projects/rust/server finds 0 private keys, while scanning
+  # projects/rust/server/tests — where the path no longer contains `tests/` —
+  # finds 4. These two files are flagged only because their path happens to read
+  # `traefik/certs` instead.
+  #
+  # Deliberately scoped to the two exact files, NOT the directory: a new or
+  # unexpected key appearing alongside them must still be reported. Re-check this
+  # if regenerate_certs.sh ever emits a differently named key.
+  skip-files:
+    - projects/k8s/traefik/certs/ca.key
+    - projects/k8s/traefik/certs/tls.key
 
 # Render the Helm chart for misconfig scanning. The chart uses `required` on
 # secrets.databaseUrl / tlsCrt / tlsKey (secret.yaml) and traefikTlsCrt /
