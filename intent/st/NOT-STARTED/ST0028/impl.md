@@ -141,6 +141,34 @@ Verified by destroying OpenObserve and running against zero streams: all four ob
 
 The devcontainer restarting also discards `~/.kube/config` while the k3d containers survive, leaving `kubectl` pointed at nothing. `k3d kubeconfig merge udex --kubeconfig-merge-default` followed by the `0.0.0.0` → `host.docker.internal` patch from `cluster-create.sh` restores it without recreating the cluster.
 
+### WP-05 -- Documentation (complete)
+
+Nine documents updated: `projects/compose/README.md` (the largest edit), `docs/ARCHITECTURE.md`, `docs/DESIGN_DECISIONS.md`, `docs/SECRETS.md`, `.devcontainer/README.md`, `projects/k8s/README.md`, `projects/rust/CONTRIBUTING.md`, `projects/rust/telemetry/README.md` and the root `README.md`.
+
+**The charting guidance was replaced, not deleted** (AC-05.2). The old HyperDX recipes existed because metrics charting is not self-evident — the udex and postgres counters are cumulative, so a raw value is a running total and a developer needs to know to take a rate. That is still true; only the mechanism changed. It changed for the better: OpenObserve answers **PromQL**, so the guidance is now `rate(udex_rpc_requests[5m])` instead of a described sequence of UI dropdowns.
+
+Every documented query was **executed against the running fixture before being written down**, including the histogram quantile (`histogram_quantile(0.95, sum by (le) (rate(udex_rpc_duration_bucket[5m])))`, which needs `_bucket` because OpenObserve splits a histogram across five streams on ingest). The UI routes cited (`/web/logs`, `/web/traces`, `/web/metrics`, `/web/dashboards`, `/web/streams`) were each probed and return 200, rather than being guessed from memory of the product.
+
+This also settles the open question `design.md` recorded — whether OpenObserve's charting story is good enough to replace HyperDX's. It is, and it is better in one specific respect the ST0027 record had listed as a loss: ClickHouse SQL needed explicit `argMax`-per-series handling for cumulative counters, which PromQL does natively.
+
+**The ST0027 decision record was superseded, not rewritten** (AC-05.4). Its ClickHouse sections are intact under a supersession note, followed by a new "Why OpenObserve instead of ClickHouse + HyperDX?" section. The argument that led to ClickHouse is what makes this thread's move legible — deleting it would leave the current design looking arbitrary.
+
+**`docs/SECRETS.md` states the posture change rather than just listing new keys.** The fixture moved from keyless to carrying a credential on a plaintext in-network hop. That is a real weakening, accepted for a dev/CI-only loopback fixture, and it is written down as such alongside the constraint that forces the password's restricted alphabet.
+
+**The doc-reviewer pass earned its place** (AC-05.5): 0 critical, 4 major, 9 minor, 4 suggestions. All majors and minors were applied. Three findings were substantive rather than cosmetic:
+
+- **The "durable log floor" claim was no longer true and I had carried it forward.** Under ST0027 Vector wrote to ClickHouse directly, so the container-log floor survived a collector outage. WP01 rerouted Vector through the collector, which silently gave that property up — and the docs still advertised it. Now corrected in `compose/README.md` and `ARCHITECTURE.md`, and added to the ST0028 costs list in `DESIGN_DECISIONS.md`, where it belonged from the start. This was a real regression recorded nowhere.
+- **"Only the collector knows which backend exists" was overstated, in four places.** True of the *pipeline*; false of the repository, since the test helpers, `gen-env.sh`, `dev-doctor.sh` and CI all name OpenObserve directly. The accompanying claim that a backend swap is "a change to `docker-compose.yml` and nothing else" was simply wrong. Scoped in all four.
+- **The service count was wrong throughout this thread.** The old fixture had **six** services (`clickhouse`, `otel-collector`, `mongo`, `hyperdx`, `hyperdx-init`, `vector`), not five — `hyperdx-init` was missed in the original count and the error propagated into planning, commit messages and the decision record. Corrected to six-to-three.
+
+Also fixed: credential/login instructions had been copied into three documents, which is exactly how the old HyperDX credentials drifted — `compose/README.md` now owns them and the others link. The pinned-version table in `projects/rust/CONTRIBUTING.md` gained OpenObserve, the collector and Vector, with a pointer to `REQUIRED_OPENOBSERVE_MAJOR`. `.devcontainer/README.md` gained the `OPENOBSERVE_URL` row it was missing. Root `CONTRIBUTING.md` had stale `gen-env.sh` and compose descriptions and had not been in the change set at all. Two pre-existing defects were repaired in passing: a root-absolute broken link and a broken `#access` anchor in `ARCHITECTURE.md`, plus a bare code fence in root `CONTRIBUTING.md`.
+
+I had also manually hard-wrapped ~30 lines of new prose in `SECRETS.md`, against an explicit project rule. Unwrapped.
+
+`.claude/agent-memory/doc-reviewer/staleness_hotspots.md` gained the version pins and three new drift entries, including the durability claim — recorded specifically because it survived a full rewrite and was only caught in review.
+
+Some ClickHouse and HyperDX mentions survive **deliberately** and should not be "fixed" by a later sweep: the retained decision record, the posture comparison in `SECRETS.md`, the "main practical difference from the previous HyperDX setup" line in the compose README, and ClickStack/HyperDX in `telemetry/README.md`, which documents a *third-party* backend a user might target via `otlp_headers` and has nothing to do with our fixture.
+
 ## Notes for later work packages
 
 - The `.env` on this machine was appended to by hand rather than regenerated, because the rotation guard correctly refuses to rewrite it while a compose Postgres is live. A clean clone gets the same values from `gen-env.sh`; this only affects existing developer machines, and belongs in the WP05 upgrade note.

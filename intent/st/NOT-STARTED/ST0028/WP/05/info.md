@@ -3,7 +3,7 @@ verblock: "08 Aug 2026:v0.1: vscode - Initial version"
 wp_id: WP-05
 title: "Documentation"
 scope: Small
-status: Not Started
+status: Done
 ---
 
 # WP-05: Documentation

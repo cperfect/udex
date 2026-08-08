@@ -34,7 +34,7 @@ The recommended way to get a consistent environment is the [VS Code dev containe
 Generate secrets and key material before building or running tests:
 
 ```bash
-bash scripts/gen-env.sh              # creates .env with DB passwords and Hydra secrets
+bash scripts/gen-env.sh              # creates .env with DB passwords, Hydra secrets and OpenObserve credentials
 bash scripts/gen-keys-and-certs.sh   # creates TLS certs and JWT signing keys
 ```
 
@@ -51,7 +51,7 @@ This checks every required tool, service, and fixture file and prints a PASS/FAI
 ### Build & Test
 
 ```bash
-# Start dev services (PostgreSQL + Hydra)
+# Start dev services (PostgreSQL + Hydra + the always-on observability fixture)
 docker compose -f projects/compose/docker-compose.yml --env-file .env up -d
 
 # Build the workspace
@@ -121,7 +121,7 @@ Please follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0
 
 For AI-assisted commits, include the model as a co-author:
 
-```
+```text
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 ```
 

@@ -60,13 +60,13 @@ title: "OpenObserve as the dev observability backend -- acceptance contract"
 
 AC-04.4 was **narrowed during implementation**. As originally written ("anywhere in the repo") it could not be satisfied inside WP-04, because `docs/`, the various `README.md` files and `CONTRIBUTING.md` are WP-05's explicit deliverables -- the two ACs overlapped, and honouring the original wording would have meant doing WP-05's work here. The boundary is now executable/config surfaces for WP-04, prose for WP-05. AC-05.1 already covers the documentation side, so nothing is dropped. Recorded rather than quietly reinterpreted.
 
-### WP-05 -- Documentation (status: Not Started)
+### WP-05 -- Documentation (status: WIP)
 
-- AC-05.1 (non-test) No document describes ClickHouse or HyperDX as the observability backend -- evidence: repo-wide grep across `docs/`, `projects/*/README.md`, `.devcontainer/` -- satisfied: no
-- AC-05.2 (non-test) The metrics-charting guidance is **replaced**, not deleted: a developer can still learn that the counters are cumulative and need a rate aggregation -- evidence: `projects/compose/README.md` -- satisfied: no
-- AC-05.3 (non-test) `docs/SECRETS.md` documents the new credentials and states the posture change from keyless ClickHouse to an authenticated backend on a plaintext dev network -- evidence: `docs/SECRETS.md` -- satisfied: no
-- AC-05.4 (non-test) ST0027's decision record is superseded rather than silently rewritten, so the history of why ClickHouse was chosen and then replaced survives -- evidence: `docs/DESIGN_DECISIONS.md` -- satisfied: no
-- AC-05.5 (non-test) `/in-review` doc-reviewer pass run and its findings addressed -- evidence: review output -- satisfied: no
+- AC-05.1 (non-test) No document describes ClickHouse or HyperDX as the observability backend -- evidence: repo-wide grep; the only surviving mentions are deliberate (the retained decision record, a posture comparison in `SECRETS.md`, and ClickStack as a third-party `otlp_headers` example in the telemetry README) -- satisfied: yes
+- AC-05.2 (non-test) The metrics-charting guidance is **replaced**, not deleted: a developer can still learn that the counters are cumulative and need a rate aggregation -- evidence: `projects/compose/README.md` now carries PromQL recipes, every one of which was executed against the running fixture before being written down -- satisfied: yes
+- AC-05.3 (non-test) `docs/SECRETS.md` documents the new credentials and states the posture change from keyless ClickHouse to an authenticated backend on a plaintext dev network -- evidence: `docs/SECRETS.md#observability` -- satisfied: yes
+- AC-05.4 (non-test) ST0027's decision record is superseded rather than silently rewritten, so the history of why ClickHouse was chosen and then replaced survives -- evidence: `docs/DESIGN_DECISIONS.md` -- the ClickHouse sections are kept intact under a supersession note, with a new "Why OpenObserve instead of ClickHouse + HyperDX?" section -- satisfied: yes
+- AC-05.5 (non-test) doc-reviewer pass run and its findings addressed -- evidence: review returned 0 critical, 4 major, 9 minor, 4 suggestions; all 4 major and all 9 minor applied, 3 of 4 suggestions applied -- satisfied: yes
 
 ## Acceptance Tests
 

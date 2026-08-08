@@ -110,11 +110,11 @@ Edit `helm/udex/values.yaml` or pass `--set` overrides, then re-run `deploy.sh`.
 
 ## Observability
 
-The deployment runs with OpenTelemetry **enabled** and full sampling (`observability` in `values.yaml`). The pods export OTLP traces, metrics, and logs to the **ClickHouse-backed observability fixture** (part of the base [`projects/compose`](../compose/README.md#observability) stack) via `host.k3d.internal:4317` — the same host bridge used for PostgreSQL and Hydra — rather than a second in-cluster Collector. The local collector is **plaintext** (no OTLP CA mount), so the OTLP hop is unauthenticated and untls'd in dev; cluster telemetry is tagged `deployment.environment=k3d`.
+The deployment runs with OpenTelemetry **enabled** and full sampling (`observability` in `values.yaml`). The pods export OTLP traces, metrics, and logs to the **observability fixture** (part of the base [`projects/compose`](../compose/README.md#observability) stack) via `host.k3d.internal:4317` — the same host bridge used for PostgreSQL and Hydra — rather than a second in-cluster Collector. The local collector is **plaintext** (no OTLP CA mount), so the OTLP hop is unauthenticated and untls'd in dev; cluster telemetry is tagged `deployment.environment=k3d`. Nothing in the chart names the storage backend: the pods target the collector, and the collector decides where telemetry goes.
 
-The fixture is always-on with the base stack, so there is nothing extra to start. View the data in HyperDX at <http://localhost:8080> (login `admin@udex.local` / `UdexLocalDev1!`), or query ClickHouse directly on `:8123`.
+The fixture is always-on with the base stack, so there is nothing extra to start. View the data in OpenObserve at <http://localhost:5080> — see [projects/compose/README.md#observability](../compose/README.md#observability) for the login. Cluster telemetry is distinguishable by the `deployment_environment` label, for example `sum by (rpc_method) (rate(udex_rpc_requests{deployment_environment="k3d"}[5m]))`.
 
-Telemetry export is best-effort: if the collector is down the pods keep serving and simply cannot export. The `test_obs_k8s_*` integration tests assert the signals land in ClickHouse (see [projects/rust/CONTRIBUTING.md](../rust/CONTRIBUTING.md)).
+Telemetry export is best-effort: if the collector is down the pods keep serving and simply cannot export. The `test_obs_k8s_*` integration tests assert the signals land in OpenObserve (see [projects/rust/CONTRIBUTING.md](../rust/CONTRIBUTING.md)).
 
 ## Teardown
 
