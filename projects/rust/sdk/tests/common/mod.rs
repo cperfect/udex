@@ -293,7 +293,7 @@ pub async fn openobserve_trace_span_names(key: &str) -> Vec<String> {
     for _ in 0..30u32 {
         match openobserve_try_search(&sql, "traces").await {
             Ok(hits) => {
-                pending.clear();
+                pending.record_success();
                 if !hits.is_empty() {
                     return hits
                         .iter()
@@ -338,7 +338,7 @@ pub async fn openobserve_await(
     for _ in 0..attempts {
         match openobserve_try_search(sql, stream_type).await {
             Ok(hits) => {
-                pending.clear();
+                pending.record_success();
                 if let Some(v) = scalar_from_hits(&hits) {
                     if v > baseline {
                         return Some(v);
@@ -359,32 +359,115 @@ pub async fn openobserve_await(
 /// individual attempt.
 ///
 /// While polling, a not-yet-ingested response is tolerated. If the budget runs
-/// out and EVERY attempt was that response, the column or stream almost
-/// certainly does not exist — so this fails naming it, rather than letting the
-/// caller report a vague "telemetry did not arrive". A single successful query
-/// clears the memory, so a genuine "ingested but did not increase" still reports
-/// as the caller intends. This is what keeps `IN-AG-NO-SILENT-001` intact while
-/// still tolerating a cold fixture.
+/// out with the **most recent** attempt still rejected that way, this fails
+/// rather than letting the caller report a vague "telemetry did not arrive" —
+/// and it distinguishes two cases that deserve different diagnoses:
+///
+/// - **Nothing ever resolved.** The stream or column almost certainly does not
+///   exist; the name is probably wrong.
+/// - **Something resolved earlier, then stopped.** Weaker evidence — the schema
+///   was readable at least once, so a name is less likely to be the culprit.
+///
+/// A trailing success clears the memory entirely, so a genuine "ingested but did
+/// not increase" still reports as the caller intends. This is what keeps
+/// `IN-AG-NO-SILENT-001` intact while still tolerating a cold fixture.
+///
+/// The distinction exists because the message is read by someone debugging a
+/// failure: claiming every attempt was rejected when some succeeded sends them
+/// looking for a typo that is not there.
 #[derive(Default)]
-struct PendingReason(Option<String>);
+struct PendingReason {
+    /// Reason from the latest not-yet-ingested response — `None` when the most
+    /// recent attempt resolved.
+    last: Option<String>,
+    /// Whether any attempt in this poll ever resolved against the schema.
+    resolved_at_least_once: bool,
+}
 
 impl PendingReason {
     fn record(&mut self, reason: String) {
-        self.0 = Some(reason);
+        self.last = Some(reason);
     }
 
-    fn clear(&mut self) {
-        self.0 = None;
+    /// The query resolved against the schema. Clears the pending reason and
+    /// remembers that the names were valid at least once.
+    fn record_success(&mut self) {
+        self.last = None;
+        self.resolved_at_least_once = true;
     }
 
     fn panic_if_persistent(&self, context: &str) {
-        if let Some(reason) = &self.0 {
-            panic!(
-                "{context}, and every query attempt was rejected as not-yet-ingested. \
-                 The stream or column name is probably wrong:\n{reason}"
-            );
+        if let Some(reason) = &self.last {
+            let diagnosis = if self.resolved_at_least_once {
+                "an earlier attempt resolved against the schema, so the names were valid at \
+                 least once — but the final attempts came back not-yet-ingested"
+            } else {
+                "no attempt ever resolved against the schema, so the stream or column name is \
+                 probably wrong"
+            };
+            panic!("{context}, and {diagnosis}:\n{reason}");
         }
     }
+}
+
+// ── PendingReason behaviour ───────────────────────────────────────────────────
+// The whole point of this type is producing an accurate diagnosis, so the two
+// branches are pinned rather than trusted.
+
+#[test]
+fn pending_reason_stays_silent_when_the_last_attempt_resolved() {
+    let mut p = PendingReason::default();
+    p.record("unknown field 'x'".to_string());
+    p.record_success();
+    // Must not panic: a trailing success means the caller's own assertion is the
+    // right thing to report.
+    p.panic_if_persistent("ctx");
+}
+
+#[test]
+fn pending_reason_blames_the_name_when_nothing_ever_resolved() {
+    let mut p = PendingReason::default();
+    p.record("unknown field 'udex_test_run'".to_string());
+    let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        p.panic_if_persistent("ctx")
+    }))
+    .expect_err("a persistently unresolved query must panic");
+    let msg = panic_message(&err);
+    assert!(
+        msg.contains("no attempt ever resolved"),
+        "expected the strong diagnosis; got: {msg}"
+    );
+    assert!(
+        msg.contains("udex_test_run"),
+        "reason must be carried: {msg}"
+    );
+}
+
+#[test]
+fn pending_reason_softens_the_claim_when_something_resolved_earlier() {
+    let mut p = PendingReason::default();
+    p.record_success();
+    p.record("unknown field 'x'".to_string());
+    let err = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        p.panic_if_persistent("ctx")
+    }))
+    .expect_err("a trailing not-yet-ingested response must still panic");
+    let msg = panic_message(&err);
+    assert!(
+        msg.contains("an earlier attempt resolved"),
+        "expected the softened diagnosis; got: {msg}"
+    );
+    assert!(
+        !msg.contains("no attempt ever resolved"),
+        "must not claim nothing resolved when something did: {msg}"
+    );
+}
+
+fn panic_message(err: &Box<dyn std::any::Any + Send>) -> String {
+    err.downcast_ref::<String>()
+        .cloned()
+        .or_else(|| err.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_else(|| "<non-string panic payload>".to_string())
 }
 
 /// Single-shot scalar query (None when the result set is empty or the value is
