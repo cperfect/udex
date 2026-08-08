@@ -2,9 +2,9 @@
 //!
 //! Stands up an in-process udex server with observability **enabled**, pointed at
 //! the compose collector (`http://otel-collector:4317`, plaintext OTLP/gRPC), drives a few
-//! requests, and asserts the resulting trace / metric / log land in ClickHouse.
+//! requests, and asserts the resulting trace / metric / log land in OpenObserve.
 //! Unlike the `test_obs_k8s_*` tests this needs no cluster, so it exercises the
-//! full server -> collector -> ClickHouse path on every `cargo test`.
+//! full server -> collector -> OpenObserve path on every `cargo test`.
 //!
 //! It lives in its OWN test binary on purpose: `udex_telemetry::init` installs a
 //! PROCESS-GLOBAL tracing subscriber + OpenTelemetry providers, so it must be the
@@ -12,7 +12,7 @@
 //! subscriber (`init_test_tracing`), which would make the enabled-path `try_init`
 //! here fail — hence the separation.
 //!
-//! ClickHouse is an always-on fixture like Hydra: the `common::clickhouse_*`
+//! OpenObserve is an always-on fixture like Hydra: the `common::openobserve_*`
 //! helpers FAIL (not skip) if it is unreachable.
 
 use std::net::SocketAddr;
@@ -26,8 +26,8 @@ use udex_test_utils::bind_file_secret;
 
 mod common;
 use common::{
-    clickhouse_scalar_f64, clickhouse_trace_span_names, context_input, jwt_key_path, make_token,
-    now_unix_nanos, server_cert_path, wait_for_server,
+    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_scalar_f64,
+    openobserve_search, openobserve_trace_span_names, server_cert_path, wait_for_server,
 };
 
 // Distinct from the integration_tests binary's bind addresses to avoid clashes
@@ -35,6 +35,53 @@ use common::{
 const OBS_BIND_ADDR: &str = "127.0.0.1:50056";
 
 const LIST_METHOD: &str = "/udex.index.v1.IndexService/ListIndices";
+
+/// A rejected query must FAIL LOUDLY, not read as "no telemetry".
+///
+/// OpenObserve answers a bad query with **HTTP 200** and the reason in a
+/// `message` field, leaving `hits` null. If the helper treated that as an empty
+/// result set, a mistyped column would be indistinguishable from telemetry never
+/// arriving — and the mistake is easy to make, because resource attributes are
+/// prefixed `service_` in the traces stream but bare in logs and metrics. The
+/// failure would surface as a poll-budget timeout blaming the pipeline, minutes
+/// away from the actual cause.
+///
+/// This guards `IN-AG-NO-SILENT-001` for the whole observability suite, so it is
+/// tested directly rather than trusted.
+///
+/// A panic backtrace in this test's output is expected — it is the behaviour
+/// being asserted.
+#[tokio::test]
+async fn obs_search_surfaces_query_errors() {
+    let result = tokio::spawn(async {
+        openobserve_search("SELECT no_such_column_at_all FROM \"default\"", "logs").await
+    })
+    .await;
+
+    let panic_payload = result
+        .expect_err(
+            "a query OpenObserve rejects must panic; returning an empty result set would make \
+             a typo look like missing telemetry",
+        )
+        .into_panic();
+
+    let message = panic_payload
+        .downcast_ref::<String>()
+        .map(String::as_str)
+        .or_else(|| panic_payload.downcast_ref::<&str>().copied())
+        .unwrap_or("<non-string panic payload>");
+
+    assert!(
+        message.contains("OpenObserve rejected the query"),
+        "panic did not identify the query rejection; got: {message}"
+    );
+    // The API's own reason must reach the developer, not just our wrapper text —
+    // that reason is what names the offending column.
+    assert!(
+        message.contains("no_such_column_at_all"),
+        "panic did not carry the API's reason naming the bad column; got: {message}"
+    );
+}
 
 #[tokio::test]
 async fn obs_local_traces_metrics_logs_land() {
@@ -54,7 +101,7 @@ async fn obs_local_traces_metrics_logs_land() {
 
     // A unique resource attribute tags THIS run's telemetry, so the metric/log
     // assertions match only this server's exports (not concurrent k8s traffic or a
-    // previous run) in the shared ClickHouse.
+    // previous run) in the shared OpenObserve.
     let run_id = format!("obs-run-{}", now_unix_nanos());
 
     let server_config = udex_server::config::ServerConfig {
@@ -152,21 +199,33 @@ async fn obs_local_traces_metrics_logs_land() {
     // Baselines BEFORE the ListIndices traffic. Both queries are scoped to THIS
     // run's resource tag (`udex.test.run`), so only this server's exports can
     // advance the count — concurrent k8s traffic or a prior run cannot.
+    // `udex.rpc.requests` becomes its own stream, dots as underscores. Taking
+    // max(value) per series is the argMax equivalent (OpenObserve's DataFusion
+    // build has no max_by) and is CORRECT ONLY BECAUSE the counter is monotonic
+    // cumulative — so the latest value of a series is also its largest. Summing
+    // those per-series maxima gives a total that rises by one per request.
+    //
+    // Note the attribute naming: in the metrics stream, resource attributes are
+    // flattened bare (`udex_test_run`, `service_instance_id`). In the *traces*
+    // stream the same attributes carry a `service_` prefix. Getting this wrong
+    // returns HTTP 200 with an error body, which openobserve_search panics on.
     let metric_query = format!(
-        "SELECT sum(v) FROM ( \
-           SELECT argMax(Value, TimeUnix) AS v FROM otel.otel_metrics_sum \
-           WHERE MetricName = 'udex.rpc.requests' \
-             AND Attributes['rpc.method'] = '{LIST_METHOD}' \
-             AND ResourceAttributes['udex.test.run'] = '{run_id}' \
-           GROUP BY ResourceAttributes['service.instance.id'], \
-                    Attributes['rpc.grpc.status_code'] )"
+        "SELECT sum(m) AS total FROM ( \
+           SELECT max(value) AS m FROM \"udex_rpc_requests\" \
+           WHERE rpc_method = '{LIST_METHOD}' \
+             AND udex_test_run = '{run_id}' \
+           GROUP BY service_instance_id, rpc_grpc_status_code )"
     );
     let log_query = format!(
-        "SELECT count() FROM otel.otel_logs \
-         WHERE ServiceName = 'udex-server' AND ResourceAttributes['udex.test.run'] = '{run_id}'"
+        "SELECT count(*) AS n FROM \"default\" \
+         WHERE service_name = 'udex-server' AND udex_test_run = '{run_id}'"
     );
-    let metric_baseline = clickhouse_scalar_f64(&metric_query).await.unwrap_or(0.0);
-    let log_baseline = clickhouse_scalar_f64(&log_query).await.unwrap_or(0.0);
+    let metric_baseline = openobserve_scalar_f64(&metric_query, "metrics")
+        .await
+        .unwrap_or(0.0);
+    let log_baseline = openobserve_scalar_f64(&log_query, "logs")
+        .await
+        .unwrap_or(0.0);
 
     // Drive request traffic: each authed ListIndices increments the request
     // counter and emits a "request authenticated" audit log.
@@ -174,10 +233,10 @@ async fn obs_local_traces_metrics_logs_land() {
         client.list_indices().await.expect("list_indices");
     }
 
-    let spans = clickhouse_trace_span_names(&key).await;
+    let spans = openobserve_trace_span_names(&key).await;
     assert!(
         !spans.is_empty(),
-        "no trace in ClickHouse for entry key {key}"
+        "no trace in OpenObserve for entry key {key}"
     );
     assert!(
         spans.iter().any(|s| s.ends_with("/CreateEntry")),
@@ -193,7 +252,7 @@ async fn obs_local_traces_metrics_logs_land() {
     // honoured, else the 60s default).
     let mut metric_increased = false;
     for _ in 0..40u32 {
-        if let Some(v) = clickhouse_scalar_f64(&metric_query).await {
+        if let Some(v) = openobserve_scalar_f64(&metric_query, "metrics").await {
             if v > metric_baseline {
                 metric_increased = true;
                 break;
@@ -209,7 +268,7 @@ async fn obs_local_traces_metrics_logs_land() {
     // ── logs ── the audit logs export via the batch log processor (sub-second).
     let mut log_increased = false;
     for _ in 0..30u32 {
-        if let Some(v) = clickhouse_scalar_f64(&log_query).await {
+        if let Some(v) = openobserve_scalar_f64(&log_query, "logs").await {
             if v > log_baseline {
                 log_increased = true;
                 break;
@@ -219,6 +278,6 @@ async fn obs_local_traces_metrics_logs_land() {
     }
     assert!(
         log_increased,
-        "udex-server logs in ClickHouse did not increase (baseline {log_baseline})"
+        "udex-server logs in OpenObserve did not increase (baseline {log_baseline})"
     );
 }

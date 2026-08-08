@@ -3,7 +3,7 @@ verblock: "08 Aug 2026:v0.1: vscode - Initial version"
 wp_id: WP-02
 title: "Port the observability verification layer to OpenObserve"
 scope: Small
-status: Not Started
+status: WIP
 ---
 
 # WP-02: Port the observability verification layer to OpenObserve
@@ -20,7 +20,9 @@ Repoint every existing observability assertion from ClickHouse SQL to OpenObserv
 
 ## Implementation notes
 
-**The search helper must surface API errors.** OpenObserve answers a SQL error with **HTTP 200** and `{"message": "...", "hits": null}`. A helper that only checks the status code turns a mistyped column into "no data", and the test then fails 90 seconds later with a message blaming the pipeline instead of the query. `IN-AG-NO-SILENT-001` makes this mandatory: a non-null `message` is a panic, not an empty result. This single decision is what makes the prefix asymmetry below survivable.
+**The search helper must surface API errors.** A rejected query is answered with **HTTP 400** carrying `{"code": ..., "message": "unknown field '...'", "hint": "..."}`; some conditions instead answer 200 with `message` set and `hits` null. Handle both, and — crucially — read the body *before* reacting to the status, because `error_for_status()` alone discards the `message` and `hint` that name the offending column and suggest the repair. `IN-AG-NO-SILENT-001` makes this mandatory. This single decision is what makes the prefix asymmetry below survivable.
+
+(The spike recorded this as "HTTP 200 with the error in the body" — it had inspected the body with `jq` and never checked the status code. Corrected during implementation.)
 
 **Resource attributes are prefixed inconsistently by signal** -- `service_` in traces only. `udex.test.run` is `service_udex_test_run` when querying traces but `udex_test_run` in logs and metrics; `service.instance.id` is `service_service_instance_id` in traces but `service_instance_id` in metrics. This is the most likely source of a confusing failure in the whole thread.
 

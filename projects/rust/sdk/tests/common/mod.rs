@@ -127,59 +127,152 @@ pub fn now_unix_nanos() -> u128 {
         .as_nanos()
 }
 
-// ── ClickHouse query helpers (observability fixture) ──────────────────────────
+// ── OpenObserve query helpers (observability fixture) ─────────────────────────
 //
-// The observability tests assert that telemetry lands in ClickHouse — the
-// unified store the collector exports to (ST0027). ClickHouse is an always-on
-// fixture like Hydra: these helpers FAIL LOUDLY if it is unreachable, they never
-// skip. Reachable via the `clickhouse` service name in-network; override with
-// CLICKHOUSE_URL for other environments.
+// The observability tests assert that telemetry lands in OpenObserve — the
+// unified store the collector exports to (ST0028). It is an always-on fixture
+// like Hydra: these helpers FAIL LOUDLY if it is unreachable, they never skip.
+// Reachable via the `openobserve` service name in-network; override with
+// OPENOBSERVE_URL for other environments (CI uses the runner's localhost).
 
-fn clickhouse_url() -> String {
-    std::env::var("CLICKHOUSE_URL").unwrap_or_else(|_| "http://clickhouse:8123".to_string())
+/// OpenObserve organisation. The fixture never creates a second one.
+const OPENOBSERVE_ORG: &str = "default";
+
+/// How far back a search window reaches. OpenObserve requires an explicit window
+/// and returns *nothing* — with no error — when it does not bracket the data, so
+/// this is deliberately generous. Assertions are made run-specific by resource
+/// attribute (`udex.test.run`) and by baseline-then-poll, never by this window.
+const SEARCH_LOOKBACK_SECS: u64 = 3600;
+
+fn openobserve_url() -> String {
+    std::env::var("OPENOBSERVE_URL").unwrap_or_else(|_| "http://openobserve:5080".to_string())
 }
 
-/// POST a SQL query to ClickHouse (default user, no password) and return the
-/// trimmed response body. Panics on transport error — the obs fixture must be up.
-pub async fn clickhouse_query(sql: &str) -> String {
-    let http = reqwest::Client::new();
-    http.post(clickhouse_url())
-        .body(sql.to_string())
-        .timeout(Duration::from_secs(5))
+/// Basic-auth credentials for the search API — the same pair the collector uses
+/// to ingest, generated into `.env` by `scripts/gen-env.sh`.
+///
+/// `.env` is loaded here rather than relying on another fixture having done it
+/// first: several helpers call `dotenvy` incidentally, and depending on which
+/// one happens to run earlier is exactly the kind of ordering coupling that
+/// breaks when a test is run on its own.
+fn openobserve_credentials() -> (String, String) {
+    static LOAD_ENV: std::sync::Once = std::sync::Once::new();
+    LOAD_ENV.call_once(|| {
+        dotenvy::dotenv_override().ok();
+    });
+    let email =
+        std::env::var("OPENOBSERVE_ROOT_EMAIL").unwrap_or_else(|_| "root@udex.local".to_string());
+    let password = std::env::var("OPENOBSERVE_ROOT_PASSWORD_SECRET").expect(
+        "OPENOBSERVE_ROOT_PASSWORD_SECRET is not set — run scripts/gen-env.sh, or export it \
+         directly in CI. The observability fixture is an always-on dev/CI dependency, like Hydra.",
+    );
+    (email, password)
+}
+
+/// Run a SQL query against an OpenObserve stream type (`logs` | `traces` |
+/// `metrics`) and return the `hits` array.
+///
+/// `stream_type` is not optional decoration: the stream name `default` exists
+/// independently under both `logs` and `traces`, so getting it wrong silently
+/// searches the wrong signal.
+pub async fn openobserve_search(sql: &str, stream_type: &str) -> Vec<serde_json::Value> {
+    let (email, password) = openobserve_credentials();
+    let now_micros = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock before unix epoch")
+        .as_micros() as i64;
+
+    let body = serde_json::json!({
+        "query": {
+            "sql": sql,
+            "start_time": now_micros - (SEARCH_LOOKBACK_SECS as i64 * 1_000_000),
+            // A little ahead of now, so a record ingested during this call cannot
+            // fall outside the window.
+            "end_time": now_micros + 60_000_000,
+            "from": 0,
+            "size": 100,
+        }
+    });
+
+    let response = reqwest::Client::new()
+        .post(format!(
+            "{}/api/{OPENOBSERVE_ORG}/_search?type={stream_type}",
+            openobserve_url()
+        ))
+        .basic_auth(email, Some(password))
+        .json(&body)
+        .timeout(Duration::from_secs(10))
         .send()
         .await
         .expect(
-            "ClickHouse query failed — is the observability fixture (ClickHouse) reachable? \
+            "OpenObserve query failed — is the observability fixture reachable? \
              It is an always-on dev/CI dependency, like Hydra.",
-        )
-        // Surface a 4xx/5xx (e.g. a SQL error) immediately rather than reading the
-        // error page as if it were a result and wasting the poll budget.
-        .error_for_status()
-        .expect("ClickHouse returned an error status")
+        );
+
+    // Read the body BEFORE reacting to the status. `error_for_status` alone would
+    // throw away the part that actually helps: OpenObserve puts the reason in
+    // `message` and often a repair suggestion in `hint`, and losing those leaves
+    // a bare "400 Bad Request" to debug.
+    let status = response.status();
+    let raw = response
         .text()
         .await
-        .expect("ClickHouse response body")
-        .trim()
-        .to_string()
+        .expect("could not read the OpenObserve response body");
+    let payload: serde_json::Value = serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null);
+
+    // A rejected query must FAIL LOUDLY rather than read as "no telemetry".
+    //
+    // A malformed query is answered with HTTP 400 and a `message`; some
+    // conditions instead answer 200 with `message` set and `hits` null. Both are
+    // treated as failure here, because the alternative is that a mistyped column
+    // — easy to get wrong, since resource attributes are prefixed `service_` in
+    // the traces stream but bare in logs and metrics — looks exactly like
+    // telemetry that never arrived, and surfaces as a poll-budget timeout
+    // blaming the pipeline (IN-AG-NO-SILENT-001).
+    let message = payload.get("message").and_then(|m| m.as_str());
+    if !status.is_success() || message.is_some() {
+        let reason = message.unwrap_or(if raw.is_empty() {
+            "<empty response body>"
+        } else {
+            &raw
+        });
+        let hint = payload
+            .get("hint")
+            .and_then(|h| h.as_str())
+            .map(|h| format!("\n  hint: {h}"))
+            .unwrap_or_default();
+        panic!(
+            "OpenObserve rejected the query ({status}): {reason}{hint}\n  \
+             stream_type: {stream_type}\n  SQL: {sql}"
+        );
+    }
+
+    payload
+        .get("hits")
+        .and_then(|h| h.as_array())
+        .cloned()
+        .unwrap_or_default()
 }
 
 /// Polls for a trace one of whose spans carries the entry `key` attribute,
 /// returning the sorted, de-duplicated span names of that trace (empty if none
 /// appear within the budget). Used for run-specific trace assertions.
-pub async fn clickhouse_trace_span_names(key: &str) -> Vec<String> {
+///
+/// `key` needs SQL quoting: it is a bare flattened column here, not a map lookup
+/// as it was under ClickHouse's `SpanAttributes['key']`.
+pub async fn openobserve_trace_span_names(key: &str) -> Vec<String> {
     let sql = format!(
-        "SELECT DISTINCT SpanName FROM otel.otel_traces \
-         WHERE TraceId IN (SELECT TraceId FROM otel.otel_traces \
-                           WHERE SpanAttributes['key'] = '{key}') \
-         ORDER BY SpanName FORMAT TabSeparated"
+        "SELECT DISTINCT operation_name FROM \"default\" \
+         WHERE trace_id IN (SELECT trace_id FROM \"default\" WHERE \"key\" = '{key}') \
+         ORDER BY operation_name"
     );
     for _ in 0..30u32 {
-        let body = clickhouse_query(&sql).await;
-        if !body.is_empty() {
-            return body
-                .lines()
-                .map(|l| l.trim().to_string())
-                .filter(|l| !l.is_empty())
+        let hits = openobserve_search(&sql, "traces").await;
+        if !hits.is_empty() {
+            return hits
+                .iter()
+                .filter_map(|h| h.get("operation_name").and_then(|v| v.as_str()))
+                .map(|s| s.to_string())
                 .collect();
         }
         sleep(Duration::from_secs(2)).await;
@@ -187,13 +280,13 @@ pub async fn clickhouse_trace_span_names(key: &str) -> Vec<String> {
     Vec::new()
 }
 
-/// Polls a scalar `count()` query, returning the first value > 0 (or 0 after the
-/// budget expires).
-pub async fn clickhouse_count(sql: &str) -> u64 {
+/// Polls a single-column aggregate query, returning the first value > 0 (or 0
+/// after the budget expires).
+pub async fn openobserve_count(sql: &str, stream_type: &str) -> u64 {
     for _ in 0..45u32 {
-        if let Ok(n) = clickhouse_query(sql).await.parse::<u64>() {
-            if n > 0 {
-                return n;
+        if let Some(v) = openobserve_scalar_f64(sql, stream_type).await {
+            if v > 0.0 {
+                return v as u64;
             }
         }
         sleep(Duration::from_secs(2)).await;
@@ -201,8 +294,13 @@ pub async fn clickhouse_count(sql: &str) -> u64 {
     0
 }
 
-/// Single-shot scalar query parsed as f64 (None when the result is empty or
-/// unparseable, e.g. a metric series that does not exist yet).
-pub async fn clickhouse_scalar_f64(sql: &str) -> Option<f64> {
-    clickhouse_query(sql).await.parse::<f64>().ok()
+/// Single-shot scalar query (None when the result set is empty or the value is
+/// null, e.g. a metric series that does not exist yet).
+///
+/// The SQL must select exactly one column; the alias is irrelevant, the sole
+/// value of the first row is taken. A *malformed* query does not land here — it
+/// panics inside `openobserve_search`, which is the point.
+pub async fn openobserve_scalar_f64(sql: &str, stream_type: &str) -> Option<f64> {
+    let hits = openobserve_search(sql, stream_type).await;
+    hits.first()?.as_object()?.values().next()?.as_f64()
 }

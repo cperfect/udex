@@ -138,7 +138,7 @@ pub fn init(
     let metadata = build_metadata(&config.otlp_headers)?;
     let resource = build_resource(&identity, &config.resource_attributes);
 
-    // Traces -> ClickHouse (via the collector).
+    // Traces -> the configured OTLP endpoint (in dev, the collector).
     let (tracer_provider, trace_layer) = if config.traces {
         let exporter = build_span_exporter(&endpoint, ca_pem.as_deref(), metadata.clone())?;
         let provider = SdkTracerProvider::builder()
@@ -157,7 +157,7 @@ pub fn init(
         (None, None)
     };
 
-    // Metrics -> ClickHouse (via the collector).
+    // Metrics -> the configured OTLP endpoint (in dev, the collector).
     let meter_provider = if config.metrics {
         let exporter = build_metric_exporter(&endpoint, ca_pem.as_deref(), metadata.clone())?;
         Some(
@@ -170,8 +170,8 @@ pub fn init(
         None
     };
 
-    // Logs -> ClickHouse via the collector (hybrid: stdout JSON is still on via
-    // fmt_layer).
+    // Logs -> the configured OTLP endpoint (in dev, the collector). Hybrid:
+    // stdout JSON is still on via fmt_layer.
     let (logger_provider, logs_layer) = if config.logs {
         let exporter = build_log_exporter(&endpoint, ca_pem.as_deref(), metadata)?;
         let provider = SdkLoggerProvider::builder()

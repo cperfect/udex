@@ -57,7 +57,11 @@ Note the posture change this represents: ClickHouse today is keyless, so the fix
 
 ### The search helper must surface errors
 
-OpenObserve returns **HTTP 200** with `{"message": "...", "hits": null}` for a SQL error — including the very common "unknown field" case caused by the resource-attribute prefix asymmetry below. A helper that checks only the status code silently converts a typo into "no data", and the test then fails with a misleading message about telemetry not arriving.
+A rejected query comes back as **HTTP 400** with `{"code": ..., "message": "unknown field '...'", "hint": "..."}` — the very case the resource-attribute prefix asymmetry below invites. Some conditions instead answer 200 with `message` set and `hits` null, so both have to be handled.
+
+The naive failure is not what the spike write-up first claimed. `error_for_status()` does catch the 400 — but it throws away `message` and `hint`, leaving a bare "400 Bad Request" to debug, when the response already named the offending column and suggested a repair. The helper therefore reads the body *before* reacting to the status and surfaces both.
+
+(Corrected during WP02. The spike recorded this as "HTTP 200 with the error in the body"; it had only inspected the body via `jq` and never checked the status code. The requirement was right, the mechanism was not.)
 
 `IN-AG-NO-SILENT-001` makes this a correctness requirement, not a nicety: the helper panics on a non-null `message`. This is an explicit AC because it is the single most likely source of a confusing failure in this thread.
 

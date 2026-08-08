@@ -25,7 +25,7 @@ A hands-on spike (branch `spike/openobserve-obs`, `FINDINGS.md` on that branch �
 
 The spike also surfaced the things that will actually cost time, all of which this thread plans for explicitly rather than discovers late:
 
-- OpenObserve prefixes resource attributes with `service_` in the **traces** stream but not in logs or metrics, and a query naming a column that does not exist returns **HTTP 200** with an error in the body and no rows. A helper that checks only the status code reports a typo as "no data" — a `IN-AG-NO-SILENT-001` violation waiting to happen, so surfacing that error is an acceptance criterion, not a nicety.
+- OpenObserve prefixes resource attributes with `service_` in the **traces** stream but not in logs or metrics, so a mistyped column is easy to write. Rejected queries carry their reason in a `message` field (plus often a `hint`), which a naive helper discards. Surfacing that reason is an acceptance criterion, not a nicety — without it a typo is indistinguishable from telemetry never arriving, which is a `IN-AG-NO-SILENT-001` violation.
 - `max_by` is absent from OpenObserve's DataFusion build, so the existing `argMax(Value, TimeUnix)` metric query has no direct translation. `max(value)` per series is correct **because** `udex.rpc.requests` is a monotonic cumulative counter; that reasoning has to be written down next to the query or it reads as a bug.
 - Vector 0.44's `opentelemetry` sink is thin: it needs the OTLP envelope hand-built in VRL, an explicit `Content-Type`, and one event per request.
 

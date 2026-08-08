@@ -34,6 +34,20 @@ A related trap caught during review rather than in production: composing the pas
 
 **Vector did not recreate on a config-only change.** `docker compose up -d vector` reported it unchanged despite the inline `configs` content differing; `--force-recreate` was needed. Worth knowing for WP04's CI work -- a pipeline that relies on `up -d` picking up a config edit could silently run the old config.
 
+### WP-02 -- Port the verification layer to OpenObserve (complete except AC-02.5)
+
+Changed files: `sdk/tests/common/mod.rs`, `sdk/tests/obs.rs`, `sdk/tests/integration_tests.rs`, plus three stale comments in `telemetry/src/lib.rs`.
+
+The four `clickhouse_*` helpers are replaced by `openobserve_search` and three wrappers. `obs.rs` passes green against OpenObserve; `cargo fmt` and `cargo clippy --tests` are clean.
+
+**The spike's HTTP-200 finding was wrong.** A rejected query returns **HTTP 400** with `{"code", "message", "hint"}`, not 200. The spike had only inspected response bodies through `jq` and never checked a status code. The AC survived the correction because the *requirement* was right, but the mechanism inverted: `error_for_status()` does catch the 400 — the actual defect is that it discards `message` and `hint`, leaving a bare "400 Bad Request" when the response had already named the offending column and suggested a fix. The helper now reads the body before reacting to the status and surfaces both, and still handles the 200-with-`message` variant.
+
+This is exactly why AT-02.1 exists as a real test rather than an assumption: the first version of the helper was written to the wrong model and the test failed immediately, before the mistake could reach WP03.
+
+**Three comments in `udex-telemetry` named ClickHouse** ("Traces -> ClickHouse (via the collector)"). Made backend-agnostic. This touches a production crate, which AC-00.1 says is untouched — the change is comments only, with no behavioural effect, and it moves the crate *toward* the open-standard boundary MODULES.md says it owns. Read AC-00.1 as "no behavioural change to production crates"; if the owner disagrees, revert these three lines.
+
+**AC-02.5 is not satisfied.** See `acceptance.md` for the detail: the k3d deployment has been crash-looping for 34 days on a database DNS failure, so the three k8s tests take their skip path and report `ok` in 0.00s. That is a skip, not a pass. The `deployment_environment = 'k3d'` column in the ported metric query is inferred from a verified rule but never observed, and needs a live cluster to confirm.
+
 ## Notes for later work packages
 
 - The `.env` on this machine was appended to by hand rather than regenerated, because the rotation guard correctly refuses to rewrite it while a compose Postgres is live. A clean clone gets the same values from `gen-env.sh`; this only affects existing developer machines, and belongs in the WP05 upgrade note.

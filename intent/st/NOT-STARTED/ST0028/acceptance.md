@@ -35,14 +35,14 @@ title: "OpenObserve as the dev observability backend -- acceptance contract"
 - AC-01.5 (non-test) `gen-env.sh` generates the root credential and the pre-encoded basic-auth value; no credential is hardcoded in compose -- evidence: `scripts/gen-env.sh` run in an isolated tree; base64 round-trips to `email:password` and the password carries all four required character classes -- satisfied: yes
 - AC-01.6 (non-test) All configuration is inline; no bind mounts are introduced, so the fixture resolves identically from `projects/compose/` and `.devcontainer/` -- evidence: `docker compose config -q` clean from both project directories -- satisfied: yes
 
-### WP-02 -- Port the observability verification layer to OpenObserve (status: Not Started)
+### WP-02 -- Port the observability verification layer to OpenObserve (status: WIP -- AC-02.5 blocked, see AT-02.5)
 
-- AC-02.1 A search helper that receives an OpenObserve API error (HTTP 200 with a non-null `message`) fails loudly rather than reporting an empty result -- this is the `IN-AG-NO-SILENT-001` requirement and the thread's highest-risk detail
+- AC-02.1 A search helper that receives an OpenObserve API error fails loudly AND surfaces the API's own `message` (and `hint` when present), rather than reporting an empty result or a bare status code -- this is the `IN-AG-NO-SILENT-001` requirement and the thread's highest-risk detail
 - AC-02.2 The trace assertion resolves an entry key to a trace and finds both the `/CreateEntry` request span and the `db.create_entry` datastore span, against OpenObserve
 - AC-02.3 The metric assertion detects a run-scoped increase in `udex.rpc.requests` for `ListIndices`, against OpenObserve
 - AC-02.4 The log assertion detects a run-scoped increase in `udex-server` log records, against OpenObserve
 - AC-02.5 The three `test_obs_k8s_*` tests pass against OpenObserve with their assertions semantically unchanged
-- AC-02.6 (non-test) No `clickhouse_*` helper or `otel.otel_*` table reference remains in the test suite -- evidence: `grep -ri clickhouse projects/rust/` returns nothing -- satisfied: no
+- AC-02.6 (non-test) No `clickhouse_*` helper or `otel.otel_*` table reference remains in the test suite -- evidence: `grep -ri clickhouse projects/rust/ --include=*.rs` returns only one deliberate comparative comment in `common/mod.rs` explaining the `"key"` quoting change -- satisfied: yes
 
 ### WP-03 -- New coverage: log floor and postgres receiver metric (status: Not Started)
 
@@ -79,12 +79,18 @@ AT-01.1 observed: traces returned all eight expected `udex-server` span names in
 
 ### WP-02
 
-- AT-02.1 `sdk/tests/common/mod.rs` unit test: a deliberately malformed SQL query panics with the API message rather than returning empty -- covers AC-02.1 -- status: to-write (red-first)
-- AT-02.2 `sdk/tests/obs.rs::obs_local_traces_metrics_logs_land` (trace assertion) -- covers AC-02.2 -- status: to-write (red-first)
-- AT-02.3 `sdk/tests/obs.rs::obs_local_traces_metrics_logs_land` (metric assertion) -- covers AC-02.3 -- status: to-write (red-first)
-- AT-02.4 `sdk/tests/obs.rs::obs_local_traces_metrics_logs_land` (log assertion) -- covers AC-02.4 -- status: to-write (red-first)
-- AT-02.5 `integration_tests.rs::test_obs_k8s_traces_land`, `::test_obs_k8s_metrics_land`, `::test_obs_k8s_logs_land` -- covers AC-02.5 -- status: to-write (red-first)
-- Coverage: AC-02.6 is non-test and carries evidence on the AC line. AT-02.1 is the one genuinely new test in this WP and exists because the failure mode it guards is silent.
+- AT-02.1 `sdk/tests/obs.rs::obs_search_surfaces_query_errors` -- a deliberately malformed query must panic carrying the API's own reason, not return empty -- covers AC-02.1 -- status: green
+- AT-02.2 `sdk/tests/obs.rs::obs_local_traces_metrics_logs_land` (trace assertion) -- covers AC-02.2 -- status: green
+- AT-02.3 `sdk/tests/obs.rs::obs_local_traces_metrics_logs_land` (metric assertion) -- covers AC-02.3 -- status: green
+- AT-02.4 `sdk/tests/obs.rs::obs_local_traces_metrics_logs_land` (log assertion) -- covers AC-02.4 -- status: green
+- AT-02.5 `integration_tests.rs::test_obs_k8s_traces_land`, `::test_obs_k8s_metrics_land`, `::test_obs_k8s_logs_land` -- covers AC-02.5 -- status: **red (blocked, not run)**
+- Coverage: AC-02.6 is non-test and carries evidence on the AC line. AC-02.5 is NOT satisfied -- see below.
+
+AT-02.5 is blocked by a pre-existing, unrelated fault: the k3d `udex` deployment has been in `CrashLoopBackOff` for 34 days, failing DNS resolution of its database host (`failed to lookup address information`). With `K8S_SERVER_URL` unset the three tests take their early-return skip path and report `ok` in 0.00s -- which is a **skip, not a pass**, and must not be read as coverage.
+
+The three tests are ported and compile, and their queries follow naming rules verified against real telemetry. One element remains genuinely unverified: the metric query filters on `deployment_environment = 'k3d'`. That column name follows the confirmed rule that resource attributes are flattened bare in the metrics stream (as `udex_test_run` was proven to be), but the specific attribute has never been observed, because no k8s telemetry has flowed for 34 days. It must be confirmed against a live cluster before AC-02.5 can go green.
+
+Repairing the cluster is out of scope for this work package. AC-02.5 stays unsatisfied until a working deployment runs these tests.
 
 ### WP-03
 

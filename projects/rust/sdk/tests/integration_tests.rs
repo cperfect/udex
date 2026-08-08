@@ -35,8 +35,8 @@ use udex_test_utils::{bind_file_secret, hydra_admin_url, hydra_public_url, regis
 
 mod common;
 use common::{
-    clickhouse_count, clickhouse_scalar_f64, clickhouse_trace_span_names, context_input,
-    jwt_key_path, make_token, now_unix_nanos, server_cert_path, wait_for_server,
+    context_input, jwt_key_path, make_token, now_unix_nanos, openobserve_count,
+    openobserve_scalar_f64, openobserve_trace_span_names, server_cert_path, wait_for_server,
 };
 
 // ── Port constants ────────────────────────────────────────────────────────────
@@ -2126,9 +2126,9 @@ async fn test_sdk_k8s_multi_cross_instance_crud() {
 
 // ── Observability tests (k8s) ───────────────────────────────────────────────
 //
-// These assert that telemetry from the k8s deployment lands in ClickHouse — the
-// unified store the collector exports to (ST0027). ClickHouse is an always-on
-// dev/CI fixture like Hydra: the ClickHouse helpers (in `common`) FAIL if it is
+// These assert that telemetry from the k8s deployment lands in OpenObserve — the
+// unified store the collector exports to (ST0028). OpenObserve is an always-on
+// dev/CI fixture like Hydra: the OpenObserve helpers (in `common`) FAIL if it is
 // unreachable, they do NOT skip. These tests still gate on the k8s fixture
 // (`data_k8s`), returning early when `K8S_SERVER_URL` is unset.
 //
@@ -2136,7 +2136,7 @@ async fn test_sdk_k8s_multi_cross_instance_crud() {
 // server-generated `key` span attribute; the metric/log assertions use a
 // baseline-then-increase comparison. The k8s deployment exports OTLP (plaintext
 // gRPC) to the compose collector via `host.k3d.internal:4317`; the tests query
-// ClickHouse by the `clickhouse` service name (override with CLICKHOUSE_URL).
+// OpenObserve by the `openobserve` service name (override with OPENOBSERVE_URL).
 
 #[rstest]
 #[tokio_shared_rt::test]
@@ -2148,7 +2148,7 @@ async fn test_obs_k8s_traces_land() {
 
     // A unique context yields a new entry with a server-generated key; the server
     // stamps that key onto the db.create_entry span as the `key` attribute, giving
-    // us a run-specific handle to find this exact request's trace in ClickHouse.
+    // us a run-specific handle to find this exact request's trace in OpenObserve.
     let tag = format!("obs-{}", now_unix_nanos());
     let resp = client
         .create_entry(index_name, context_input(&[("obs_tag", &tag)]))
@@ -2156,10 +2156,10 @@ async fn test_obs_k8s_traces_land() {
         .expect("create_entry for obs trace test");
     let key = resp.key;
 
-    let spans = clickhouse_trace_span_names(&key).await;
+    let spans = openobserve_trace_span_names(&key).await;
     assert!(
         !spans.is_empty(),
-        "no trace found in ClickHouse for entry key {key}"
+        "no trace found in OpenObserve for entry key {key}"
     );
     // The request span is named after the full gRPC method path; the datastore
     // span is db.create_entry.
@@ -2184,24 +2184,28 @@ async fn test_obs_k8s_metrics_land() {
     // Run-specific check: capture the cumulative ListIndices counter, make the
     // call, then poll for an increase - so a stale series from a prior run cannot
     // satisfy the test. Budget is generous because the OTel metric export interval
-    // (default 60s) gates how soon the increment lands in ClickHouse.
+    // (default 60s) gates how soon the increment lands in OpenObserve.
     //
     // `udex.rpc.requests` is a CUMULATIVE counter, so each export writes a new row
-    // with the running total. We take the latest value per series (argMax over
-    // TimeUnix, grouped by pod instance + status code) and sum across the two
-    // replicas, giving a monotonic total that rises by one whichever pod the
-    // load-balanced request hits.
+    // with the running total. We take the latest value per series and sum across
+    // the two replicas, giving a monotonic total that rises by one whichever pod
+    // the load-balanced request hits.
+    //
+    // max(value) is the argMax equivalent - OpenObserve's DataFusion build has no
+    // max_by - and is CORRECT ONLY BECAUSE the counter is monotonic cumulative, so
+    // a series' latest value is also its largest. The metric lives in its own
+    // stream named after the metric, dots as underscores.
     let method = "/udex.index.v1.IndexService/ListIndices";
     let metric_query = format!(
-        "SELECT sum(v) FROM ( \
-           SELECT argMax(Value, TimeUnix) AS v FROM otel.otel_metrics_sum \
-           WHERE MetricName = 'udex.rpc.requests' \
-             AND Attributes['rpc.method'] = '{method}' \
-             AND ResourceAttributes['deployment.environment'] = 'k3d' \
-           GROUP BY ResourceAttributes['service.instance.id'], \
-                    Attributes['rpc.grpc.status_code'] )"
+        "SELECT sum(m) AS total FROM ( \
+           SELECT max(value) AS m FROM \"udex_rpc_requests\" \
+           WHERE rpc_method = '{method}' \
+             AND deployment_environment = 'k3d' \
+           GROUP BY service_instance_id, rpc_grpc_status_code )"
     );
-    let baseline = clickhouse_scalar_f64(&metric_query).await.unwrap_or(0.0);
+    let baseline = openobserve_scalar_f64(&metric_query, "metrics")
+        .await
+        .unwrap_or(0.0);
 
     client
         .list_indices()
@@ -2210,7 +2214,7 @@ async fn test_obs_k8s_metrics_land() {
 
     let mut increased = false;
     for _ in 0..45u32 {
-        if let Some(v) = clickhouse_scalar_f64(&metric_query).await {
+        if let Some(v) = openobserve_scalar_f64(&metric_query, "metrics").await {
             if v > baseline {
                 increased = true;
                 break;
@@ -2225,11 +2229,12 @@ async fn test_obs_k8s_metrics_land() {
 
     // PostgreSQL receiver metric — the collector scrapes the DB continuously, so a
     // presence check is appropriate here.
-    let pg = clickhouse_count(
-        "SELECT count() FROM otel.otel_metrics_sum WHERE MetricName = 'postgresql.backends'",
+    let pg = openobserve_count(
+        "SELECT count(*) AS n FROM \"postgresql_backends\"",
+        "metrics",
     )
     .await;
-    assert!(pg > 0, "no postgresql.backends metric in ClickHouse");
+    assert!(pg > 0, "no postgresql.backends metric in OpenObserve");
 }
 
 #[rstest]
@@ -2242,11 +2247,13 @@ async fn test_obs_k8s_logs_land() {
 
     // Run-specific check: count udex-server logs now, make a request (each
     // authenticated request emits an authz audit "request authenticated" info log
-    // that reaches ClickHouse via the OTLP logs pipeline), then assert the count
+    // that reaches OpenObserve via the OTLP logs pipeline), then assert the count
     // increases - so pre-existing logs cannot satisfy the test on their own.
     let count_query =
-        "SELECT count() FROM otel.otel_logs WHERE ServiceName = 'udex-server'".to_string();
-    let baseline = clickhouse_scalar_f64(&count_query).await.unwrap_or(0.0);
+        "SELECT count(*) AS n FROM \"default\" WHERE service_name = 'udex-server'".to_string();
+    let baseline = openobserve_scalar_f64(&count_query, "logs")
+        .await
+        .unwrap_or(0.0);
 
     client
         .list_indices()
@@ -2255,7 +2262,7 @@ async fn test_obs_k8s_logs_land() {
 
     let mut increased = false;
     for _ in 0..30u32 {
-        if let Some(v) = clickhouse_scalar_f64(&count_query).await {
+        if let Some(v) = openobserve_scalar_f64(&count_query, "logs").await {
             if v > baseline {
                 increased = true;
                 break;
@@ -2265,6 +2272,6 @@ async fn test_obs_k8s_logs_land() {
     }
     assert!(
         increased,
-        "udex-server logs in ClickHouse did not increase after the request (baseline {baseline})"
+        "udex-server logs in OpenObserve did not increase after the request (baseline {baseline})"
     );
 }
