@@ -1,10 +1,10 @@
 ---
 verblock: "08 Aug 2026:v0.1: vscode - Initial version"
 intent_version: 2.15.0
-status: Not Started
+status: Completed
 slug: openobserve-as-the-dev-observability-backend
 created: 20260808
-completed:
+completed: 2026-08-08T09:27:11Z
 ---
 
 # ST0028: OpenObserve as the dev observability backend

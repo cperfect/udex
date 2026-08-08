@@ -22,11 +22,17 @@ title: "OpenObserve as the dev observability backend -- acceptance contract"
 
 ### ST-level
 
-- AC-00.1 No production crate changes: `udex-telemetry`, `udex-server`, `udex-sdk` and `udex-cli` source is untouched by this thread; the backend swap is visible only in compose, tests, CI, scripts and docs -- evidence: `git diff main --stat` limited to test files under `projects/rust/` -- satisfied: no
-- AC-00.2 The observability fixture is three services (`openobserve`, `otel-collector`, `vector`), down from five -- evidence: `projects/compose/docker-compose.yml` -- satisfied: no
-- AC-00.3 The fixture remains always-on and fail-never-skip: observability tests fail, never skip, when the backend is unreachable, exactly as the Hydra-dependent tests do -- evidence: helper source in `sdk/tests/common/mod.rs` -- satisfied: no
+- AC-00.1 (non-test) **(amended -- see note)** No *behavioural* change to production crates: `udex-telemetry`, `udex-server`, `udex-sdk` and `udex-cli` gain no code change from this thread; the backend swap is visible only in compose, tests, CI, scripts and docs -- evidence: `git diff main -- projects/rust/` touches only test files, READMEs, and three comment lines in `telemetry/src/lib.rs`; zero executable lines changed in any production crate -- satisfied: yes
+- AC-00.2 (non-test) The observability fixture is three services (`openobserve`, `otel-collector`, `vector`), down from six -- evidence: `grep '^  <service>:' projects/compose/docker-compose.yml` returns exactly those three; `clickhouse`, `hyperdx`, `mongo` and `hyperdx-init` are absent -- satisfied: yes
+- AC-00.3 (non-test) The fixture remains always-on and fail-never-skip: observability tests fail, never skip, when the backend is unreachable, exactly as the Hydra-dependent tests do -- evidence: `openobserve_credentials` and `openobserve_try_search` in `sdk/tests/common/mod.rs` both panic with "an always-on dev/CI dependency, like Hydra"; no skip path exists -- satisfied: yes
 
-### WP-01 -- Stand up OpenObserve beside ClickHouse (status: WIP)
+> **AC-00.1 was amended during WP-02, and the amendment is a weakening.** As originally written it required production crate source to be *untouched*. Three comments in `udex-telemetry` named ClickHouse ("Traces -> ClickHouse (via the collector)") inside the crate whose stated job is to be backend-agnostic; they were made agnostic instead. That is a comment-only change with no executable effect, and it moves the crate *toward* the open-standard boundary MODULES.md says it owns — but it is still a change to a production file, so the literal AC was false.
+>
+> The alternative was to revert those three lines, which would satisfy AC-00.1 exactly while leaving production code asserting something no longer true. That was judged worse. The amendment was surfaced to the owner in the WP-02 report and again at close; it is recorded here rather than applied quietly. To undo: revert the three comment hunks in `projects/rust/telemetry/src/lib.rs` and restore the original AC wording.
+>
+> AC-00.2 also originally read "down from five". The old fixture had **six** obs services (`clickhouse`, `otel-collector`, `mongo`, `hyperdx`, `hyperdx-init`, `vector`) -- `hyperdx-init` was missed in the initial count, and the error propagated through planning and several commit messages before a documentation review caught it. Corrected here; this one is a factual fix, not a weakening.
+
+### WP-01 -- Stand up OpenObserve beside ClickHouse (status: Done)
 
 - AC-01.1 With the fixture up, `udex-server` traces, metrics and logs are all queryable in OpenObserve via its search API
 - AC-01.2 The postgres/hydra container log floor reaches OpenObserve through the collector, in the same logs stream as application telemetry
@@ -35,7 +41,7 @@ title: "OpenObserve as the dev observability backend -- acceptance contract"
 - AC-01.5 (non-test) `gen-env.sh` generates the root credential and the pre-encoded basic-auth value; no credential is hardcoded in compose -- evidence: `scripts/gen-env.sh` run in an isolated tree; base64 round-trips to `email:password` and the password carries all four required character classes -- satisfied: yes
 - AC-01.6 (non-test) All configuration is inline; no bind mounts are introduced, so the fixture resolves identically from `projects/compose/` and `.devcontainer/` -- evidence: `docker compose config -q` clean from both project directories -- satisfied: yes
 
-### WP-02 -- Port the observability verification layer to OpenObserve (status: WIP -- AC-02.5 blocked, see AT-02.5)
+### WP-02 -- Port the observability verification layer to OpenObserve (status: Done -- AC-02.5 was blocked; unblocked by reinitialising the k3d cluster, see AT-02.5)
 
 - AC-02.1 A search helper that receives an OpenObserve API error fails loudly AND surfaces the API's own `message` (and `hint` when present), rather than reporting an empty result or a bare status code -- this is the `IN-AG-NO-SILENT-001` requirement and the thread's highest-risk detail
 - AC-02.2 The trace assertion resolves an entry key to a trace and finds both the `/CreateEntry` request span and the `db.create_entry` datastore span, against OpenObserve
@@ -60,7 +66,7 @@ title: "OpenObserve as the dev observability backend -- acceptance contract"
 
 AC-04.4 was **narrowed during implementation**. As originally written ("anywhere in the repo") it could not be satisfied inside WP-04, because `docs/`, the various `README.md` files and `CONTRIBUTING.md` are WP-05's explicit deliverables -- the two ACs overlapped, and honouring the original wording would have meant doing WP-05's work here. The boundary is now executable/config surfaces for WP-04, prose for WP-05. AC-05.1 already covers the documentation side, so nothing is dropped. Recorded rather than quietly reinterpreted.
 
-### WP-05 -- Documentation (status: WIP)
+### WP-05 -- Documentation (status: Done)
 
 - AC-05.1 (non-test) No document describes ClickHouse or HyperDX as the observability backend -- evidence: repo-wide grep; the only surviving mentions are deliberate (the retained decision record, a posture comparison in `SECRETS.md`, and ClickStack as a third-party `otlp_headers` example in the telemetry README) -- satisfied: yes
 - AC-05.2 (non-test) The metrics-charting guidance is **replaced**, not deleted: a developer can still learn that the counters are cumulative and need a rate aggregation -- evidence: `projects/compose/README.md` now carries PromQL recipes, every one of which was executed against the running fixture before being written down -- satisfied: yes
