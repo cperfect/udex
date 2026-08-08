@@ -1,14 +1,24 @@
+# `severity` and `exit-code` are TOP-LEVEL keys in Trivy's config schema, not
+# members of `scan:`. They were previously nested and therefore silently ignored:
+# scans reported LOW findings despite the threshold below, and exited 0 even with
+# HIGH findings present. Verified by running the same image against both layouts
+# — nested exits 0, top-level exits 1.
+#
+# CI was unaffected, because 02-Security.yml passes severity and exit-code as
+# action inputs, which is exactly what hid the problem: the gate worked in CI
+# while every local `trivy fs --config .trivy.yaml .` quietly refused to fail.
+severity:
+  - MEDIUM
+  - HIGH
+  - CRITICAL
+exit-code: 1        # Non-zero exit when issues at or above the severity threshold are found
+
 scan:
   scanners:
     - vuln          # CVEs in Cargo.lock and other dependency manifests
     - secret        # Hardcoded credentials, API keys, tokens
     - misconfig     # IaC and config file misconfigurations
     - license       # Dependency licence detection
-  severity:
-    - MEDIUM
-    - HIGH
-    - CRITICAL
-  exit-code: 1      # Non-zero exit when issues at or above severity threshold are found
   ignorefile: .trivyignore
   # Skip third-party Claude Code marketplace plugins installed into the devcontainer.
   # These bun.lock files are owned and versioned by the plugin authors, not this repo.

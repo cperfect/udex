@@ -31,6 +31,7 @@ The container pins the following versions:
 | Ory Hydra | v26.2.0 | `projects/compose/docker-compose.yml` |
 | PostgreSQL | 16 | `projects/compose/docker-compose.yml` |
 | OpenObserve | v0.92.0 | `projects/compose/docker-compose.yml` |
+| Trivy | 0.73.0 | `.devcontainer/Dockerfile` (`ARG TRIVY_VERSION`) |
 | OTel Collector (contrib) | 0.119.0 | `projects/compose/docker-compose.yml` |
 | Vector | 0.44.0 | `projects/compose/docker-compose.yml` |
 

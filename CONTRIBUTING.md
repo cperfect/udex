@@ -91,11 +91,24 @@ bash scripts/validate-lint-helm.sh
 
 > Dependabot has been disabled and replaced by regular scanning with Trivy. Results are uploaded to the GitHub security panel.
 
-Trivy is pre-installed in the devcontainer. To run the same scan that CI runs:
+Trivy is pre-installed in the devcontainer, pinned to the version in `.devcontainer/Dockerfile` (`ARG TRIVY_VERSION`) so findings reproduce between machines — Trivy's checks and severity mappings move between releases, so an unpinned scanner produces results that differ per developer.
+
+There are two scans, because they see different things:
 
 ```bash
-trivy fs --config .trivy.yaml .
+trivy fs --config .trivy.yaml .              # source tree + dependency manifests
+bash scripts/validate-security-image.sh      # the built udex image (base layer + OS packages)
 ```
+
+The filesystem scan says nothing about what ends up inside the image, and image findings drift on their own schedule — a new CVE can appear with no change to this repository — which is why the security workflow also runs weekly on a cron.
+
+The image scan requires `udex:latest` to be present (`bash projects/k8s/scripts/image-build.sh`) and **ignores findings with no available fix**. That is deliberate: the `debian:bookworm-slim` base currently carries 167 such CVEs, none of which any change here could resolve, so gating on them would mean a permanently red build. The gate therefore means something precise — *a fix exists upstream and this image has not picked it up*, resolved by rebuilding. To see the excluded findings:
+
+```bash
+trivy image --config .trivy.yaml --scanners vuln udex:latest
+```
+
+Add `--fixtures` to the image script to also scan the compose dev fixtures (OpenObserve, collector, Vector, PostgreSQL, Hydra). They are third-party and never deployed, so they are reported but never gate.
 
 Findings at MEDIUM severity or higher cause a non-zero exit and block merging on GitHub. To suppress an accepted finding, add its ID to `.trivyignore` with a rationale comment.
 

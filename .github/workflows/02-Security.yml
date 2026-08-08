@@ -30,6 +30,21 @@ jobs:
           severity: 'MEDIUM,HIGH,CRITICAL'
           format: table
 
+      # The filesystem scan above reads source and dependency manifests; it says
+      # nothing about what ends up inside the built image — the base layer and its
+      # OS packages. Those drift on their own schedule, which is why this job also
+      # runs on a cron: an image can acquire a fixable CVE with no change here.
+      #
+      # Only udex:latest is gated. The compose fixtures are third-party, dev-only
+      # and never deployed; scan them on demand with
+      # `bash scripts/validate-security-image.sh --fixtures`.
+      - name: Build udex image
+        run: bash projects/k8s/scripts/image-build.sh
+
+      # Delegates to a script so developers can run the exact same scan locally.
+      - name: Scan udex image
+        run: bash scripts/validate-security-image.sh
+
       # Disabled until code scanning enabled as this is required to be able to upload SARIF results to the Security tab.
       # - name: Run Trivy (SARIF — Security tab upload)
       #   if: always()

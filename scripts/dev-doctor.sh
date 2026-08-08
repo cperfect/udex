@@ -292,6 +292,32 @@ else
     "Debian/Ubuntu: apt-get install jq   macOS: brew install jq"
 fi
 
+# trivy (security scanner; mirrors the 02-Security CI job)
+#
+# Version policy is MAJOR-ONLY, so a developer running a slightly newer Trivy is
+# not blocked. Be clear about what that buys on a 0.x tool: every release so far
+# is major 0, so this catches a jump to 1.x but not a 0.x minor bump — and minor
+# bumps are exactly where Trivy's checks and severity mappings move. The
+# authoritative pin is TRIVY_VERSION in .devcontainer/Dockerfile; the running
+# version is printed below so drift from it is visible.
+REQUIRED_TRIVY_MAJOR="0"
+if command -v trivy &>/dev/null; then
+  TRIVY_VER=$(trivy --version 2>/dev/null | awk '/^Version:/ {print $2}')
+  TRIVY_MAJOR="${TRIVY_VER%%.*}"
+  if is_nonempty_integer "${TRIVY_MAJOR}" && [[ "${TRIVY_MAJOR}" -eq "${REQUIRED_TRIVY_MAJOR}" ]]; then
+    pass "trivy $TRIVY_VER (need major $REQUIRED_TRIVY_MAJOR)"
+  elif is_nonempty_integer "${TRIVY_MAJOR}"; then
+    fail "trivy $TRIVY_VER (need major $REQUIRED_TRIVY_MAJOR)" \
+      "Rebuild the devcontainer to get the pinned version, or see CONTRIBUTING.md for a host install"
+  else
+    fail "trivy version could not be parsed" \
+      "Rebuild the devcontainer, or see CONTRIBUTING.md for a host install"
+  fi
+else
+  fail "trivy not found" \
+    "Rebuild the devcontainer (it installs the pinned version), or see CONTRIBUTING.md for a host install"
+fi
+
 # --- Environment & fixtures ------------------------------------------------
 echo ""
 echo "==> Environment & fixtures"
