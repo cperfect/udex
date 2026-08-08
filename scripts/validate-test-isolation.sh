@@ -41,7 +41,36 @@ command -v jq &>/dev/null || { echo "ERROR: jq is required (see scripts/dev-doct
 echo "Building ${PACKAGE} --test ${TARGET}..."
 # --no-run compiles without executing. The JSON stream reports the built
 # executable's path, which we invoke directly for each test: going through
-# `cargo test` 40 times would spend most of the run in cargo's own startup.
+# `cargo test` once per test would spend most of the run in cargo's own startup
+# (~20s for the whole sweep this way, versus minutes).
+#
+# KNOWN DIVERGENCE — read before trusting a surprising result.
+#
+# Invoking the binary directly does NOT reproduce the environment `cargo test`
+# gives a test process. Cargo runs the binary with the working directory set to
+# the *package* root (here `projects/rust/sdk`) and sets runtime variables of its
+# own, notably the dynamic library search path. This script runs it from the
+# workspace root (`projects/rust`) with the ambient environment. So in principle
+# a test could pass here and fail under `cargo test`, or the reverse, and the
+# isolation verdict would be misleading.
+#
+# What was actually checked, rather than assumed:
+#   - Fixture paths are cwd-independent: CERTS_DIR/JWT_DIR in
+#     `sdk/tests/common/mod.rs` are built from `env!("CARGO_MANIFEST_DIR")`,
+#     which is baked in at compile time.
+#   - The one cwd-sensitive call is `dotenvy::dotenv_override()`, which searches
+#     upward from the working directory for `.env`. Both this script's cwd and
+#     cargo's walk up to the same workspace-root `.env`, so they agree.
+#   - Running a database-backed test from `projects/rust`, from
+#     `projects/rust/sdk` (cargo's cwd) and from `/tmp` all produced the same
+#     result, so no divergence is reachable with the suite as it stands.
+#
+# The risk is future tests, not current ones: a test that opens a fixture by
+# RELATIVE path, or that depends on a variable only cargo sets, would behave
+# differently here. If this sweep ever disagrees with `cargo test`, that is the
+# first thing to suspect — and the fix is to run each filter through cargo
+# (`cargo test -p "${PACKAGE}" --test "${TARGET}" <name> -- --exact`), trading
+# the speed for exact fidelity.
 BIN="$(cargo test --package "${PACKAGE}" --test "${TARGET}" --no-run --message-format=json 2>/dev/null \
   | jq -r --arg t "${TARGET}" 'select(.executable != null and .target.name == $t) | .executable' \
   | tail -1)"
